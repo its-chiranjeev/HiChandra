@@ -4,7 +4,7 @@ import * as bcrypt from 'bcryptjs';
 import { randomUUID } from 'crypto';
 import { DataSource, QueryRunner } from 'typeorm';
 import { last, single } from 'rxjs';
-import { UserRepository } from '@optechular/repositories';
+import { UserRepository } from '@hichandra/repositories';
 
 type AuditMeta = {
     actorUserId?: number;
@@ -35,4 +35,18 @@ export class UserService {
         } = user;
         return rest;
     }
+    async getAllUsers(page: number, limit: number) {
+  const { users, total } =
+    await this.userRepository.findAllUsers(page, limit);
+
+  return {
+    data: users,
+    pagination: {
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    },
+  };
+}
 }

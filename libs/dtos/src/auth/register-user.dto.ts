@@ -1,6 +1,9 @@
+import { USER_ROLE } from '@hichandra/entities';
 import { Transform } from 'class-transformer';
 import {
   IsEmail,
+  IsEnum,
+  IsNotEmpty,
   IsOptional,
   IsString,
   MaxLength,
@@ -17,4 +20,9 @@ export class RegisterUserDto {
   @Transform(({ value }) => value?.trim())
   @MaxLength(15)
   phone?: string;
+
+  @IsEnum(USER_ROLE)
+  @IsNotEmpty()
+  @Transform(({ value }) => value.toUpperCase())
+  role!: USER_ROLE;
 }

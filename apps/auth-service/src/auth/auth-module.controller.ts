@@ -12,13 +12,20 @@ import {
   ValidationPipe,
 } from '@nestjs/common';
 import { AuthModuleService } from './auth-module.service';
-// import { JwtAuthGuard } from '@hichandra/common';
+import { JwtAuthGuard } from '@hichandra/common';
 import { LoginDto, RegisterUserDto, VerifyOtpDto } from '@hichandra/dtos';
 import { RegisterDto } from '@hichandra/dtos/auth/register.dto';
 
 @Controller('auth')
 export class AuthModuleController {
   constructor(private readonly authModuleService: AuthModuleService) { }
+
+  @Post('logout')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async logout(@Req() req: any) {
+    return this.authModuleService.logoutService(req.user.id);
+  }
 
   @Post('register')
   @HttpCode(HttpStatus.OK)
@@ -57,14 +64,15 @@ export class AuthModuleController {
     return this.authModuleService.loginService(dto);
   }
 
-  // @Post('refresh-token')
-  // async refreshToken(@Body('refreshToken') refreshToken: string) {
-  //   if (!refreshToken) {
-  //     throw new UnauthorizedException('Refresh token missing');
-  //   }
+  @Post('refresh-token')
+  @HttpCode(HttpStatus.OK)
+  async refreshToken(@Body('refreshToken') refreshToken: string) {
+    if (!refreshToken) {
+      throw new UnauthorizedException('Refresh token missing');
+    }
 
-  //   return this.authModuleService.refreshToken(refreshToken);
-  // }
+    return this.authModuleService.refreshToken(refreshToken);
+  }
 
   // @Post('forgot-password')
   // @HttpCode(HttpStatus.OK)

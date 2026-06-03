@@ -7,20 +7,23 @@ import {
   UnauthorizedException,
   ForbiddenException,
 } from '@nestjs/common';
-import { UserRepository } from '@hichandra/repositories';
+import { UserRepository, OtpRepository } from '@hichandra/repositories';
 import * as bcrypt from 'bcryptjs';
-import { User, USER_STATUS } from '@hichandra/entities';
+import { User, USER_STATUS, USER_ROLE } from '@hichandra/entities';
 import { ConfigService } from '@nestjs/config';
 import { createHmac } from 'crypto';
-import { LoginDto, RegisterDto } from '@hichandra/dtos';
+import { LoginDto, RegisterDto, RegisterUserDto, VerifyOtpDto } from '@hichandra/dtos';
 import { DataSource } from 'typeorm';
+import { EmailService } from '@hichandra/email-services';
 
 @Injectable()
 export class AuthModuleService {
   constructor(
     private readonly userRepository: UserRepository,
+    private readonly otpRepository: OtpRepository,
     private readonly dataSource: DataSource,
     private readonly configService: ConfigService,
+    private readonly emailService: EmailService
   ) { }
 
   private async issueAuthTokens(user: User) {
@@ -111,6 +114,7 @@ export class AuthModuleService {
       firstName: dto.firstName,
       lastName: dto.lastName,
       password: hashedPassword,
+      role: USER_ROLE.ADMIN
     });
 
     const savedUser = await this.userRepository.save(newUser);
@@ -122,6 +126,139 @@ export class AuthModuleService {
       ...data,
     };
   }
+
+  async registerUserService(dto: RegisterUserDto) {
+    if (!dto.email && !dto.phone) {
+      throw new BadRequestException('At least email or phone number must be provided');
+    }
+
+    // 1. Verify if user already exists by email
+    if (dto.email) {
+      const existingUserByEmail = await this.userRepository.findByEmail(dto.email);
+      if (existingUserByEmail) {
+        throw new ConflictException('Email already in use');
+      }
+      const verifyAccount = await this.otpRepository.findOne({ where: { email: dto.email } });
+      if (verifyAccount) {
+        await this.otpRepository.delete(verifyAccount.id);
+      }
+    }
+
+    // 2. Verify if user already exists by phone
+    if (dto.phone) {
+      const existingUserByPhone = await this.userRepository.findOne({
+        where: { phone: dto.phone },
+      });
+      if (existingUserByPhone) {
+        throw new ConflictException('Phone number already in use');
+      }
+      const verifyAccount = await this.otpRepository.findOne({ where: { phone: dto.phone } });
+      if (verifyAccount) {
+        await this.otpRepository.delete(verifyAccount.id);
+      }
+    }
+
+    // 5. Generate a 6-digit numeric OTP
+    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+
+    // 6. Save OTP to database
+    const expiresAt = new Date();
+    expiresAt.setMinutes(expiresAt.getMinutes() + 10); // OTP expires in 10 minutes
+
+    const newOtp = this.otpRepository.create({
+      ...(dto.email && { email: dto.email }),
+      ...(dto.phone && { phone: dto.phone }),
+      otp: otpCode,
+      expiresAt,
+      isUsed: false,
+    });
+    await this.otpRepository.save(newOtp);
+
+    // 7. Send one email with email and otp (for now commented out)
+    if (dto.email) {
+      await this.emailService.sendOtpEmail(dto.email, otpCode);
+    }
+
+    return {
+      message: 'OTP has been sent.',
+      email: dto.email,
+      phone: dto.phone,
+    };
+  }
+
+  async verifyOtpService(dto: VerifyOtpDto) {
+    // 1. Only allow customer and technician roles
+    if (dto.role !== USER_ROLE.CUSTOMER && dto.role !== USER_ROLE.TECHNICIAN) {
+      throw new ForbiddenException('Only customer and technician roles can verify OTP via this endpoint');
+    }
+
+    // 2. Check if verified email is in the table with the matching OTP code
+    const otpRecord = await this.otpRepository.findOne({
+      where: {
+        email: dto.email,
+        otp: dto.otp,
+        isUsed: false,
+      },
+    });
+
+    if (!otpRecord) {
+      throw new BadRequestException('Invalid OTP code or email');
+    }
+
+    // 3. Check expiration time
+    if (otpRecord.expiresAt < new Date()) {
+      throw new BadRequestException('OTP has expired');
+    }
+
+    // 4. Delete the OTP entry
+    await this.otpRepository.delete(otpRecord.id);
+
+    // 5. Verify that the email, username, and phone are unique before saving
+    const existingUserByEmail = await this.userRepository.findByEmail(dto.email);
+    if (existingUserByEmail) {
+      throw new ConflictException('Email already in use');
+    }
+
+    const existingUserByUsername = await this.userRepository.findOne({
+      where: { username: dto.username },
+    });
+    if (existingUserByUsername) {
+      throw new ConflictException('Username already in use');
+    }
+
+    if (dto.phone) {
+      const existingUserByPhone = await this.userRepository.findOne({
+        where: { phone: dto.phone },
+      });
+      if (existingUserByPhone) {
+        throw new ConflictException('Phone number already in use');
+      }
+    }
+
+    // 6. Store the user data in user entity
+    const hashedPassword = await bcrypt.hash(dto.password, 10);
+    const newUser = this.userRepository.create({
+      email: dto.email,
+      phone: dto.phone,
+      username: dto.username,
+      firstName: dto.firstName,
+      lastName: dto.lastName,
+      password: hashedPassword,
+      role: dto.role,
+      status: USER_STATUS.ACTIVE,
+    });
+
+    const savedUser = await this.userRepository.save(newUser);
+
+    // 7. Issue auth tokens and return user data
+    const tokenData = await this.issueAuthTokens(savedUser);
+
+    return {
+      message: 'OTP verified successfully. User registered.',
+      ...tokenData,
+    };
+  }
+
   // async registerService(dto: RegisterDto) {
   //   const existingUser = await this.userRepository.findByEmail(dto.email);
   //   if (existingUser) {

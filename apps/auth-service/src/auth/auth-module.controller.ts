@@ -13,7 +13,7 @@ import {
 } from '@nestjs/common';
 import { AuthModuleService } from './auth-module.service';
 // import { JwtAuthGuard } from '@hichandra/common';
-import { LoginDto } from '@hichandra/dtos';
+import { LoginDto, RegisterUserDto, VerifyOtpDto } from '@hichandra/dtos';
 import { RegisterDto } from '@hichandra/dtos/auth/register.dto';
 
 @Controller('auth')
@@ -24,9 +24,18 @@ export class AuthModuleController {
   @HttpCode(HttpStatus.OK)
   async register(
     @Body(new ValidationPipe({ whitelist: true, transform: true }))
-    dto: RegisterDto,
+    dto: RegisterUserDto,
   ) {
-    return this.authModuleService.registerService(dto);
+    return this.authModuleService.registerUserService(dto);
+  }
+
+  @Post('verify-otp')
+  @HttpCode(HttpStatus.OK)
+  async verifyOtp(
+    @Body(new ValidationPipe({ whitelist: true, transform: true }))
+    dto: VerifyOtpDto,
+  ) {
+    return this.authModuleService.verifyOtpService(dto);
   }
 
   @Post('admin/register')

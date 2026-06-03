@@ -51,7 +51,10 @@
       ],
       "@hichandra/repositories/*": [
         "libs/repositories/src/*"
-      ]
+      ],
+      "@hichandra/email-services": [
+        "libs/email-services/src/index.ts"
+      ],
     }
   },
   "exclude": [

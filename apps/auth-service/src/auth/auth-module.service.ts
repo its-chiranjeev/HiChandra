@@ -105,6 +105,24 @@ export class AuthModuleService {
       throw new ConflictException('Email already in use');
     }
 
+    if (dto.username) {
+      const existingUserByUsername = await this.userRepository.findOne({
+        where: { username: dto.username },
+      });
+      if (existingUserByUsername) {
+        throw new ConflictException('Username already in use');
+      }
+    }
+
+    if (dto.phone) {
+      const existingUserByPhone = await this.userRepository.findOne({
+        where: { phone: dto.phone },
+      });
+      if (existingUserByPhone) {
+        throw new ConflictException('Phone number already in use');
+      }
+    }
+
     const hashedPassword = await bcrypt.hash(dto.password, 10);
 
     const newUser = this.userRepository.create({
@@ -161,6 +179,10 @@ export class AuthModuleService {
     // 5. Generate a 6-digit numeric OTP
     const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
 
+    if (dto.email) {
+      await this.emailService.sendOtpEmail(dto.email, otpCode);
+    }
+
     // 6. Save OTP to database
     const expiresAt = new Date();
     expiresAt.setMinutes(expiresAt.getMinutes() + 10); // OTP expires in 10 minutes
@@ -173,11 +195,6 @@ export class AuthModuleService {
       isUsed: false,
     });
     await this.otpRepository.save(newOtp);
-
-    // 7. Send one email with email and otp (for now commented out)
-    if (dto.email) {
-      await this.emailService.sendOtpEmail(dto.email, otpCode);
-    }
 
     return {
       message: 'OTP has been sent.',

@@ -12,21 +12,27 @@ import {
   ValidationPipe,
 } from '@nestjs/common';
 import { AuthModuleService } from './auth-module.service';
-// import { JwtAuthGuard } from '@hichandra/common';
+import { JwtAuthGuard } from '@hichandra/common';
 import { LoginDto, RegisterUserDto, VerifyOtpDto } from '@hichandra/dtos';
-import { RegisterDto } from '@hichandra/dtos/auth/register.dto';
 
 @Controller('auth')
 export class AuthModuleController {
   constructor(private readonly authModuleService: AuthModuleService) { }
 
-  @Post('register')
+  @Post('logout')
+  @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
-  async register(
+  async logout(@Req() req: any) {
+    return this.authModuleService.logoutService(req.user.id);
+  }
+
+  @Post('generate-otp')
+  @HttpCode(HttpStatus.OK)
+  async generateOtp(
     @Body(new ValidationPipe({ whitelist: true, transform: true }))
     dto: RegisterUserDto,
   ) {
-    return this.authModuleService.registerUserService(dto);
+    return this.authModuleService.generateOtpService(dto);
   }
 
   @Post('verify-otp')
@@ -36,15 +42,6 @@ export class AuthModuleController {
     dto: VerifyOtpDto,
   ) {
     return this.authModuleService.verifyOtpService(dto);
-  }
-
-  @Post('admin/register')
-  @HttpCode(HttpStatus.OK)
-  async adminRegister(
-    @Body(new ValidationPipe({ whitelist: true, transform: true }))
-    dto: RegisterDto,
-  ) {
-    return this.authModuleService.registerService(dto);
   }
 
   @Post('login')
@@ -57,14 +54,15 @@ export class AuthModuleController {
     return this.authModuleService.loginService(dto);
   }
 
-  // @Post('refresh-token')
-  // async refreshToken(@Body('refreshToken') refreshToken: string) {
-  //   if (!refreshToken) {
-  //     throw new UnauthorizedException('Refresh token missing');
-  //   }
+  @Post('refresh-token')
+  @HttpCode(HttpStatus.OK)
+  async refreshToken(@Body('refreshToken') refreshToken: string) {
+    if (!refreshToken) {
+      throw new UnauthorizedException('Refresh token missing');
+    }
 
-  //   return this.authModuleService.refreshToken(refreshToken);
-  // }
+    return this.authModuleService.refreshToken(refreshToken);
+  }
 
   // @Post('forgot-password')
   // @HttpCode(HttpStatus.OK)

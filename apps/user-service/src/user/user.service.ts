@@ -4,7 +4,11 @@ import * as bcrypt from 'bcryptjs';
 import { randomUUID } from 'crypto';
 import { DataSource, QueryRunner } from 'typeorm';
 import { last, single } from 'rxjs';
-import { UserRepository } from '@hichandra/repositories';
+import { UserRepository, OtpRepository, TechnicianProfileRepository } from '@hichandra/repositories';
+import { RegisterDto,UpdateUserDto } from '@hichandra/dtos';
+import { USER_ROLE, USER_STATUS, TECHNICIAN_STATUS } from '@hichandra/entities';
+import { AuthModuleService } from 'apps/auth-service/src/auth/auth-module.service';
+//import { NotFoundException } from '@nestjs/common';
 
 type AuditMeta = {
     actorUserId?: number;
@@ -19,7 +23,10 @@ export class UserService {
 
     constructor(
         private readonly userRepository: UserRepository,
-        private readonly dataSource: DataSource
+        private readonly otpRepository: OtpRepository,
+        private readonly technicianProfileRepository: TechnicianProfileRepository,
+        private readonly dataSource: DataSource,
+        private readonly authModuleService: AuthModuleService,
     ) { }
 
     /*async findById(id: number) {
@@ -27,27 +34,207 @@ export class UserService {
         if (!user) {
             throw new NotFoundException('User not found');
         }
-        const { 
-            password: _pass, 
-            id: _id, 
-            hashedRefreshToken: _refreshToken, 
-            ...rest 
+        const {
+            password: _pass,
+            id: _id,
+            hashedRefreshToken: _refreshToken,
+            ...rest
         } = user;
         return rest;
     }*/
    
-    async getAllUsers(page: number, limit: number) {
-  const { users, total } =
-    await this.userRepository.findAllUsers(page, limit);
+  async getAllUsersService(page: number, limit: number) {
+const { users, total } =
+  await this.userRepository.findAllUsers(page, limit);
 
-  return {
-    data: users,
-    pagination: {
-      total,
-      page,
-      limit,
-      totalPages: Math.ceil(total / limit),
-    },
+return {
+  success:true,
+  message:"All users fetched successfully",
+  data: users,
+  pagination: {
+    total,
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit),
+  },
+};
+}
+
+async getUserByIdService(id: number) {
+const user = await this.userRepository.findById(id);
+
+if (!user) {
+throw new NotFoundException('User not found');
+}
+
+return user;
+}
+
+async updateUserService(
+  id: number,
+  updateUserDto: UpdateUserDto,
+) {
+  const user = await this.userRepository.findById(id);
+
+  if (!user) {
+    throw new Error('User not found');
+  }
+
+  const updatedUser = await this.userRepository.updateUser(
+    id,
+    updateUserDto,
+  );
+
+   return {
+    success: true,
+    message: 'User updated successfully',
+    data: updatedUser,
   };
 }
+
+async deleteUserService(id: number) {
+  const user = await this.userRepository.findById(id);
+
+  if (!user) {
+    throw new Error('User not found');
+  }
+
+  await this.userRepository.softDeleteUser(id);
+  
+  return {
+    success: true,
+    message: 'User deleted successfully',
+  };
+}
+
+async adminRegisterService(dto: RegisterDto) {
+    const existingUser = await this.userRepository.findByEmail(dto.email);
+    if (existingUser) {
+        throw new ConflictException('Email already in use');
+    }
+
+    if (dto.username) {
+        const existingUserByUsername = await this.userRepository.findOne({
+            where: { username: dto.username },
+        });
+        if (existingUserByUsername) {
+            throw new ConflictException('Username already in use');
+        }
+    }
+
+    if (dto.phone) {
+        const existingUserByPhone = await this.userRepository.findOne({
+            where: { phone: dto.phone },
+        });
+        if (existingUserByPhone) {
+            throw new ConflictException('Phone number already in use');
+        }
+    }
+
+    const hashedPassword = await bcrypt.hash(dto.password, 10);
+
+    const newUser = this.userRepository.create({
+        email: dto.email,
+        username: dto.username,
+        ...(dto.phone && { phone: dto.phone }),
+        firstName: dto.firstName,
+        lastName: dto.lastName,
+        password: hashedPassword,
+        role: USER_ROLE.ADMIN
+    });
+
+    const savedUser = await this.userRepository.save(newUser);
+
+    const data = await this.authModuleService.issueAuthTokens(savedUser);
+
+    return {
+        message: 'Registration successful',
+        ...data,
+    };
+}
+
+  async userRegisterService(dto: RegisterDto) {
+      if (!dto.email) {
+          throw new BadRequestException('Email is required');
+      }
+      // if (!dto.phone) {
+      //     throw new BadRequestException('Phone number is required');
+      // }
+
+      const existingUser = await this.userRepository.findByEmail(dto.email);
+      if (existingUser) {
+          throw new ConflictException('Email already in use');
+      }
+
+      if (dto.username) {
+          const existingUserByUsername = await this.userRepository.findOne({
+              where: { username: dto.username },
+          });
+          if (existingUserByUsername) {
+              throw new ConflictException('Username already in use');
+          }
+      }
+
+      const existingUserByPhone = await this.userRepository.findOne({
+          where: { phone: dto.phone },
+      });
+      if (existingUserByPhone) {
+          throw new ConflictException('Phone number already in use');
+      }
+
+      const otpRecord = await this.otpRepository.findOne({
+          where: { email: dto.email, phone: dto.phone },
+      });
+
+      if (!otpRecord) {
+          throw new BadRequestException('OTP record not found for this email and phone');
+      }
+
+      if (!otpRecord.isVerified) {
+          throw new ForbiddenException('OTP is not verified');
+      }
+
+      await this.otpRepository.delete(otpRecord.id);
+
+      const hashedPassword = await bcrypt.hash(dto.password, 10);
+
+      const newUser = this.userRepository.create({
+          email: dto.email,
+          username: dto.username,
+          phone: dto.phone,
+          firstName: dto.firstName,
+          lastName: dto.lastName,
+          password: hashedPassword,
+          role: otpRecord.role || USER_ROLE.CUSTOMER,
+          status: USER_STATUS.ACTIVE,
+      });
+
+      let savedUser = await this.userRepository.save(newUser);
+
+      if (savedUser.role === USER_ROLE.TECHNICIAN) {
+          const profileData = dto.technicianProfile || {};
+          const newProfile = this.technicianProfileRepository.create({
+              userId: savedUser.id,
+              address: profileData.address,
+              yearsOfExperience: profileData.yearsOfExperience,
+              languages: profileData.languages,
+              serviceRadiusKm: profileData.serviceRadiusKm,
+              preferredAreas: profileData.preferredAreas,
+              pincodes: profileData.pincodes,
+              status: TECHNICIAN_STATUS.INCOMPLETE,
+              isAvailable: false,
+          });
+          const savedProfile = await this.technicianProfileRepository.save(newProfile);
+
+          savedUser.technicianProfileId = savedProfile.id;
+          savedUser = await this.userRepository.save(savedUser);
+      }
+
+      const data = await this.authModuleService.issueAuthTokens(savedUser);
+
+      return {
+          message: 'Registration successful',
+          ...data,
+      };
+  }
 }

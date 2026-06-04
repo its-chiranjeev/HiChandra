@@ -6,6 +6,7 @@ import {
   UpdateDateColumn,
   Index,
 } from 'typeorm';
+import { USER_ROLE } from './user.entity';
 
 @Entity('otps')
 export class Otp {
@@ -23,11 +24,14 @@ export class Otp {
   @Column({ type: 'varchar', length: 10 })
   otp!: string;
 
+  @Column({ type: 'enum', enum: USER_ROLE, nullable: true })
+  role?: USER_ROLE;
+
   @Column({ type: 'timestamp' })
   expiresAt!: Date;
 
   @Column({ type: 'boolean', default: false })
-  isUsed!: boolean;
+  isVerified!: boolean;
 
   @CreateDateColumn()
   createdAt!: Date;

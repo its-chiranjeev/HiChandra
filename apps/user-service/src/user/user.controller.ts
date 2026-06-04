@@ -1,29 +1,71 @@
-import { Body, Controller, Get,Query, Post, Req, UnauthorizedException, UseGuards, UseInterceptors, ValidationPipe } from "@nestjs/common";
+import { Body, Controller, Query,Get, Patch, Delete, Param,ParseIntPipe, HttpCode, HttpStatus, Post, Req, UnauthorizedException, UseGuards, UseInterceptors, ValidationPipe } from "@nestjs/common";
 import { UserService } from "./user.service";
 import { AuthGuard } from "@nestjs/passport";
-import { JwtAuthGuard } from "@hichandra/common";
+import { JwtAuthGuard , Roles, RolesGuard} from "@hichandra/common";
+import { RegisterDto, UpdateUserDto } from "@hichandra/dtos";
+import { USER_ROLE } from '@hichandra/entities';
 
 @Controller('users')
 export class UserController {
   constructor(private readonly userService: UserService) { }
-  
-  /*@Get('profile')
-  @UseGuards(JwtAuthGuard)
-  async getProfile(@Req() req: any) {
-    if (!req.user || !req.user.id) {
-      throw new UnauthorizedException('User not authenticated');
-    }
-    return this.userService.findById(req.user.id);
-  }*/
 
-    @Get()
-async getAllUsers(
+
+  @Get('all')
+  async getAllUsers(
   @Query('page') page = '1',
-  @Query('limit') limit = '5',
-) {
-  return this.userService.getAllUsers(
+  @Query('limit') limit = '10',
+  ) {
+  return this.userService.getAllUsersService(
     Number(page),
     Number(limit),
   );
-}
+  }
+
+  @Get(':id')
+  @UseGuards(JwtAuthGuard)
+  async getUserById(
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.userService.getUserByIdService(id);
+  }
+
+  @Patch('update/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLE.ADMIN)
+  async updateUser(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() updateUserDto: UpdateUserDto,
+  ) {
+    return this.userService.updateUserService(
+      id,
+      updateUserDto,
+    );
+  }
+
+  @Delete('delete/:id')
+  @UseGuards(JwtAuthGuard)
+  async deleteUser(
+   @Param('id', ParseIntPipe) id: number,
+  ) {
+  return this.userService.deleteUserService(id);
+  }
+
+  @Post('admin/register')
+  @HttpCode(HttpStatus.OK)
+  async adminRegister(
+    @Body(new ValidationPipe({ whitelist: true, transform: true }))
+    dto: RegisterDto,
+  ) {
+    return this.userService.adminRegisterService(dto);
+  }
+
+  @Post('register')
+  @HttpCode(HttpStatus.OK)
+  async userRegister(
+    @Body(new ValidationPipe({ whitelist: true, transform: true }))
+    dto: RegisterDto,
+  ) {
+    return this.userService.userRegisterService(dto);
+  }
+
 }

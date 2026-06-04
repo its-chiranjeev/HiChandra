@@ -15,5 +15,6 @@ import { EmailServicesModule } from '@hichandra/email-services';
   ],
   controllers: [AuthModuleController],
   providers: [AuthModuleService],
+  exports: [AuthModuleService]
 })
 export class AuthModuleModule { }

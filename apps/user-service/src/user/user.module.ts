@@ -5,14 +5,16 @@ import { UserService } from './user.service';
 import { EntitiesModule } from '@hichandra/entities';
 import { RepositoriesModule } from '@hichandra/repositories';
 import { CommonAuthModule } from '@hichandra/common';
+import { AuthModuleModule } from 'apps/auth-service/src/auth/auth-module.module';
 
 
 @Module({
   imports: [
-      EntitiesModule,
-      RepositoriesModule,
-      CommonAuthModule,
-    ],
+    EntitiesModule,
+    RepositoriesModule,
+    CommonAuthModule,
+    AuthModuleModule
+  ],
   controllers: [UserController],
   providers: [UserService],
 })

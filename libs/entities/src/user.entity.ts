@@ -7,7 +7,10 @@ import {
   DeleteDateColumn,
   Index,
   OneToMany,
+  OneToOne,
+  JoinColumn,
 } from 'typeorm';
+import { TechnicianProfile } from './technician-profile.entity';
 
 export enum USER_ROLE {
   CUSTOMER = 'CUSTOMER',
@@ -19,6 +22,7 @@ export enum USER_STATUS {
   ACTIVE = 'ACTIVE',
   INACTIVE = 'INACTIVE',
   BLOCKED = 'BLOCKED',
+  PENDING = 'PENDING',
 }
 
 @Entity('users')
@@ -38,6 +42,9 @@ export class User {
   @Index({ unique: true })
   @Column({ type: 'varchar', length: 15, nullable: true })
   phone?: string;
+
+  @Column({ type: 'varchar', length: 15, nullable: true })
+  emergencyContact?: string;
 
   @Column({ type: 'varchar', length: 100, nullable: true })
   firstName?: string;
@@ -75,6 +82,13 @@ export class User {
     default: USER_STATUS.ACTIVE,
   })
   status!: USER_STATUS;
+
+  @Column({ nullable: true })
+  technicianProfileId?: number;
+
+  @OneToOne(() => TechnicianProfile)
+  @JoinColumn({ name: 'technicianProfileId' })
+  technicianProfile?: TechnicianProfile;
 
   // Timestamps
   @CreateDateColumn()

@@ -61,13 +61,13 @@
         "tsConfigPath": "libs/repositories/tsconfig.lib.json"
       }
     },
-    "user-management": {
+    "user-service": {
       "type": "application",
-      "root": "apps/user-management",
+      "root": "apps/user-service",
       "entryFile": "main",
-      "sourceRoot": "apps/user-management/src",
+      "sourceRoot": "apps/user-service/src",
       "compilerOptions": {
-        "tsConfigPath": "apps/user-management/tsconfig.app.json"
+        "tsConfigPath": "apps/user-service/tsconfig.app.json"
       }
     }
   }

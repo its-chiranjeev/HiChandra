@@ -22,7 +22,7 @@ export class UserService {
         private readonly dataSource: DataSource
     ) { }
 
-    async findById(id: number) {
+    /*async findById(id: number) {
         const user = await this.userRepository.findById(id);
         if (!user) {
             throw new NotFoundException('User not found');
@@ -34,7 +34,8 @@ export class UserService {
             ...rest 
         } = user;
         return rest;
-    }
+    }*/
+   
     async getAllUsers(page: number, limit: number) {
   const { users, total } =
     await this.userRepository.findAllUsers(page, limit);

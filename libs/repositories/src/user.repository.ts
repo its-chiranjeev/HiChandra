@@ -27,4 +27,32 @@ export class UserRepository extends BaseRepository<User> {
       where: [{ email: normalized }, { username: normalized }],
     });
   }
+
+    async findAllUsers(page = 1, limit = 5) {
+  const [users, total] = await this.repo.findAndCount({
+    select: {
+      id: true,
+      email: true,
+      username: true,
+      phone: true,
+      firstName: true,
+      lastName: true,
+      profileImage: true,
+      role: true,
+      status: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+    skip: (page - 1) * limit,
+    take: limit,
+    order: {
+      createdAt: 'DESC',
+    },
+  });
+
+  return {
+    users,
+    total,
+  };
+}
 }

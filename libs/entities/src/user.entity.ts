@@ -7,7 +7,10 @@ import {
   DeleteDateColumn,
   Index,
   OneToMany,
+  OneToOne,
+  JoinColumn,
 } from 'typeorm';
+import { TechnicianProfile } from './technician-profile.entity';
 
 export enum USER_ROLE {
   CUSTOMER = 'CUSTOMER',
@@ -79,6 +82,13 @@ export class User {
     default: USER_STATUS.ACTIVE,
   })
   status!: USER_STATUS;
+
+  @Column({ nullable: true })
+  technicianProfileId?: number;
+
+  @OneToOne(() => TechnicianProfile)
+  @JoinColumn({ name: 'technicianProfileId' })
+  technicianProfile?: TechnicianProfile;
 
   // Timestamps
   @CreateDateColumn()

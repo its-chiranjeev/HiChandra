@@ -4,9 +4,9 @@ import * as bcrypt from 'bcryptjs';
 import { randomUUID } from 'crypto';
 import { DataSource, QueryRunner } from 'typeorm';
 import { last, single } from 'rxjs';
-import { UserRepository, OtpRepository } from '@hichandra/repositories';
+import { UserRepository, OtpRepository, TechnicianProfileRepository } from '@hichandra/repositories';
 import { RegisterDto } from '@hichandra/dtos';
-import { USER_ROLE, USER_STATUS } from '@hichandra/entities';
+import { USER_ROLE, USER_STATUS, TECHNICIAN_STATUS } from '@hichandra/entities';
 import { AuthModuleService } from 'apps/auth-service/src/auth/auth-module.service';
 
 type AuditMeta = {
@@ -23,6 +23,7 @@ export class UserService {
     constructor(
         private readonly userRepository: UserRepository,
         private readonly otpRepository: OtpRepository,
+        private readonly technicianProfileRepository: TechnicianProfileRepository,
         private readonly dataSource: DataSource,
         private readonly authModuleService: AuthModuleService,
     ) { }
@@ -143,7 +144,26 @@ export class UserService {
             status: USER_STATUS.ACTIVE,
         });
 
-        const savedUser = await this.userRepository.save(newUser);
+        let savedUser = await this.userRepository.save(newUser);
+
+        if (savedUser.role === USER_ROLE.TECHNICIAN) {
+            const profileData = dto.technicianProfile || {};
+            const newProfile = this.technicianProfileRepository.create({
+                userId: savedUser.id,
+                address: profileData.address,
+                yearsOfExperience: profileData.yearsOfExperience,
+                languages: profileData.languages,
+                serviceRadiusKm: profileData.serviceRadiusKm,
+                preferredAreas: profileData.preferredAreas,
+                pincodes: profileData.pincodes,
+                status: TECHNICIAN_STATUS.INCOMPLETE,
+                isAvailable: false,
+            });
+            const savedProfile = await this.technicianProfileRepository.save(newProfile);
+
+            savedUser.technicianProfileId = savedProfile.id;
+            savedUser = await this.userRepository.save(savedUser);
+        }
 
         const data = await this.authModuleService.issueAuthTokens(savedUser);
 

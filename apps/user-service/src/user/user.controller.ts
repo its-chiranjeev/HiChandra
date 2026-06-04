@@ -11,7 +11,6 @@ import { USER_ROLE } from '@hichandra/entities';
 export class UserController {
   constructor(private readonly userService: UserService) { }
 
-
   @Get('all')
   async getAllUsers(
     @Query('page') page = '1',
@@ -86,5 +85,4 @@ export class UserController {
   ) {
     return this.userService.userRegisterService(dto, files);
   }
-
 }

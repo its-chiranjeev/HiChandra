@@ -21,6 +21,7 @@ export enum USER_ROLE {
 export enum USER_STATUS {
   ACTIVE = 'ACTIVE',
   INACTIVE = 'INACTIVE',
+  REJECTED = 'REJECTED',
   BLOCKED = 'BLOCKED',
   PENDING = 'PENDING',
 }

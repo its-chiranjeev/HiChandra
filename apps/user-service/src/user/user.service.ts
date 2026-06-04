@@ -281,8 +281,8 @@ export class UserService {
                 const skillsToSave = profileData.skills.map((s) =>
                     this.dataSource.getRepository(TechnicianSkill).create({
                         technicianProfileId: savedProfile.id,
-                        skill: s.skill,
-                        skillLevel: s.skillLevel,
+                        serviceId: s.serviceId,
+                        experienceLevel: s.experienceLevel,
                     })
                 );
                 await this.dataSource.getRepository(TechnicianSkill).save(skillsToSave);

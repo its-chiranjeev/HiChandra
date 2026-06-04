@@ -38,11 +38,11 @@ export class TechnicianSkill {
   @JoinColumn({ name: 'technicianProfileId' })
   technicianProfile?: TechnicianProfile;
 
-  @Column({ type: 'enum', enum: SKILL_TYPE })
-  skill!: SKILL_TYPE;
+  @Column({ type: 'int' })
+  serviceId!: number;
 
   @Column({ type: 'enum', enum: SKILL_LEVEL })
-  skillLevel!: SKILL_LEVEL;
+  experienceLevel!: SKILL_LEVEL;
 
   @CreateDateColumn()
   createdAt!: Date;

@@ -7,6 +7,8 @@ import { TechnicianProfile } from './technician-profile.entity';
 import { TechnicianSkill } from './technician-skill.entity';
 import { TechnicianServiceArea } from './technician-service-area.entity';
 import { TechnicianBrandExpertise } from './technician-brand-expertise.entity';
+import { Service } from './service.entity';
+import { ServiceArea } from './service-area.entity';
 import { EntitiesService } from './entities.service';
 
 @Module({
@@ -18,6 +20,8 @@ import { EntitiesService } from './entities.service';
       TechnicianSkill,
       TechnicianServiceArea,
       TechnicianBrandExpertise,
+      Service,
+      ServiceArea,
     ]),
   ],
   providers: [EntitiesService],

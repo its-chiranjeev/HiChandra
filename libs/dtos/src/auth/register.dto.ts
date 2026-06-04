@@ -11,16 +11,16 @@ import {
   MaxLength,
   ValidateNested,
 } from 'class-validator';
-import { SKILL_TYPE, SKILL_LEVEL } from '@hichandra/entities';
+import { SKILL_LEVEL } from '@hichandra/entities';
 
 export class TechnicianSkillDto {
-  @IsEnum(SKILL_TYPE)
+  @IsNumber()
   @IsNotEmpty()
-  skill!: SKILL_TYPE;
+  serviceId!: number;
 
   @IsEnum(SKILL_LEVEL)
   @IsNotEmpty()
-  skillLevel!: SKILL_LEVEL;
+  experienceLevel!: SKILL_LEVEL;
 }
 
 export class TechnicianServiceAreaDto {

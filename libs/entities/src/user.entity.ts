@@ -86,7 +86,7 @@ export class User {
   @Column({ nullable: true })
   technicianProfileId?: number;
 
-  @OneToOne(() => TechnicianProfile)
+  @OneToOne(() => TechnicianProfile, { onDelete: 'SET NULL', nullable: true })
   @JoinColumn({ name: 'technicianProfileId' })
   technicianProfile?: TechnicianProfile;
 

@@ -4,11 +4,21 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { User } from './user.entity';
 import { Otp } from './otp.entity';
 import { TechnicianProfile } from './technician-profile.entity';
+import { TechnicianSkill } from './technician-skill.entity';
+import { TechnicianServiceArea } from './technician-service-area.entity';
+import { TechnicianBrandExpertise } from './technician-brand-expertise.entity';
 import { EntitiesService } from './entities.service';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([User, Otp, TechnicianProfile]),
+    TypeOrmModule.forFeature([
+      User,
+      Otp,
+      TechnicianProfile,
+      TechnicianSkill,
+      TechnicianServiceArea,
+      TechnicianBrandExpertise,
+    ]),
   ],
   providers: [EntitiesService],
   exports: [

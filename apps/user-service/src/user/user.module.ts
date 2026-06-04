@@ -6,6 +6,7 @@ import { EntitiesModule } from '@hichandra/entities';
 import { RepositoriesModule } from '@hichandra/repositories';
 import { CommonAuthModule } from '@hichandra/common';
 import { AuthModuleModule } from 'apps/auth-service/src/auth/auth-module.module';
+import { S3Module } from '@hichandra/s3';
 
 
 @Module({
@@ -13,7 +14,8 @@ import { AuthModuleModule } from 'apps/auth-service/src/auth/auth-module.module'
     EntitiesModule,
     RepositoriesModule,
     CommonAuthModule,
-    AuthModuleModule
+    AuthModuleModule,
+    S3Module
   ],
   controllers: [UserController],
   providers: [UserService],

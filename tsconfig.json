@@ -55,6 +55,12 @@
       "@hichandra/email-services": [
         "libs/email-services/src/index.ts"
       ],
+      "@hichandra/s3": [
+        "libs/s3/src"
+      ],
+      "@hichandra/s3/*": [
+        "libs/s3/src/*"
+      ]
     }
   },
   "exclude": [

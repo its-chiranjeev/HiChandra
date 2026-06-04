@@ -6,8 +6,16 @@ import { DataSource, QueryRunner } from 'typeorm';
 import { last, single } from 'rxjs';
 import { UserRepository, OtpRepository, TechnicianProfileRepository } from '@hichandra/repositories';
 import { RegisterDto } from '@hichandra/dtos';
-import { USER_ROLE, USER_STATUS, TECHNICIAN_STATUS } from '@hichandra/entities';
+import {
+    USER_ROLE,
+    USER_STATUS,
+    TECHNICIAN_STATUS,
+    TechnicianSkill,
+    TechnicianServiceArea,
+    TechnicianBrandExpertise,
+} from '@hichandra/entities';
 import { AuthModuleService } from 'apps/auth-service/src/auth/auth-module.service';
+import { S3Service } from '@hichandra/s3';
 
 type AuditMeta = {
     actorUserId?: number;
@@ -26,10 +34,19 @@ export class UserService {
         private readonly technicianProfileRepository: TechnicianProfileRepository,
         private readonly dataSource: DataSource,
         private readonly authModuleService: AuthModuleService,
+        private readonly s3Service: S3Service,
     ) { }
 
     async findById(id: number) {
-        const user = await this.userRepository.findById(id);
+        const user = await this.userRepository.findOne({
+            where: { id },
+            relations: [
+                'technicianProfile',
+                'technicianProfile.skills',
+                'technicianProfile.serviceAreas',
+                'technicianProfile.brandExpertise',
+            ],
+        });
         if (!user) {
             throw new NotFoundException('User not found');
         }
@@ -88,13 +105,19 @@ export class UserService {
         };
     }
 
-    async userRegisterService(dto: RegisterDto) {
+    async userRegisterService(
+        dto: RegisterDto,
+        files?: {
+            aadharUrl?: Express.Multer.File[];
+            panUrl?: Express.Multer.File[];
+            policeCertUrl?: Express.Multer.File[];
+            tradeLicenseUrl?: Express.Multer.File[];
+            selfieUrl?: Express.Multer.File[];
+        },
+    ) {
         if (!dto.email) {
             throw new BadRequestException('Email is required');
         }
-        // if (!dto.phone) {
-        //     throw new BadRequestException('Phone number is required');
-        // }
 
         const existingUser = await this.userRepository.findByEmail(dto.email);
         if (existingUser) {
@@ -148,6 +171,28 @@ export class UserService {
 
         if (savedUser.role === USER_ROLE.TECHNICIAN) {
             const profileData = dto.technicianProfile || {};
+            let panUrl;
+            let policeCertUrl;
+            let tradeLicenseUrl;
+            let selfieUrl;
+            let aadharUrl;
+
+            if (files?.panUrl?.[0]) {
+                panUrl = await this.s3Service.uploadFileHelper(savedUser.id, 'pan', files?.panUrl);
+            }
+            if (files?.policeCertUrl?.[0]) {
+                policeCertUrl = await this.s3Service.uploadFileHelper(savedUser.id, 'police-cert', files?.policeCertUrl);
+            }
+            if (files?.tradeLicenseUrl?.[0]) {
+                tradeLicenseUrl = await this.s3Service.uploadFileHelper(savedUser.id, 'trade-license', files?.tradeLicenseUrl);
+            }
+            if (files?.selfieUrl?.[0]) {
+                selfieUrl = await this.s3Service.uploadFileHelper(savedUser.id, 'selfie', files?.selfieUrl);
+            }
+            if (files?.aadharUrl?.[0]) {
+                aadharUrl = await this.s3Service.uploadFileHelper(savedUser.id, 'aadhar', files?.aadharUrl);
+            }
+
             const newProfile = this.technicianProfileRepository.create({
                 userId: savedUser.id,
                 address: profileData.address,
@@ -158,8 +203,57 @@ export class UserService {
                 pincodes: profileData.pincodes,
                 status: TECHNICIAN_STATUS.INCOMPLETE,
                 isAvailable: false,
+                aadharUrl,
+                panUrl,
+                policeCertUrl,
+                tradeLicenseUrl,
+                selfieUrl,
+                hasLadder: profileData.hasLadder || false,
+                hasACGauges: profileData.hasACGauges || false,
+                hasSafetyEquipment: profileData.hasSafetyEquipment || false,
+                hasVehicle: profileData.hasVehicle || false,
+                accountHolderName: profileData.accountHolderName || '',
+                accountNumber: profileData.accountNumber || '',
+                ifscCode: profileData.ifscCode || '',
+                bankName: profileData.bankName || '',
+                isVerified: false,
             });
             const savedProfile = await this.technicianProfileRepository.save(newProfile);
+
+            // Save skills
+            if (profileData.skills && profileData.skills.length > 0) {
+                const skillsToSave = profileData.skills.map((s) =>
+                    this.dataSource.getRepository(TechnicianSkill).create({
+                        technicianProfileId: savedProfile.id,
+                        skill: s.skill,
+                        skillLevel: s.skillLevel,
+                    })
+                );
+                await this.dataSource.getRepository(TechnicianSkill).save(skillsToSave);
+            }
+
+            // Save service areas
+            if (profileData.serviceAreas && profileData.serviceAreas.length > 0) {
+                const areasToSave = profileData.serviceAreas.map((a) =>
+                    this.dataSource.getRepository(TechnicianServiceArea).create({
+                        technicianProfileId: savedProfile.id,
+                        pincode: a.pincode,
+                        areaName: a.areaName,
+                    })
+                );
+                await this.dataSource.getRepository(TechnicianServiceArea).save(areasToSave);
+            }
+
+            // Save brand expertise
+            if (profileData.brandExpertise && profileData.brandExpertise.length > 0) {
+                const brandsToSave = profileData.brandExpertise.map((b) =>
+                    this.dataSource.getRepository(TechnicianBrandExpertise).create({
+                        technicianProfileId: savedProfile.id,
+                        brandName: b.brandName,
+                    })
+                );
+                await this.dataSource.getRepository(TechnicianBrandExpertise).save(brandsToSave);
+            }
 
             savedUser.technicianProfileId = savedProfile.id;
             savedUser = await this.userRepository.save(savedUser);

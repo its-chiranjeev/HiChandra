@@ -1,8 +1,9 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Post, Req, UnauthorizedException, UseGuards, UseInterceptors, ValidationPipe } from "@nestjs/common";
+import { Body, Controller, Get, HttpCode, HttpStatus, Post, Req, UnauthorizedException, UploadedFiles, UseGuards, UseInterceptors, ValidationPipe } from "@nestjs/common";
 import { UserService } from "./user.service";
 import { AuthGuard } from "@nestjs/passport";
 import { JwtAuthGuard } from "@hichandra/common";
 import { RegisterDto } from "@hichandra/dtos";
+import { FileFieldsInterceptor } from "@nestjs/platform-express";
 
 @Controller('users')
 export class UserController {
@@ -27,12 +28,29 @@ export class UserController {
   }
 
   @Post('register')
+  @UseInterceptors(
+    FileFieldsInterceptor([
+      { name: 'aadharUrl', maxCount: 1 },
+      { name: 'panUrl', maxCount: 1 },
+      { name: 'policeCertUrl', maxCount: 1 },
+      { name: 'tradeLicenseUrl', maxCount: 1 },
+      { name: 'selfieUrl', maxCount: 1 },
+    ]),
+  )
   @HttpCode(HttpStatus.OK)
   async userRegister(
+    @UploadedFiles()
+    files: {
+      aadharUrl?: Express.Multer.File[];
+      panUrl?: Express.Multer.File[];
+      policeCertUrl?: Express.Multer.File[];
+      tradeLicenseUrl?: Express.Multer.File[];
+      selfieUrl?: Express.Multer.File[];
+    },
     @Body(new ValidationPipe({ whitelist: true, transform: true }))
     dto: RegisterDto,
   ) {
-    return this.userService.userRegisterService(dto);
+    return this.userService.userRegisterService(dto, files);
   }
 
 }

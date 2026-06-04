@@ -5,9 +5,13 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   OneToOne,
+  OneToMany,
   JoinColumn,
 } from 'typeorm';
 import { User } from './user.entity';
+import { TechnicianSkill } from './technician-skill.entity';
+import { TechnicianServiceArea } from './technician-service-area.entity';
+import { TechnicianBrandExpertise } from './technician-brand-expertise.entity';
 
 export enum TECHNICIAN_STATUS {
   INCOMPLETE = 'INCOMPLETE',
@@ -26,7 +30,7 @@ export class TechnicianProfile {
   @Column()
   userId!: number;                        // FK → users.id
 
-  @OneToOne(() => User, (user) => user.technicianProfile)
+  @OneToOne(() => User, (user) => user.technicianProfile, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'userId' })
   user?: User;
 
@@ -77,10 +81,67 @@ export class TechnicianProfile {
   @Column({ type: 'simple-array', nullable: true })
   pincodes?: string[];                   // ["110024", "110003"]
 
+  // Documents
+
+  @Column({ type: 'varchar', nullable: true })
+  aadharUrl?: string;
+
+  @Column({ type: 'varchar', nullable: true })
+  panUrl?: string;
+
+  @Column({ type: 'varchar', nullable: true })
+  policeCertUrl?: string;
+
+  @Column({ type: 'varchar', nullable: true })
+  tradeLicenseUrl?: string;
+
+  @Column({ type: 'varchar', nullable: true })
+  selfieUrl?: string;
+
+  // Tools & Equipment
+
+  @Column({ default: false })
+  hasLadder!: boolean;
+
+  @Column({ default: false })
+  hasACGauges!: boolean;
+
+  @Column({ default: false })
+  hasSafetyEquipment!: boolean;
+
+  @Column({ default: false })
+  hasVehicle!: boolean;
+
+  // Bank details
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  accountHolderName?: string;
+
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  accountNumber?: string;
+
+  @Column({ type: 'varchar', length: 11, nullable: true })
+  ifscCode?: string;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  bankName?: string;
+
+  @Column({ default: false })
+  isVerified!: boolean;
+
   // Timestamps
   @CreateDateColumn()
   createdAt!: Date;
 
   @UpdateDateColumn()
   updatedAt!: Date;
+
+  @OneToMany(() => TechnicianSkill, (skill) => skill.technicianProfile)
+  skills?: TechnicianSkill[];
+
+  @OneToMany(() => TechnicianServiceArea, (area) => area.technicianProfile)
+  serviceAreas?: TechnicianServiceArea[];
+
+  @OneToMany(() => TechnicianBrandExpertise, (brand) => brand.technicianProfile)
+  brandExpertise?: TechnicianBrandExpertise[];
 }

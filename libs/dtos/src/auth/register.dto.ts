@@ -1,6 +1,8 @@
 import { Transform, Type } from 'class-transformer';
 import {
   IsArray,
+  IsBoolean,
+  IsEnum,
   IsNotEmpty,
   IsNumber,
   IsOptional,
@@ -9,6 +11,33 @@ import {
   MaxLength,
   ValidateNested,
 } from 'class-validator';
+import { SKILL_TYPE, SKILL_LEVEL } from '@hichandra/entities';
+
+export class TechnicianSkillDto {
+  @IsEnum(SKILL_TYPE)
+  @IsNotEmpty()
+  skill!: SKILL_TYPE;
+
+  @IsEnum(SKILL_LEVEL)
+  @IsNotEmpty()
+  skillLevel!: SKILL_LEVEL;
+}
+
+export class TechnicianServiceAreaDto {
+  @IsString()
+  @IsNotEmpty()
+  pincode!: string;
+
+  @IsOptional()
+  @IsString()
+  areaName?: string;
+}
+
+export class TechnicianBrandExpertiseDto {
+  @IsString()
+  @IsNotEmpty()
+  brandName!: string;
+}
 
 export class TechnicianProfileDto {
   @IsOptional()
@@ -37,6 +66,56 @@ export class TechnicianProfileDto {
   @IsArray()
   @IsString({ each: true })
   pincodes?: string[];
+
+  @IsOptional()
+  @IsString()
+  accountHolderName?: string;
+
+  @IsOptional()
+  @IsString()
+  accountNumber?: string;
+
+  @IsOptional()
+  @IsString()
+  ifscCode?: string;
+
+  @IsOptional()
+  @IsString()
+  bankName?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  hasLadder?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  hasACGauges?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  hasSafetyEquipment?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  hasVehicle?: boolean;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => TechnicianSkillDto)
+  skills?: TechnicianSkillDto[];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => TechnicianServiceAreaDto)
+  serviceAreas?: TechnicianServiceAreaDto[];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => TechnicianBrandExpertiseDto)
+  brandExpertise?: TechnicianBrandExpertiseDto[];
 }
 
 export class RegisterDto {
@@ -72,7 +151,17 @@ export class RegisterDto {
   password!: string;
 
   @IsOptional()
-  @ValidateNested()
+  @Transform(({ value }) => {
+    if (typeof value === 'string') {
+      try {
+        return JSON.parse(value);
+      } catch {
+        return value;
+      }
+    }
+    return value;
+  })
+  // @ValidateNested()
   @Type(() => TechnicianProfileDto)
   technicianProfile?: TechnicianProfileDto;
 }

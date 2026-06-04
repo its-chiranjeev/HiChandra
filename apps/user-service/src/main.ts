@@ -57,6 +57,8 @@ async function bootstrap() {
 
         return new UnprocessableEntityException({
           success: false,
+          message: 'Validation failed',
+          error: errorMessages,
         });
       },
     }),

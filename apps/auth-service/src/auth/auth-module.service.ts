@@ -26,7 +26,7 @@ export class AuthModuleService {
     private readonly emailService: EmailService
   ) { }
 
-  private async issueAuthTokens(user: User) {
+  async issueAuthTokens(user: User) {
     const accessSecret =
       this.configService.get<string>('JWT_ACCESS_SECRET') ||
       this.configService.get<string>('JWT_SECRET');
@@ -71,7 +71,7 @@ export class AuthModuleService {
     };
   }
 
-  private signJwt(
+  signJwt(
     payload: Record<string, unknown>,
     secret: string,
     expiresInSeconds: number,
@@ -95,57 +95,11 @@ export class AuthModuleService {
     return `${data}.${signature}`;
   }
 
-  private base64UrlEncode(value: string): string {
+  base64UrlEncode(value: string): string {
     return Buffer.from(value).toString('base64url');
   }
 
-  async registerService(dto: RegisterDto) {
-    const existingUser = await this.userRepository.findByEmail(dto.email);
-    if (existingUser) {
-      throw new ConflictException('Email already in use');
-    }
-
-    if (dto.username) {
-      const existingUserByUsername = await this.userRepository.findOne({
-        where: { username: dto.username },
-      });
-      if (existingUserByUsername) {
-        throw new ConflictException('Username already in use');
-      }
-    }
-
-    if (dto.phone) {
-      const existingUserByPhone = await this.userRepository.findOne({
-        where: { phone: dto.phone },
-      });
-      if (existingUserByPhone) {
-        throw new ConflictException('Phone number already in use');
-      }
-    }
-
-    const hashedPassword = await bcrypt.hash(dto.password, 10);
-
-    const newUser = this.userRepository.create({
-      email: dto.email,
-      username: dto.username,
-      ...(dto.phone && { phone: dto.phone }),
-      firstName: dto.firstName,
-      lastName: dto.lastName,
-      password: hashedPassword,
-      role: USER_ROLE.ADMIN
-    });
-
-    const savedUser = await this.userRepository.save(newUser);
-
-    const data = await this.issueAuthTokens(savedUser);
-
-    return {
-      message: 'Registration successful',
-      ...data,
-    };
-  }
-
-  async registerUserService(dto: RegisterUserDto) {
+  async generateOtpService(dto: RegisterUserDto) {
     if (!dto.email && !dto.phone) {
       throw new BadRequestException('At least email or phone number must be provided');
     }

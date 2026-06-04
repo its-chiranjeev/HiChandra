@@ -40,6 +40,9 @@ export class User {
   @Column({ type: 'varchar', length: 15, nullable: true })
   phone?: string;
 
+  @Column({ type: 'varchar', length: 15, nullable: true })
+  emergencyContact?: string;
+
   @Column({ type: 'varchar', length: 100, nullable: true })
   firstName?: string;
 

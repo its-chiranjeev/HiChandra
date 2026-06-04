@@ -14,7 +14,6 @@ import {
 import { AuthModuleService } from './auth-module.service';
 import { JwtAuthGuard } from '@hichandra/common';
 import { LoginDto, RegisterUserDto, VerifyOtpDto } from '@hichandra/dtos';
-import { RegisterDto } from '@hichandra/dtos/auth/register.dto';
 
 @Controller('auth')
 export class AuthModuleController {
@@ -27,13 +26,13 @@ export class AuthModuleController {
     return this.authModuleService.logoutService(req.user.id);
   }
 
-  @Post('register')
+  @Post('generate-otp')
   @HttpCode(HttpStatus.OK)
-  async register(
+  async generateOtp(
     @Body(new ValidationPipe({ whitelist: true, transform: true }))
     dto: RegisterUserDto,
   ) {
-    return this.authModuleService.registerUserService(dto);
+    return this.authModuleService.generateOtpService(dto);
   }
 
   @Post('verify-otp')
@@ -43,15 +42,6 @@ export class AuthModuleController {
     dto: VerifyOtpDto,
   ) {
     return this.authModuleService.verifyOtpService(dto);
-  }
-
-  @Post('admin/register')
-  @HttpCode(HttpStatus.OK)
-  async adminRegister(
-    @Body(new ValidationPipe({ whitelist: true, transform: true }))
-    dto: RegisterDto,
-  ) {
-    return this.authModuleService.registerService(dto);
   }
 
   @Post('login')

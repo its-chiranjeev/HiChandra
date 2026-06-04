@@ -1,8 +1,8 @@
 import { NestFactory } from '@nestjs/core';
 import { UserManagementModule } from './user-management.module';
 import { Logger, UnprocessableEntityException, ValidationPipe } from '@nestjs/common';
-import { ResponseInterceptor } from '@optechular/common';
-import { GlobalExceptionFilter } from '@optechular/common';
+import { ResponseInterceptor } from '@hichandra/common';
+import { GlobalExceptionFilter } from '@hichandra/common';
 import { Request, Response, NextFunction } from 'express';
 
 

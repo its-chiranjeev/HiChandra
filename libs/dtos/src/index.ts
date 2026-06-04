@@ -5,3 +5,4 @@ export * from './auth/register.dto';
 export * from './auth/register-user.dto';
 export * from './auth/verify-otp.dto';
 export * from './multer/multer.dto';
+export * from './auth/update-user.dto';

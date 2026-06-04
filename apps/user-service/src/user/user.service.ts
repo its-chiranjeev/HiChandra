@@ -5,7 +5,6 @@ import { randomUUID } from 'crypto';
 import { DataSource, QueryRunner } from 'typeorm';
 import { last, single } from 'rxjs';
 import { UserRepository, OtpRepository, TechnicianProfileRepository } from '@hichandra/repositories';
-import { RegisterDto } from '@hichandra/dtos';
 import {
     USER_ROLE,
     USER_STATUS,
@@ -16,14 +15,7 @@ import {
 } from '@hichandra/entities';
 import { AuthModuleService } from 'apps/auth-service/src/auth/auth-module.service';
 import { S3Service } from '@hichandra/s3';
-
-type AuditMeta = {
-    actorUserId?: number;
-    // actorRole?: USER_ROLE;
-    ipAddress?: string;
-    userAgent?: string;
-};
-
+import { RegisterDto, UpdateUserDto } from '@hichandra/dtos';
 
 @Injectable()
 export class UserService {
@@ -57,6 +49,70 @@ export class UserService {
             ...rest
         } = user;
         return rest;
+    }
+
+    async getAllUsersService(page: number, limit: number) {
+        const { users, total } =
+            await this.userRepository.findAllUsers(page, limit);
+
+        return {
+            success: true,
+            message: "All users fetched successfully",
+            data: users,
+            pagination: {
+                total,
+                page,
+                limit,
+                totalPages: Math.ceil(total / limit),
+            },
+        };
+    }
+
+    async getUserByIdService(id: number) {
+        const user = await this.userRepository.findById(id);
+
+        if (!user) {
+            throw new NotFoundException('User not found');
+        }
+
+        return user;
+    }
+
+    async updateUserService(
+        id: number,
+        updateUserDto: UpdateUserDto,
+    ) {
+        const user = await this.userRepository.findById(id);
+
+        if (!user) {
+            throw new Error('User not found');
+        }
+
+        const updatedUser = await this.userRepository.updateUser(
+            id,
+            updateUserDto,
+        );
+
+        return {
+            success: true,
+            message: 'User updated successfully',
+            data: updatedUser,
+        };
+    }
+
+    async deleteUserService(id: number) {
+        const user = await this.userRepository.findById(id);
+
+        if (!user) {
+            throw new Error('User not found');
+        }
+
+        await this.userRepository.softDeleteUser(id);
+
+        return {
+            success: true,
+            message: 'User deleted successfully',
+        };
     }
 
     async adminRegisterService(dto: RegisterDto) {
@@ -100,7 +156,7 @@ export class UserService {
         const data = await this.authModuleService.issueAuthTokens(savedUser);
 
         return {
-            message: 'Registration successful',
+            message: 'Admin Registration successful',
             ...data,
         };
     }

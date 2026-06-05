@@ -9,12 +9,12 @@ import {
     USER_ROLE,
     USER_STATUS,
     TECHNICIAN_STATUS,
-    TechnicianSkill,
-    TechnicianServiceArea,
+    TechnicianService,
     TechnicianBrandExpertise,
     Service,
     PricingRule,
     PlatformSetting,
+    TechnicianLocation,
 } from '@hichandra/entities';
 import { AuthModuleService } from 'apps/auth-service/src/auth/auth-module.service';
 import { S3Service } from '@hichandra/s3';
@@ -37,9 +37,9 @@ export class UserService {
             where: { id },
             relations: [
                 'technicianProfile',
-                'technicianProfile.skills',
-                'technicianProfile.serviceAreas',
+                'technicianProfile.services',
                 'technicianProfile.brandExpertise',
+                'technicianProfile.locations',
             ],
         });
         if (!user) {
@@ -289,29 +289,32 @@ export class UserService {
             });
             const savedProfile = await this.technicianProfileRepository.save(newProfile);
 
-            // Save skills
-            if (profileData.skills && profileData.skills.length > 0) {
-                const skillsToSave = profileData.skills.map((s) =>
-                    this.dataSource.getRepository(TechnicianSkill).create({
+            // Save location
+            const locationRepository = this.dataSource.getRepository(TechnicianLocation);
+            const newLocation = locationRepository.create({
+                technicianId: savedProfile.id,
+                latitude: profileData.latitude ?? 0,
+                longitude: profileData.longitude ?? 0,
+                serviceRadiusKm: profileData.serviceRadiusKm ?? 0,
+                fullAddress: profileData.address,
+                city: profileData.city,
+                state: profileData.state,
+                pincode: profileData.pincode,
+                isActive: true,
+            });
+            await locationRepository.save(newLocation);
+
+            // Save services
+            if (profileData.services && profileData.services.length > 0) {
+                const servicesToSave = profileData.services.map((s) =>
+                    this.dataSource.getRepository(TechnicianService).create({
                         technicianProfileId: savedProfile.id,
                         serviceId: s.serviceId,
-                        experienceLevel: s.experienceLevel,
                     })
                 );
-                await this.dataSource.getRepository(TechnicianSkill).save(skillsToSave);
+                await this.dataSource.getRepository(TechnicianService).save(servicesToSave);
             }
 
-            // Save service areas
-            if (profileData.serviceAreas && profileData.serviceAreas.length > 0) {
-                const areasToSave = profileData.serviceAreas.map((a) =>
-                    this.dataSource.getRepository(TechnicianServiceArea).create({
-                        technicianProfileId: savedProfile.id,
-                        pincode: a.pincode,
-                        areaName: a.areaName,
-                    })
-                );
-                await this.dataSource.getRepository(TechnicianServiceArea).save(areasToSave);
-            }
 
             // Save brand expertise
             if (profileData.brandExpertise && profileData.brandExpertise.length > 0) {
@@ -328,11 +331,43 @@ export class UserService {
             savedUser = await this.userRepository.save(savedUser);
         }
 
-        const data = await this.authModuleService.issueAuthTokens(savedUser);
+        const tokenData = await this.authModuleService.issueAuthTokens(savedUser);
+
+        let userResponse: any = {
+            id: savedUser.id,
+            email: savedUser.email,
+            username: savedUser.username,
+            phone: savedUser.phone,
+            firstName: savedUser.firstName,
+            lastName: savedUser.lastName,
+            role: savedUser.role,
+            status: savedUser.status,
+            createdAt: savedUser.createdAt,
+            updatedAt: savedUser.updatedAt,
+        };
+
+        if (savedUser.role === USER_ROLE.TECHNICIAN) {
+            const fullUser = await this.userRepository.findOne({
+                where: { id: savedUser.id },
+                relations: [
+                    'technicianProfile',
+                    'technicianProfile.services',
+                    'technicianProfile.brandExpertise',
+                    'technicianProfile.locations',
+                ],
+            });
+            if (fullUser) {
+                userResponse = {
+                    ...userResponse,
+                    technicianProfile: fullUser.technicianProfile,
+                };
+            }
+        }
 
         return {
             message: 'Registration successful',
-            ...data,
+            tokens: tokenData.tokens,
+            user: userResponse,
         };
     }
 
@@ -382,6 +417,7 @@ export class UserService {
                 freeDistanceKm: dto.freeDistanceKm ?? 5,
                 distanceChargePerKm: dto.distanceChargePerKm ?? 0,
                 surgeFactor: dto.surgeFactor ?? 0,
+                isSurgeEnabled: dto.isSurgeEnabled ?? false,
                 platformFee: dto.platformFee ?? 0,
                 gst: dto.gst ?? 0,
             });

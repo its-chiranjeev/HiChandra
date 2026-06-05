@@ -11,27 +11,12 @@ import {
   MaxLength,
   ValidateNested,
 } from 'class-validator';
-import { SKILL_LEVEL } from '@hichandra/entities';
-
-export class TechnicianSkillDto {
+export class TechnicianServiceDto {
   @IsNumber()
   @IsNotEmpty()
   serviceId!: number;
-
-  @IsEnum(SKILL_LEVEL)
-  @IsNotEmpty()
-  experienceLevel!: SKILL_LEVEL;
 }
 
-export class TechnicianServiceAreaDto {
-  @IsString()
-  @IsNotEmpty()
-  pincode!: string;
-
-  @IsOptional()
-  @IsString()
-  areaName?: string;
-}
 
 export class TechnicianBrandExpertiseDto {
   @IsString()
@@ -43,6 +28,26 @@ export class TechnicianProfileDto {
   @IsOptional()
   @IsString()
   address?: string;
+
+  @IsOptional()
+  @IsNumber()
+  latitude?: number;
+
+  @IsOptional()
+  @IsNumber()
+  longitude?: number;
+
+  @IsOptional()
+  @IsString()
+  city?: string;
+
+  @IsOptional()
+  @IsString()
+  state?: string;
+
+  @IsOptional()
+  @IsString()
+  pincode?: string;
 
   @IsOptional()
   @IsNumber()
@@ -102,14 +107,9 @@ export class TechnicianProfileDto {
   @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
-  @Type(() => TechnicianSkillDto)
-  skills?: TechnicianSkillDto[];
+  @Type(() => TechnicianServiceDto)
+  services?: TechnicianServiceDto[];
 
-  @IsOptional()
-  @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => TechnicianServiceAreaDto)
-  serviceAreas?: TechnicianServiceAreaDto[];
 
   @IsOptional()
   @IsArray()

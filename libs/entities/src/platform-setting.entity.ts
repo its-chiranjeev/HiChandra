@@ -10,8 +10,7 @@ import {
 export enum PLATFORM_SETTING_KEYS {
   PLATFORM_FEE = 'PLATFORM_FEE',
   GST = 'GST',
-  CURRENCY = 'CURRENCY',
-  SURGE_FACTOR = 'SURGE_FACTOR',
+  CURRENCY = 'CURRENCY'
 }
 
 @Entity('platform_settings')

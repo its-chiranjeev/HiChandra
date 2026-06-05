@@ -8,23 +8,20 @@ import {
 } from 'typeorm';
 import { TechnicianProfile } from './technician-profile.entity';
 
-@Entity('technician_service_areas')
-export class TechnicianServiceArea {
+@Entity('technician_services')
+export class TechnicianService {
   @PrimaryGeneratedColumn()
   id!: number;
 
   @Column()
   technicianProfileId!: number;
 
-  @ManyToOne(() => TechnicianProfile, (profile) => profile.serviceAreas, { onDelete: 'CASCADE' })
+  @ManyToOne(() => TechnicianProfile, (profile) => profile.services, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'technicianProfileId' })
   technicianProfile?: TechnicianProfile;
 
-  @Column({ type: 'varchar', length: 10 })
-  pincode!: string;
-
-  @Column({ type: 'varchar', length: 100, nullable: true })
-  areaName?: string;
+  @Column({ type: 'int' })
+  serviceId!: number;
 
   @CreateDateColumn()
   createdAt!: Date;

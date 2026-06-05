@@ -9,9 +9,9 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { User } from './user.entity';
-import { TechnicianSkill } from './technician-skill.entity';
-import { TechnicianServiceArea } from './technician-service-area.entity';
+import { TechnicianService } from './technician-service.entity';
 import { TechnicianBrandExpertise } from './technician-brand-expertise.entity';
+import { TechnicianLocation } from './technician-location.entity';
 
 export enum TECHNICIAN_STATUS {
   INCOMPLETE = 'INCOMPLETE',
@@ -136,12 +136,12 @@ export class TechnicianProfile {
   @UpdateDateColumn()
   updatedAt!: Date;
 
-  @OneToMany(() => TechnicianSkill, (skill) => skill.technicianProfile)
-  skills?: TechnicianSkill[];
-
-  @OneToMany(() => TechnicianServiceArea, (area) => area.technicianProfile)
-  serviceAreas?: TechnicianServiceArea[];
+  @OneToMany(() => TechnicianService, (service) => service.technicianProfile)
+  services?: TechnicianService[];
 
   @OneToMany(() => TechnicianBrandExpertise, (brand) => brand.technicianProfile)
   brandExpertise?: TechnicianBrandExpertise[];
+
+  @OneToMany(() => TechnicianLocation, (location) => location.technicianProfile)
+  locations?: TechnicianLocation[];
 }

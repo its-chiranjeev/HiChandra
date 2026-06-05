@@ -4,12 +4,12 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { User } from './user.entity';
 import { Otp } from './otp.entity';
 import { TechnicianProfile } from './technician-profile.entity';
-import { TechnicianSkill } from './technician-skill.entity';
-import { TechnicianServiceArea } from './technician-service-area.entity';
+import { TechnicianService } from './technician-service.entity';
 import { TechnicianBrandExpertise } from './technician-brand-expertise.entity';
 import { Service } from './service.entity';
 import { PricingRule } from './pricing-rule.entity';
 import { PlatformSetting } from './platform-setting.entity';
+import { TechnicianLocation } from './technician-location.entity';
 import { EntitiesService } from './entities.service';
 
 @Module({
@@ -18,12 +18,12 @@ import { EntitiesService } from './entities.service';
       User,
       Otp,
       TechnicianProfile,
-      TechnicianSkill,
-      TechnicianServiceArea,
+      TechnicianService,
       TechnicianBrandExpertise,
       Service,
       PricingRule,
       PlatformSetting,
+      TechnicianLocation,
     ]),
   ],
   providers: [EntitiesService],

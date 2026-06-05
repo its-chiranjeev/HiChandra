@@ -53,6 +53,9 @@ export class PricingRule {
   @Column({ type: 'decimal', precision: 5, scale: 2, default: 0 })
   surgeFactor!: number;
 
+  @Column({ type: 'boolean', default: false })
+  isSurgeEnabled!: boolean;
+
   @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
   platformFee!: number;
 

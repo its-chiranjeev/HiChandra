@@ -8,4 +8,5 @@ export * from './technician-service-area.entity';
 export * from './technician-brand-expertise.entity';
 export * from './service.entity';
 export * from './pricing-rule.entity';
+export * from './platform-setting.entity';
 

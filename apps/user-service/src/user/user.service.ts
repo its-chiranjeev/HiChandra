@@ -14,10 +14,11 @@ import {
     TechnicianBrandExpertise,
     Service,
     PricingRule,
+    PlatformSetting,
 } from '@hichandra/entities';
 import { AuthModuleService } from 'apps/auth-service/src/auth/auth-module.service';
 import { S3Service } from '@hichandra/s3';
-import { RegisterDto, UpdateUserDto, CreateServiceDto } from '@hichandra/dtos';
+import { RegisterDto, UpdateUserDto, CreateServiceDto, CreatePlatformSettingDto } from '@hichandra/dtos';
 
 @Injectable()
 export class UserService {
@@ -395,5 +396,34 @@ export class UserService {
                 },
             };
         });
+    }
+
+    async upsertPlatformSetting(dto: CreatePlatformSettingDto) {
+        const platformSettingRepository = this.dataSource.getRepository(PlatformSetting);
+
+        let setting = await platformSettingRepository.findOne({
+            where: { key: dto.key },
+        });
+
+        if (setting) {
+            setting.value = dto.value;
+            if (dto.description !== undefined) {
+                setting.description = dto.description;
+            }
+        } else {
+            setting = platformSettingRepository.create({
+                key: dto.key,
+                value: dto.value,
+                description: dto.description,
+            });
+        }
+
+        const savedSetting = await platformSettingRepository.save(setting);
+
+        return {
+            success: true,
+            message: 'Platform setting saved successfully',
+            data: savedSetting,
+        };
     }
 }

@@ -9,6 +9,7 @@ import { TechnicianServiceArea } from './technician-service-area.entity';
 import { TechnicianBrandExpertise } from './technician-brand-expertise.entity';
 import { Service } from './service.entity';
 import { PricingRule } from './pricing-rule.entity';
+import { PlatformSetting } from './platform-setting.entity';
 import { EntitiesService } from './entities.service';
 
 @Module({
@@ -22,6 +23,7 @@ import { EntitiesService } from './entities.service';
       TechnicianBrandExpertise,
       Service,
       PricingRule,
+      PlatformSetting,
     ]),
   ],
   providers: [EntitiesService],

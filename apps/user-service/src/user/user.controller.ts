@@ -58,7 +58,7 @@ export class UserController {
     );
   }
 
-  @Get('userId/:id')
+  @Get(':id')
   @UseGuards(JwtAuthGuard)
   async getUserById(
     @Param('id', ParseIntPipe) id: number,

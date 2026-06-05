@@ -10,6 +10,7 @@ import { Service } from './service.entity';
 import { PricingRule } from './pricing-rule.entity';
 import { PlatformSetting } from './platform-setting.entity';
 import { TechnicianLocation } from './technician-location.entity';
+import { ServiceSpecification } from './service-specification.entity';
 import { EntitiesService } from './entities.service';
 
 @Module({
@@ -24,6 +25,7 @@ import { EntitiesService } from './entities.service';
       PricingRule,
       PlatformSetting,
       TechnicianLocation,
+      ServiceSpecification,
     ]),
   ],
   providers: [EntitiesService],

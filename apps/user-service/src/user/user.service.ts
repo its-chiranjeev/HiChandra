@@ -15,6 +15,7 @@ import {
     PricingRule,
     PlatformSetting,
     TechnicianLocation,
+    ServiceSpecification,
 } from '@hichandra/entities';
 import { AuthModuleService } from 'apps/auth-service/src/auth/auth-module.service';
 import { S3Service } from '@hichandra/s3';
@@ -139,20 +140,22 @@ export class UserService {
                 limit,
             );
 
-        const formattedServices = services.map(
-            (service) => {
-                let iconDownloadUrl;
-                if (service.iconUrl) {
-                    // Generate download URL here
-                    iconDownloadUrl = this.s3Service.getDownloadUrl(service.iconUrl);
-                }
-                const serviceData = {
-                    ...service,
-                    iconDownloadUrl
-                };
+        const formattedServices = await Promise.all(
+            services.map(
+                async (service) => {
+                    let iconDownloadUrl;
+                    if (service.iconUrl) {
+                        // Generate download URL here
+                        iconDownloadUrl = await this.s3Service.getDownloadUrl(service.iconUrl);
+                    }
+                    const serviceData = {
+                        ...service,
+                        iconDownloadUrl
+                    };
 
-                return serviceData;
-            },
+                    return serviceData;
+                },
+            ),
         );
 
         const response: any = {
@@ -197,7 +200,7 @@ export class UserService {
         (serviceData as any).iconDownloadUrl = undefined;
         if (service.iconUrl) {
             // Generate download URL here
-            (serviceData as any).iconDownloadUrl = this.s3Service.getDownloadUrl(service.iconUrl);
+            (serviceData as any).iconDownloadUrl = await this.s3Service.getDownloadUrl(service.iconUrl);
         }
 
         return {
@@ -502,12 +505,29 @@ export class UserService {
             });
             const savedPricingRule = await pricingRuleRepository.save(pricingRule);
 
+            let savedSpecs: ServiceSpecification[] = [];
+            if (dto.specifications && dto.specifications.length > 0) {
+                const specRepository = manager.getRepository(ServiceSpecification);
+                const specsToCreate = dto.specifications.map((spec) =>
+                    specRepository.create({
+                        serviceId: savedService.id,
+                        name: spec.name,
+                        type: spec.type,
+                        values: spec.values,
+                        isRequired: spec.isRequired ?? false,
+                        isActive: spec.isActive ?? true,
+                    })
+                );
+                savedSpecs = await specRepository.save(specsToCreate);
+            }
+
             return {
                 success: true,
                 message: 'Service with pricing created successfully',
                 data: {
                     service: savedService,
                     pricingRule: savedPricingRule,
+                    specifications: savedSpecs,
                 },
             };
         });

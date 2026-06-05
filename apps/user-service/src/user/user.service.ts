@@ -4,7 +4,7 @@ import * as bcrypt from 'bcryptjs';
 import { randomUUID } from 'crypto';
 import { DataSource, QueryRunner } from 'typeorm';
 import { last, single } from 'rxjs';
-import { UserRepository, OtpRepository, TechnicianProfileRepository, ServiceRepository} from '@hichandra/repositories';
+import { UserRepository, OtpRepository, TechnicianProfileRepository, ServiceRepository } from '@hichandra/repositories';
 import {
     USER_ROLE,
     USER_STATUS,
@@ -131,22 +131,24 @@ export class UserService {
     async getAllServices(
         page?: number,
         limit?: number,
-        ) {
+    ) {
         const { services, total } =
-        await this.serviceRepository.findAllServices(
-            page,
-            limit,
-        );
+            await this.serviceRepository.findAllServices(
+                page,
+                limit,
+            );
 
         const formattedServices = services.map(
-        (service) => {
-            const serviceData = {
-            ...service,
-            };
-
+            (service) => {
+                let iconDownloadUrl;
                 if (service.iconUrl) {
-                // Generate download URL here
+                    // Generate download URL here
+                    iconDownloadUrl = this.s3Service.getDownloadUrl(service.iconUrl);
                 }
+                const serviceData = {
+                    ...service,
+                    iconDownloadUrl
+                };
 
                 return serviceData;
             },
@@ -163,12 +165,12 @@ export class UserService {
             const currentLimit = limit || 10;
 
             response.pagination = {
-            total,
-            page: currentPage,
-            limit: currentLimit,
-            totalPages: Math.ceil(
-                total / currentLimit,
-            ),
+                total,
+                page: currentPage,
+                limit: currentLimit,
+                totalPages: Math.ceil(
+                    total / currentLimit,
+                ),
             };
         }
 
@@ -176,20 +178,20 @@ export class UserService {
     }
 
     async getServiceById(id: number) {
-    const service =
-        await this.serviceRepository.findServiceById(
-        id,
-        );
+        const service =
+            await this.serviceRepository.findServiceById(
+                id,
+            );
 
         if (!service) {
             throw new NotFoundException(
-            'Service not found',
+                'Service not found',
             );
         }
 
-    const serviceData = {
-        ...service,
-    };
+        const serviceData = {
+            ...service,
+        };
 
         if (service.iconUrl) {
             // Generate download URL here

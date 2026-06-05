@@ -39,7 +39,7 @@ export class UserRepository extends BaseRepository<User> {
   const where: any = { role: Not(USER_ROLE.ADMIN),
   };
 
-  if (role && role !== USER_ROLE.ADMIN) {
+  if (role) {
   where.role = role;
 }
 

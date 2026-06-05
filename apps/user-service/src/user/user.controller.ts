@@ -76,6 +76,26 @@ export class UserController {
     return this.userService.deleteUserService(id);
   }
 
+  @Get('service/all')
+  async getAllServices(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.userService.getAllServices(
+      page ? Number(page) : undefined,
+      limit ? Number(limit) : undefined,
+    );
+  }
+
+  @Get('service/:id')
+  async getServiceById(
+    @Param('id') id: string,
+  ) {
+    return this.userService.getServiceById(
+      Number(id),
+    );
+  }
+
   @Post('admin/register')
   @HttpCode(HttpStatus.OK)
   async adminRegister(

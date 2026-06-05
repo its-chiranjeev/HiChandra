@@ -4,7 +4,7 @@ import * as bcrypt from 'bcryptjs';
 import { randomUUID } from 'crypto';
 import { DataSource, QueryRunner } from 'typeorm';
 import { last, single } from 'rxjs';
-import { UserRepository, OtpRepository, TechnicianProfileRepository } from '@hichandra/repositories';
+import { UserRepository, OtpRepository, TechnicianProfileRepository, ServiceRepository} from '@hichandra/repositories';
 import {
     USER_ROLE,
     USER_STATUS,
@@ -25,6 +25,7 @@ export class UserService {
     constructor(
         private readonly userRepository: UserRepository,
         private readonly otpRepository: OtpRepository,
+        private readonly serviceRepository: ServiceRepository,
         private readonly technicianProfileRepository: TechnicianProfileRepository,
         private readonly dataSource: DataSource,
         private readonly authModuleService: AuthModuleService,
@@ -124,6 +125,84 @@ export class UserService {
         return {
             success: true,
             message: 'User deleted successfully',
+        };
+    }
+
+    async getAllServices(
+        page?: number,
+        limit?: number,
+        ) {
+        const { services, total } =
+        await this.serviceRepository.findAllServices(
+            page,
+            limit,
+        );
+
+        const formattedServices = services.map(
+        (service) => {
+            const serviceData = {
+            ...service,
+            };
+
+                if (service.iconUrl) {
+                // Generate download URL here
+                }
+
+                return serviceData;
+            },
+        );
+
+        const response: any = {
+            success: true,
+            message: 'Services fetched successfully',
+            data: formattedServices,
+        };
+
+        if (page || limit) {
+            const currentPage = page || 1;
+            const currentLimit = limit || 10;
+
+            response.pagination = {
+            total,
+            page: currentPage,
+            limit: currentLimit,
+            totalPages: Math.ceil(
+                total / currentLimit,
+            ),
+            };
+        }
+
+        return response;
+    }
+
+    async getServiceById(id: number) {
+    const service =
+        await this.serviceRepository.findServiceById(
+        id,
+        );
+
+        if (!service) {
+            throw new NotFoundException(
+            'Service not found',
+            );
+        }
+
+    const serviceData = {
+        ...service,
+    };
+
+        if (service.iconUrl) {
+            // Generate download URL here
+            // serviceData.iconUrl =
+            //   await this.fileUploadService.getDownloadUrl(
+            //     service.iconUrl,
+            //   );
+        }
+
+        return {
+            success: true,
+            message: 'Service fetched successfully',
+            data: serviceData,
         };
     }
 

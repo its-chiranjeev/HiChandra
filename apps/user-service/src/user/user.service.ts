@@ -53,13 +53,23 @@ export class UserService {
         return rest;
     }
 
-    async getAllUsersService(page: number, limit: number) {
+    async getAllUsersService(
+        page: number,
+        limit: number,
+        role?: USER_ROLE,
+        status?: USER_STATUS,
+    ) {
         const { users, total } =
-            await this.userRepository.findAllUsers(page, limit);
+            await this.userRepository.findAllUsers(
+                page,
+                limit,
+                role,
+                status,
+            );
 
         return {
             success: true,
-            message: "All users fetched successfully",
+            message: 'All users fetched successfully',
             data: users,
             pagination: {
                 total,

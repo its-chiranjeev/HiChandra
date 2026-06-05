@@ -3,6 +3,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '@hichandra/entities';
 import { BaseRepository } from './baseDb.repository';
+import { USER_ROLE, USER_STATUS } from '@hichandra/entities';
+import { Not } from 'typeorm';
 
 @Injectable()
 export class UserRepository extends BaseRepository<User> {
@@ -28,8 +30,26 @@ export class UserRepository extends BaseRepository<User> {
     });
   }
 
-  async findAllUsers(page = 1, limit = 10) {
+  async findAllUsers(
+    page = 1,
+    limit = 10,
+    role?: USER_ROLE,
+    status?: USER_STATUS,
+  ) {
+    const where: any = {
+      role: Not(USER_ROLE.ADMIN),
+    };
+
+    if (role) {
+      where.role = role;
+    }
+
+    if (status) {
+      where.status = status;
+    }
+
     const [users, total] = await this.repo.findAndCount({
+      where,
       select: {
         id: true,
         email: true,
@@ -50,10 +70,7 @@ export class UserRepository extends BaseRepository<User> {
       },
     });
 
-    return {
-      users,
-      total,
-    };
+    return { users, total };
   }
 
   async findById(id: number) {

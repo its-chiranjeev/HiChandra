@@ -5,7 +5,7 @@ import { UserService } from "./user.service";
 import { AuthGuard } from "@nestjs/passport";
 import { JwtAuthGuard, Roles, RolesGuard } from "@hichandra/common";
 import { RegisterDto, UpdateUserDto, CreateServiceDto } from "@hichandra/dtos";
-import { USER_ROLE } from '@hichandra/entities';
+import { USER_ROLE, USER_STATUS } from '@hichandra/entities';
 
 @Controller('users')
 export class UserController {
@@ -32,17 +32,22 @@ export class UserController {
   }
 
   @Get('all')
+  @UseGuards(JwtAuthGuard)
   async getAllUsers(
     @Query('page') page = '1',
     @Query('limit') limit = '10',
+    @Query('role') role?: USER_ROLE,
+    @Query('status') status?: USER_STATUS,
   ) {
     return this.userService.getAllUsersService(
       Number(page),
       Number(limit),
+      role,
+      status,
     );
   }
 
-  @Get(':id')
+  @Get('userId/:id')
   @UseGuards(JwtAuthGuard)
   async getUserById(
     @Param('id', ParseIntPipe) id: number,

@@ -194,12 +194,10 @@ export class UserService {
             ...service,
         };
 
+        (serviceData as any).iconDownloadUrl = undefined;
         if (service.iconUrl) {
             // Generate download URL here
-            // serviceData.iconUrl =
-            //   await this.fileUploadService.getDownloadUrl(
-            //     service.iconUrl,
-            //   );
+            (serviceData as any).iconDownloadUrl = this.s3Service.getDownloadUrl(service.iconUrl);
         }
 
         return {

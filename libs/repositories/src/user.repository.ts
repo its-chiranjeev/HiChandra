@@ -106,4 +106,5 @@ export class UserRepository extends BaseRepository<User> {
   async softDeleteUser(id: number) {
     return this.repo.softDelete(id);
   }
+
 }

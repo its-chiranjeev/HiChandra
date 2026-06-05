@@ -4,30 +4,29 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
+  OneToOne,
 } from 'typeorm';
+import { PricingRule } from './pricing-rule.entity';
 
 @Entity('services')
 export class Service {
   @PrimaryGeneratedColumn()
   id!: number;
 
-  @Column()
-  categoryId!: number;         // FK → service_categories.id
-
   @Column({ type: 'varchar', length: 100 })
-  name!: string;               // "AC General Service", "Gas Filling"
+  name!: string;
 
   @Column({ type: 'text', nullable: true })
   description?: string;
 
-  @Column({ type: 'decimal', precision: 10, scale: 2 })
-  basePrice!: number;          // base price in INR
-
-  @Column({ type: 'int', nullable: true })
-  durationMinutes?: number;    // estimated job duration
-
-  @Column({ default: true })
+  @Column({ type: 'boolean', default: true })
   isActive!: boolean;
+
+  @Column({ type: 'varchar', nullable: true })
+  iconUrl?: string;
+
+  @OneToOne(() => PricingRule, (pricingRule) => pricingRule.service)
+  pricingRule?: PricingRule;
 
   @CreateDateColumn()
   createdAt!: Date;

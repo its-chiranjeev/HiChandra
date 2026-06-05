@@ -7,4 +7,5 @@ export * from './technician-skill.entity';
 export * from './technician-service-area.entity';
 export * from './technician-brand-expertise.entity';
 export * from './service.entity';
-export * from './service-area.entity';
+export * from './pricing-rule.entity';
+

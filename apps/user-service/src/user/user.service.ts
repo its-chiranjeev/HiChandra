@@ -12,10 +12,12 @@ import {
     TechnicianSkill,
     TechnicianServiceArea,
     TechnicianBrandExpertise,
+    Service,
+    PricingRule,
 } from '@hichandra/entities';
 import { AuthModuleService } from 'apps/auth-service/src/auth/auth-module.service';
 import { S3Service } from '@hichandra/s3';
-import { RegisterDto, UpdateUserDto } from '@hichandra/dtos';
+import { RegisterDto, UpdateUserDto, CreateServiceDto } from '@hichandra/dtos';
 
 @Injectable()
 export class UserService {
@@ -321,5 +323,67 @@ export class UserService {
             message: 'Registration successful',
             ...data,
         };
+    }
+
+    async createServiceWithPricing(
+        dto: CreateServiceDto,
+        files?: {
+            icon?: Express.Multer.File[];
+        },
+    ) {
+        return this.dataSource.transaction(async (manager) => {
+            const serviceRepository = manager.getRepository(Service);
+            const pricingRuleRepository = manager.getRepository(PricingRule);
+
+            const existingService = await serviceRepository.findOne({
+                where: { name: dto.name },
+            });
+            if (existingService) {
+                throw new ConflictException('Service with this name already exists');
+            }
+
+            let iconUrl = dto.iconUrl;
+            if (files?.icon?.[0]) {
+                const file = files.icon[0];
+                const parts = file.originalname.split('.');
+                const ext = parts.length > 1 ? `.${parts.pop()}` : '';
+                const key = `services/icons/${dto.name.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}${ext}`;
+                iconUrl = await this.s3Service.uploadFile(key, file.buffer, file.mimetype);
+            }
+
+            const newService = serviceRepository.create({
+                name: dto.name,
+                description: dto.description,
+                isActive: dto.isActive !== undefined ? dto.isActive : true,
+                iconUrl,
+            });
+            const savedService = await serviceRepository.save(newService);
+
+            const pricingRule = pricingRuleRepository.create({
+                serviceId: savedService.id,
+                baseFare: dto.baseFare,
+                perHourRate: dto.perHourRate ?? 0,
+                perKmRate: dto.perKmRate ?? 0,
+                weekendMultiplier: dto.weekendMultiplier ?? 1.0,
+                peakHourMultiplier: dto.peakHourMultiplier ?? 1.0,
+                peakHours: dto.peakHours,
+                emergencyCharge: dto.emergencyCharge ?? 0,
+                freeDistanceKm: dto.freeDistanceKm ?? 5,
+                distanceChargePerKm: dto.distanceChargePerKm ?? 0,
+                surgeFactor: dto.surgeFactor ?? 0,
+                platformFee: dto.platformFee ?? 0,
+                gst: dto.gst ?? 0,
+            });
+            const savedPricingRule = await pricingRuleRepository.save(pricingRule);
+
+            return {
+                success: true,
+                message: 'Service with pricing created successfully',
+                data: {
+                    service: savedService,
+                    pricingRule: savedPricingRule,
+                },
+            };
+        });
     }
 }

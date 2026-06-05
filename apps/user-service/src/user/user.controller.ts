@@ -4,7 +4,7 @@ import { Body, Controller, Query, Get, Patch, Delete, Param, ParseIntPipe, HttpC
 import { UserService } from "./user.service";
 import { AuthGuard } from "@nestjs/passport";
 import { JwtAuthGuard, Roles, RolesGuard } from "@hichandra/common";
-import { RegisterDto, UpdateUserDto, CreateServiceDto } from "@hichandra/dtos";
+import { RegisterDto, UpdateUserDto, CreateServiceDto, CreatePlatformSettingDto } from "@hichandra/dtos";
 import { USER_ROLE, USER_STATUS } from '@hichandra/entities';
 
 @Controller('users')
@@ -29,6 +29,17 @@ export class UserController {
     dto: CreateServiceDto,
   ) {
     return this.userService.createServiceWithPricing(dto, files);
+  }
+
+  @Post('admin/platform-setting')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLE.ADMIN)
+  @HttpCode(HttpStatus.OK)
+  async upsertPlatformSetting(
+    @Body(new ValidationPipe({ whitelist: true, transform: true }))
+    dto: CreatePlatformSettingDto,
+  ) {
+    return this.userService.upsertPlatformSetting(dto);
   }
 
   @Get('all')

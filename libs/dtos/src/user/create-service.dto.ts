@@ -55,9 +55,19 @@ export class CreateServiceDto {
   peakHourMultiplier?: number;
 
   @IsOptional()
+  @Transform(({ value }) => {
+    if (typeof value === 'string') {
+      try {
+        return JSON.parse(value);
+      } catch (e) {
+        return value;
+      }
+    }
+    return value;
+  })
   @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => PeakHourDto)
+  // @ValidateNested({ each: true })
+  // @Type(() => PeakHourDto)
   peakHours?: PeakHourDto[];
 
   @IsOptional()
@@ -77,6 +87,10 @@ export class CreateServiceDto {
   surgeFactor?: number;
 
   @IsOptional()
+  @IsBoolean()
+  isSurgeEnabled?: boolean;
+
+  @IsOptional()
   @IsNumber()
   platformFee?: number;
 
@@ -87,4 +101,7 @@ export class CreateServiceDto {
   @IsOptional()
   @IsString()
   iconUrl?: string;
+
+  @IsOptional()
+  icon?: any;
 }

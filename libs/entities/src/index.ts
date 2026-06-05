@@ -3,9 +3,11 @@ export * from './entities.service';
 export * from './user.entity';
 export * from './otp.entity';
 export * from './technician-profile.entity';
-export * from './technician-skill.entity';
-export * from './technician-service-area.entity';
+export * from './technician-service.entity';
 export * from './technician-brand-expertise.entity';
 export * from './service.entity';
 export * from './pricing-rule.entity';
+export * from './platform-setting.entity';
+export * from './technician-location.entity';
+
 

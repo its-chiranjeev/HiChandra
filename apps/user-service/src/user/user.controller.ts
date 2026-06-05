@@ -18,7 +18,6 @@ export class UserController {
     FileFieldsInterceptor([
       { name: 'icon', maxCount: 1 },
     ]),
-    // this is new comment
   )
   @HttpCode(HttpStatus.OK)
   async createService(

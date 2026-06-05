@@ -40,28 +40,18 @@ export class UserRepository extends BaseRepository<User> {
       role: Not(USER_ROLE.ADMIN),
     };
 
-    if (role) {
-      where.role = role;
-    }
-
     if (status) {
       where.status = status;
     }
 
     const [users, total] = await this.repo.findAndCount({
       where,
-      select: {
-        id: true,
-        email: true,
-        username: true,
-        phone: true,
-        firstName: true,
-        lastName: true,
-        profileImage: true,
-        role: true,
-        status: true,
-        createdAt: true,
-        updatedAt: true,
+      relations: {
+        technicianProfile: {
+          services: true,
+          brandExpertise: true,
+          locations: true,
+        },
       },
       skip: (page - 1) * limit,
       take: limit,
@@ -75,19 +65,16 @@ export class UserRepository extends BaseRepository<User> {
 
   async findById(id: number) {
     return this.repo.findOne({
-      where: { id },
-      select: {
-        id: true,
-        email: true,
-        username: true,
-        phone: true,
-        firstName: true,
-        lastName: true,
-        profileImage: true,
-        role: true,
-        status: true,
-        createdAt: true,
-        updatedAt: true,
+      where: {
+        id,
+        role: Not(USER_ROLE.ADMIN),
+      },
+      relations: {
+        technicianProfile: {
+          services: true,
+          brandExpertise: true,
+          locations: true,
+        },
       },
     });
   }

@@ -69,15 +69,30 @@ export class UserService {
                 status,
             );
 
+        const formattedUsers = users.map((user) => {
+            const {
+                password,
+                hashedRefreshToken,
+                tokenVersion,
+                ...safeUser
+            } = user;
+
+
+            return safeUser;
+        });
+
         return {
             success: true,
-            message: 'All users fetched successfully',
-            data: users,
+            message:
+                'All users fetched successfully',
+            data: formattedUsers,
             pagination: {
                 total,
                 page,
                 limit,
-                totalPages: Math.ceil(total / limit),
+                totalPages: Math.ceil(
+                    total / limit,
+                ),
             },
         };
     }
@@ -89,7 +104,18 @@ export class UserService {
             throw new NotFoundException('User not found');
         }
 
-        return user;
+        const {
+            password,
+            hashedRefreshToken,
+            tokenVersion,
+            ...safeUser
+        } = user;
+
+        return {
+            success: true,
+            message: 'User fetched successfully',
+            data: safeUser,
+        };
     }
 
     async updateUserService(

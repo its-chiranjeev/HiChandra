@@ -47,6 +47,15 @@ export class TechnicianLocation {
   @Column({ type: 'boolean', default: true })
   isActive!: boolean;
 
+  @Column({ type: 'decimal', precision: 10, scale: 8, nullable: true })
+  currentLat?: number;
+
+  @Column({ type: 'decimal', precision: 11, scale: 8, nullable: true })
+  currentLng?: number;
+
+  @Column({ type: 'timestamp', nullable: true })
+  locationUpdatedAt?: Date;
+
   @CreateDateColumn()
   createdAt!: Date;
 

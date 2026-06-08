@@ -35,9 +35,6 @@ export class TechnicianProfile {
   user?: User;
 
   // Basic Info
-  @Column({ type: 'varchar', length: 255, nullable: true })
-  address?: string;
-
   @Column({ type: 'int', nullable: true })
   yearsOfExperience?: number;
 
@@ -60,26 +57,6 @@ export class TechnicianProfile {
 
   @Column({ type: 'timestamp', nullable: true })
   lastSeenAt?: Date;
-
-  // Live Location
-  @Column({ type: 'decimal', precision: 10, scale: 8, nullable: true })
-  currentLat?: number;
-
-  @Column({ type: 'decimal', precision: 11, scale: 8, nullable: true })
-  currentLng?: number;
-
-  @Column({ type: 'timestamp', nullable: true })
-  locationUpdatedAt?: Date;
-
-  // Service Area
-  @Column({ type: 'int', nullable: true })
-  serviceRadiusKm?: number;
-
-  @Column({ type: 'simple-array', nullable: true })
-  preferredAreas?: string[];             // ["Lajpat Nagar", "CP"]
-
-  @Column({ type: 'simple-array', nullable: true })
-  pincodes?: string[];                   // ["110024", "110003"]
 
   // Documents
 

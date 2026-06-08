@@ -107,6 +107,22 @@ export class UserController {
     );
   }
 
+  @Get('platform-settings/all')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLE.ADMIN)
+  async getAllPlatformSettings() {
+    return this.userService.getAllPlatformSettingsService();
+  }
+
+  @Get('platform-settings/search')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLE.ADMIN)
+  async getPlatformSetting(
+    @Query('filter') filter?: string,
+  ) {
+    return this.userService.getPlatformSettingService(filter);
+  }
+
   @Post('admin/register')
   @HttpCode(HttpStatus.OK)
   async adminRegister(

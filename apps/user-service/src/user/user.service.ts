@@ -4,7 +4,7 @@ import * as bcrypt from 'bcryptjs';
 import { randomUUID } from 'crypto';
 import { DataSource, QueryRunner } from 'typeorm';
 import { last, single } from 'rxjs';
-import { UserRepository, OtpRepository, TechnicianProfileRepository, ServiceRepository } from '@hichandra/repositories';
+import { UserRepository, OtpRepository, TechnicianProfileRepository, ServiceRepository, PlatformSettingRepository } from '@hichandra/repositories';
 import {
     USER_ROLE,
     USER_STATUS,
@@ -27,6 +27,7 @@ export class UserService {
         private readonly userRepository: UserRepository,
         private readonly otpRepository: OtpRepository,
         private readonly serviceRepository: ServiceRepository,
+        private readonly platformSettingRepository: PlatformSettingRepository,
         private readonly technicianProfileRepository: TechnicianProfileRepository,
         private readonly dataSource: DataSource,
         private readonly authModuleService: AuthModuleService,
@@ -230,6 +231,45 @@ export class UserService {
             success: true,
             message: 'Service fetched successfully',
             data: serviceData,
+        };
+    }
+
+    async getAllPlatformSettingsService() {
+        const settings =
+            await this.platformSettingRepository.findAllPlatformSettings();
+
+        return {
+            success: true,
+            message: 'Platform settings fetched successfully',
+            data: settings,
+        };
+    }
+
+
+    async getPlatformSettingService(
+        filter?: string,
+    ) {
+        if (!filter) {
+            throw new BadRequestException(
+                'Search query filter is required',
+            );
+        }
+
+        const setting =
+            await this.platformSettingRepository.findByFilter(
+                filter,
+            );
+
+        if (!setting) {
+            throw new NotFoundException(
+                'Platform setting not found',
+            );
+        }
+
+        return {
+            success: true,
+            message: 'Platform setting fetched successfully',
+            data: setting,
         };
     }
 

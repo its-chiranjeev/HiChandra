@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 
 import { PlatformSetting } from '@hichandra/entities';
 import { BaseRepository } from './baseDb.repository';
+import { ILike } from 'typeorm';
 
 @Injectable()
 export class PlatformSettingRepository extends BaseRepository<PlatformSetting> {
@@ -14,29 +15,25 @@ export class PlatformSettingRepository extends BaseRepository<PlatformSetting> {
         super(repo);
     }
 
-    async findAllPlatformSettings() {
+
+    async findAllPlatformSettings(filter?: string) {
+
+        if (!filter) {
+            return this.repo.find({
+                order: {
+                    createdAt: 'DESC',
+                },
+            });
+        }
+
         return this.repo.find({
+            where: {
+                key: ILike(`%${filter}%`),
+            },
             order: {
                 createdAt: 'DESC',
             },
         });
     }
 
-    async findByFilter(filter: string) {
-        const isId = !isNaN(Number(filter));
-
-        if (isId) {
-            return this.repo.findOne({
-                where: {
-                    id: Number(filter),
-                },
-            });
-        }
-
-        return this.repo.findOne({
-            where: {
-                key: filter,
-            },
-        });
-    }
 }

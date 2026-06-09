@@ -234,9 +234,9 @@ export class UserService {
         };
     }
 
-    async getAllPlatformSettingsService() {
+    async getAllPlatformSettingsService(filter?: string) {
         const settings =
-            await this.platformSettingRepository.findAllPlatformSettings();
+            await this.platformSettingRepository.findAllPlatformSettings(filter);
 
         return {
             success: true,
@@ -245,33 +245,6 @@ export class UserService {
         };
     }
 
-
-    async getPlatformSettingService(
-        filter?: string,
-    ) {
-        if (!filter) {
-            throw new BadRequestException(
-                'Search query filter is required',
-            );
-        }
-
-        const setting =
-            await this.platformSettingRepository.findByFilter(
-                filter,
-            );
-
-        if (!setting) {
-            throw new NotFoundException(
-                'Platform setting not found',
-            );
-        }
-
-        return {
-            success: true,
-            message: 'Platform setting fetched successfully',
-            data: setting,
-        };
-    }
 
     async adminRegisterService(dto: RegisterDto) {
         const existingUser = await this.userRepository.findByEmail(dto.email);

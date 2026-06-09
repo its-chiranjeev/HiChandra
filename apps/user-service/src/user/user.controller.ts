@@ -39,7 +39,7 @@ export class UserController {
   async upsertPlatformSetting(
     @Body(new ValidationPipe({ whitelist: true, transform: true }))
     dto: CreatePlatformSettingDto,
-  ) {
+  ) { 
     return this.userService.upsertPlatformSetting(dto);
   }
 

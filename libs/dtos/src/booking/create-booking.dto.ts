@@ -1,5 +1,22 @@
-import { IsNotEmpty, IsNumber, IsOptional, IsBoolean, IsDate, IsObject } from 'class-validator';
+import { IsNotEmpty, IsNumber, IsOptional, IsBoolean, IsDate, IsArray, ValidateNested, IsString } from 'class-validator';
 import { Type } from 'class-transformer';
+
+export class BookingSpecificationDto {
+  @IsOptional()
+  @IsNumber()
+  specificationId?: number;
+
+  @IsOptional()
+  @IsNumber()
+  subSpecificationServiceId?: number;
+
+  @IsOptional()
+  @IsString()
+  name?: string;
+
+  @IsNotEmpty()
+  value!: any;
+}
 
 export class CreateBookingDto {
   @IsNumber()
@@ -11,8 +28,10 @@ export class CreateBookingDto {
   customerAddressId!: number;
 
   @IsOptional()
-  @IsObject()
-  serviceSpecifications?: Record<string, any>;
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => BookingSpecificationDto)
+  serviceSpecifications?: BookingSpecificationDto[];
 
   @IsOptional()
   @IsBoolean()

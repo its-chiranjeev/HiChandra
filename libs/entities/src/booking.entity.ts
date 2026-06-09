@@ -12,6 +12,19 @@ import { User } from './user.entity';
 import { Service } from './service.entity';
 import { CustomerAddress } from './customer-address.entity';
 
+export interface PriceBreakdown {
+  serviceBasePrice: number;
+  distanceCharge: number;
+  emergencyCharge: number;
+  peakHourCharge: number;
+  weekendCharge: number;
+  surgeCharge: number;
+  gst: number;
+  platformFee: number;
+  technicianEarning: number;
+  platformEarning: number;
+}
+
 export enum BOOKING_STATUS {
   PENDING = 'PENDING',
   ACCEPTED = 'ACCEPTED',
@@ -44,7 +57,7 @@ export class Booking {
   @Column({ type: 'int' })
   serviceId!: number;
 
-  @ManyToOne(() => Service)
+  @ManyToOne(() => Service, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'serviceId' })
   service!: Service;
 
@@ -74,21 +87,10 @@ export class Booking {
   completedAt?: Date;
 
   @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
-  totalFare?: number;
+  totalAmount?: number;
 
   @Column({ type: 'jsonb', nullable: true })
-  fareBreakdown?: {
-    baseFare: number;
-    distanceCharge: number;
-    emergencyCharge: number;
-    peakHourCharge: number;
-    weekendCharge: number;
-    surgeCharge: number;
-    gst: number;
-    platformFee: number;
-    technicianEarning: number;
-    platformEarning: number;
-  };
+  priceBreakdown?: PriceBreakdown;
 
   @Column({ type: 'text', nullable: true })
   cancellationReason?: string;

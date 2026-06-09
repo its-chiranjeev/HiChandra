@@ -59,7 +59,7 @@ export class CreateServiceDto {
 
   @IsNumber()
   @IsNotEmpty()
-  baseFare!: number;
+  serviceBasePrice!: number;
 
   @IsOptional()
   @IsNumber()

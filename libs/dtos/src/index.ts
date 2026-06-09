@@ -9,3 +9,5 @@ export * from './user/create-platform-setting.dto';
 export * from './multer/multer.dto';
 export * from './auth/update-user.dto';
 export * from './booking/create-booking.dto';
+export * from './user/update-profile.dto';
+

@@ -19,12 +19,12 @@ export class PricingRule {
   @Column({ type: 'int' })
   serviceId!: number;
 
-  @OneToOne(() => Service, (service) => service.pricingRule)
+  @OneToOne(() => Service, (service) => service.pricingRule, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'serviceId' })
   service!: Service;
 
   @Column({ type: 'decimal', precision: 10, scale: 2 })
-  baseFare!: number;
+  serviceBasePrice!: number;
 
   @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
   perHourRate!: number;

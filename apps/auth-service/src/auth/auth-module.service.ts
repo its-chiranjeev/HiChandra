@@ -54,7 +54,6 @@ export class AuthModuleService {
       lastLoginAt: new Date(),
       hashedRefreshToken,
     });
-
     return {
       tokens: {
         accessToken,
@@ -227,6 +226,7 @@ export class AuthModuleService {
       throw new NotFoundException('User not found');
     }
 
+
     const passwordMatch = await bcrypt.compare(dto.password, user.password);
     if (!passwordMatch) {
       throw new UnauthorizedException('Invalid credentials');
@@ -238,7 +238,6 @@ export class AuthModuleService {
     ) {
       throw new ForbiddenException('User is blocked');
     }
-
     const data = await this.issueAuthTokens(user);
     return {
       message: 'Login successful',

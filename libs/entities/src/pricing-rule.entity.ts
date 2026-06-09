@@ -38,7 +38,7 @@ export class PricingRule {
   @Column({ type: 'decimal', precision: 4, scale: 2, default: 1.0 })
   peakHourMultiplier!: number;
 
-  @Column({ type: 'simple-json', nullable: true })
+  @Column({ type: 'jsonb', nullable: true })
   peakHours?: { start: number; end: number }[];
 
   @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })

@@ -29,7 +29,7 @@ export class ServiceSpecification {
   @Column({ type: 'enum', enum: ['text', 'select', 'multiselect', 'number', 'image'] })
   type!: string;
 
-  @Column({ type: 'simple-json', nullable: true })
+  @Column({ type: 'jsonb', nullable: true })
   values?: string[] | number[];
 
   @Column({ type: 'boolean', default: false })

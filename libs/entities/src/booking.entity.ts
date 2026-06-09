@@ -55,7 +55,7 @@ export class Booking {
   @JoinColumn({ name: 'addressId' })
   address!: CustomerAddress;
 
-  @Column({ type: 'simple-json', nullable: true })
+  @Column({ type: 'jsonb', nullable: true })
   serviceSpecifications?: Record<string, any>;
 
   @Column({ type: 'enum', enum: BOOKING_STATUS, default: BOOKING_STATUS.PENDING })
@@ -76,7 +76,7 @@ export class Booking {
   @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
   totalFare?: number;
 
-  @Column({ type: 'simple-json', nullable: true })
+  @Column({ type: 'jsonb', nullable: true })
   fareBreakdown?: {
     baseFare: number;
     distanceCharge: number;

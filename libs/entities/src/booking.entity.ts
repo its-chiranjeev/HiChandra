@@ -12,6 +12,19 @@ import { User } from './user.entity';
 import { Service } from './service.entity';
 import { CustomerAddress } from './customer-address.entity';
 
+export interface PriceBreakdown {
+  serviceBasePrice: number;
+  distanceCharge: number;
+  emergencyCharge: number;
+  peakHourCharge: number;
+  weekendCharge: number;
+  surgeCharge: number;
+  gst: number;
+  platformFee: number;
+  technicianEarning: number;
+  platformEarning: number;
+}
+
 export enum BOOKING_STATUS {
   PENDING = 'PENDING',
   ACCEPTED = 'ACCEPTED',
@@ -44,7 +57,7 @@ export class Booking {
   @Column({ type: 'int' })
   serviceId!: number;
 
-  @ManyToOne(() => Service)
+  @ManyToOne(() => Service, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'serviceId' })
   service!: Service;
 
@@ -55,7 +68,7 @@ export class Booking {
   @JoinColumn({ name: 'addressId' })
   address!: CustomerAddress;
 
-  @Column({ type: 'simple-json', nullable: true })
+  @Column({ type: 'jsonb', nullable: true })
   serviceSpecifications?: Record<string, any>;
 
   @Column({ type: 'enum', enum: BOOKING_STATUS, default: BOOKING_STATUS.PENDING })
@@ -74,21 +87,10 @@ export class Booking {
   completedAt?: Date;
 
   @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
-  totalFare?: number;
+  totalAmount?: number;
 
-  @Column({ type: 'simple-json', nullable: true })
-  fareBreakdown?: {
-    baseFare: number;
-    distanceCharge: number;
-    emergencyCharge: number;
-    peakHourCharge: number;
-    weekendCharge: number;
-    surgeCharge: number;
-    gst: number;
-    platformFee: number;
-    technicianEarning: number;
-    platformEarning: number;
-  };
+  @Column({ type: 'jsonb', nullable: true })
+  priceBreakdown?: PriceBreakdown;
 
   @Column({ type: 'text', nullable: true })
   cancellationReason?: string;

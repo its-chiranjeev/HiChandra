@@ -7,6 +7,7 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { TechnicianProfile } from './technician-profile.entity';
+import { Service } from './service.entity';
 
 @Entity('technician_services')
 export class TechnicianService {
@@ -22,6 +23,10 @@ export class TechnicianService {
 
   @Column({ type: 'int' })
   serviceId!: number;
+
+  @ManyToOne(() => Service, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'serviceId' })
+  service?: Service;
 
   @CreateDateColumn()
   createdAt!: Date;

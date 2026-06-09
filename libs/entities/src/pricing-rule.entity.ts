@@ -19,12 +19,12 @@ export class PricingRule {
   @Column({ type: 'int' })
   serviceId!: number;
 
-  @OneToOne(() => Service, (service) => service.pricingRule)
+  @OneToOne(() => Service, (service) => service.pricingRule, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'serviceId' })
   service!: Service;
 
   @Column({ type: 'decimal', precision: 10, scale: 2 })
-  baseFare!: number;
+  serviceBasePrice!: number;
 
   @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
   perHourRate!: number;
@@ -38,7 +38,7 @@ export class PricingRule {
   @Column({ type: 'decimal', precision: 4, scale: 2, default: 1.0 })
   peakHourMultiplier!: number;
 
-  @Column({ type: 'simple-json', nullable: true })
+  @Column({ type: 'jsonb', nullable: true })
   peakHours?: { start: number; end: number }[];
 
   @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })

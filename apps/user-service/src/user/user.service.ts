@@ -24,7 +24,7 @@ import {
 } from '@hichandra/entities';
 import { AuthModuleService } from 'apps/auth-service/src/auth/auth-module.service';
 import { S3Service } from '@hichandra/s3';
-import { RegisterDto, UpdateUserDto, CreateServiceDto, CreatePlatformSettingDto, CustomerAddressDto, UpdateCustomerAddressDto } from '@hichandra/dtos';
+import { RegisterDto, UpdateUserDto, CreateServiceDto, CreatePlatformSettingDto, CustomerAddressDto, UpdateCustomerAddressDto, UpdateProfileDto } from '@hichandra/dtos';
 
 @Injectable()
 export class UserService {
@@ -616,7 +616,7 @@ export class UserService {
 
             const pricingRule = pricingRuleRepository.create({
                 serviceId: savedService.id,
-                baseFare: dto.baseFare,
+                serviceBasePrice: dto.serviceBasePrice,
                 perHourRate: dto.perHourRate ?? 0,
                 perKmRate: dto.perKmRate ?? 0,
                 weekendMultiplier: dto.weekendMultiplier ?? 1.0,
@@ -809,6 +809,192 @@ export class UserService {
             return {
                 success: true,
                 message: 'Address deleted successfully',
+            };
+        });
+    }
+
+    async updateProfileService(
+        userId: number,
+        dto: UpdateProfileDto,
+        files?: {
+            profileImage?: Express.Multer.File[];
+        },
+    ) {
+        return this.dataSource.transaction(async (manager) => {
+            const userRepo = manager.getRepository(User);
+            const profileRepo = manager.getRepository(TechnicianProfile);
+            const locationRepo = manager.getRepository(TechnicianLocation);
+            const techServiceRepo = manager.getRepository(TechnicianService);
+            const brandRepo = manager.getRepository(TechnicianBrandExpertise);
+            const serviceRepo = manager.getRepository(Service);
+
+            const user = await userRepo.findOne({
+                where: { id: userId },
+                relations: ['technicianProfile'],
+            });
+            if (!user) {
+                throw new NotFoundException('User not found');
+            }
+
+            const hasTechFields = dto.technicianProfile || dto.location || dto.services || dto.brandExpertise;
+            if (hasTechFields && user.role !== USER_ROLE.TECHNICIAN) {
+                throw new BadRequestException('Only technicians can update technician-specific profile fields');
+            }
+
+            if (dto.username && dto.username !== user.username) {
+                const existing = await userRepo.findOne({ where: { username: dto.username } });
+                if (existing) {
+                    throw new ConflictException('Username already in use');
+                }
+                user.username = dto.username;
+            }
+            if (dto.phone && dto.phone !== user.phone) {
+                const existing = await userRepo.findOne({ where: { phone: dto.phone } });
+                if (existing) {
+                    throw new ConflictException('Phone number already in use');
+                }
+                user.phone = dto.phone;
+            }
+
+            if (dto.firstName !== undefined) user.firstName = dto.firstName;
+            if (dto.lastName !== undefined) user.lastName = dto.lastName;
+            if (dto.emergencyContact !== undefined) user.emergencyContact = dto.emergencyContact;
+
+            if (files?.profileImage?.[0]) {
+                const uploadedUrl = await this.s3Service.uploadFileHelper(user.id, 'profile-image', files.profileImage);
+
+                if (uploadedUrl) {
+                    user.profileImage = uploadedUrl;
+                }
+            } else if (dto.profileImage !== undefined) {
+                user.profileImage = dto.profileImage;
+            }
+
+            await userRepo.save(user);
+            if (user.role === USER_ROLE.TECHNICIAN) {
+                let profile = user.technicianProfile;
+                if (!profile) {
+                    profile = profileRepo.create({
+                        userId: user.id,
+                        status: TECHNICIAN_STATUS.PENDING_APPROVAL,
+                    });
+                    profile = await profileRepo.save(profile);
+                    user.technicianProfile = profile;
+                    await userRepo.save(user);
+                }
+
+                if (dto.technicianProfile) {
+                    const profileData = dto.technicianProfile;
+                    if (profileData.yearsOfExperience !== undefined) profile.yearsOfExperience = profileData.yearsOfExperience;
+                    if (profileData.languages !== undefined) profile.languages = profileData.languages;
+                    if (profileData.hasLadder !== undefined) profile.hasLadder = profileData.hasLadder;
+                    if (profileData.hasACGauges !== undefined) profile.hasACGauges = profileData.hasACGauges;
+                    if (profileData.hasSafetyEquipment !== undefined) profile.hasSafetyEquipment = profileData.hasSafetyEquipment;
+                    if (profileData.hasVehicle !== undefined) profile.hasVehicle = profileData.hasVehicle;
+                    if (profileData.accountHolderName !== undefined) profile.accountHolderName = profileData.accountHolderName;
+                    if (profileData.accountNumber !== undefined) profile.accountNumber = profileData.accountNumber;
+                    if (profileData.ifscCode !== undefined) profile.ifscCode = profileData.ifscCode;
+                    if (profileData.bankName !== undefined) profile.bankName = profileData.bankName;
+
+                    await profileRepo.save(profile);
+                }
+
+                if (dto.location) {
+                    const locData = dto.location;
+                    let location = await locationRepo.findOne({ where: { technicianId: profile.id } });
+
+                    if (!location) {
+                        location = locationRepo.create({
+                            technicianId: profile.id,
+                            latitude: locData.latitude ?? 0,
+                            longitude: locData.longitude ?? 0,
+                            currentLat: locData.latitude ?? 0,
+                            currentLng: locData.longitude ?? 0,
+                            locationUpdatedAt: new Date(),
+                            isActive: true,
+                        });
+                    }
+
+                    if (locData.latitude !== undefined) {
+                        location.latitude = locData.latitude;
+                        location.currentLat = locData.latitude;
+                        location.locationUpdatedAt = new Date();
+                    }
+                    if (locData.longitude !== undefined) {
+                        location.longitude = locData.longitude;
+                        location.currentLng = locData.longitude;
+                        location.locationUpdatedAt = new Date();
+                    }
+                    if (locData.fullAddress !== undefined) location.fullAddress = locData.fullAddress;
+                    if (locData.city !== undefined) location.city = locData.city;
+                    if (locData.state !== undefined) location.state = locData.state;
+                    if (locData.pincode !== undefined) location.pincode = locData.pincode;
+                    if (locData.serviceRadiusKm !== undefined) location.serviceRadiusKm = locData.serviceRadiusKm;
+
+                    await locationRepo.save(location);
+                }
+
+                if (dto.services) {
+                    await techServiceRepo.delete({ technicianProfileId: profile.id });
+
+                    if (dto.services.length > 0) {
+                        const uniqueIds = Array.from(new Set(dto.services));
+                        for (const sId of uniqueIds) {
+                            const sExists = await serviceRepo.findOne({ where: { id: sId, isActive: true } });
+                            if (!sExists) {
+                                throw new BadRequestException(`Service with ID ${sId} does not exist or is inactive`);
+                            }
+                        }
+
+                        const servicesToSave = uniqueIds.map((serviceId) =>
+                            techServiceRepo.create({
+                                technicianProfileId: profile.id,
+                                serviceId,
+                            }),
+                        );
+                        await techServiceRepo.save(servicesToSave);
+                    }
+                }
+
+                if (dto.brandExpertise) {
+                    await brandRepo.delete({ technicianProfileId: profile.id });
+
+                    if (dto.brandExpertise.length > 0) {
+                        const uniqueBrands = Array.from(new Set(dto.brandExpertise));
+                        const brandsToSave = uniqueBrands.map((brandName) =>
+                            brandRepo.create({
+                                technicianProfileId: profile.id,
+                                brandName,
+                            }),
+                        );
+                        await brandRepo.save(brandsToSave);
+                    }
+                }
+            }
+
+            const updatedUser = await userRepo.findOne({
+                where: { id: userId },
+                relations: [
+                    'technicianProfile',
+                    'technicianProfile.services',
+                    'technicianProfile.brandExpertise',
+                    'technicianProfile.locations',
+                    'addresses',
+                ],
+            });
+
+            if (updatedUser) {
+                const { password: _pass, hashedRefreshToken: _token, ...cleanUser } = updatedUser;
+                return {
+                    success: true,
+                    message: 'Profile updated successfully',
+                    data: cleanUser,
+                };
+            }
+
+            return {
+                success: true,
+                message: 'Profile updated successfully',
             };
         });
     }

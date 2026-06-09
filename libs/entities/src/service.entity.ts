@@ -5,8 +5,10 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   OneToOne,
+  OneToMany,
 } from 'typeorm';
 import { PricingRule } from './pricing-rule.entity';
+import { ServiceSpecification } from './service-specification.entity';
 
 @Entity('services')
 export class Service {
@@ -27,6 +29,9 @@ export class Service {
 
   @OneToOne(() => PricingRule, (pricingRule) => pricingRule.service)
   pricingRule?: PricingRule;
+
+  @OneToMany(() => ServiceSpecification, (spec) => spec.service)
+  specifications?: ServiceSpecification[];
 
   @CreateDateColumn()
   createdAt!: Date;

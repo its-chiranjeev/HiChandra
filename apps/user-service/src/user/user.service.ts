@@ -2,7 +2,7 @@ import { ConflictException, ForbiddenException, Injectable, InternalServerErrorE
 import { BadRequestException } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 import { randomUUID } from 'crypto';
-import { DataSource, QueryRunner } from 'typeorm';
+import { DataSource, QueryRunner, Not } from 'typeorm';
 import { last, single } from 'rxjs';
 import { UserRepository, OtpRepository, TechnicianProfileRepository, ServiceRepository } from '@hichandra/repositories';
 import {
@@ -15,10 +15,16 @@ import {
     PricingRule,
     PlatformSetting,
     TechnicianLocation,
+    ServiceSpecification,
+    CustomerAddress,
+    User,
+    Otp,
+    TechnicianProfile,
+    JOB_STATUS,
 } from '@hichandra/entities';
 import { AuthModuleService } from 'apps/auth-service/src/auth/auth-module.service';
 import { S3Service } from '@hichandra/s3';
-import { RegisterDto, UpdateUserDto, CreateServiceDto, CreatePlatformSettingDto } from '@hichandra/dtos';
+import { RegisterDto, UpdateUserDto, CreateServiceDto, CreatePlatformSettingDto, CustomerAddressDto, UpdateCustomerAddressDto } from '@hichandra/dtos';
 
 @Injectable()
 export class UserService {
@@ -41,6 +47,7 @@ export class UserService {
                 'technicianProfile.services',
                 'technicianProfile.brandExpertise',
                 'technicianProfile.locations',
+                'addresses',
             ],
         });
         if (!user) {
@@ -139,20 +146,22 @@ export class UserService {
                 limit,
             );
 
-        const formattedServices = services.map(
-            (service) => {
-                let iconDownloadUrl;
-                if (service.iconUrl) {
-                    // Generate download URL here
-                    iconDownloadUrl = this.s3Service.getDownloadUrl(service.iconUrl);
-                }
-                const serviceData = {
-                    ...service,
-                    iconDownloadUrl
-                };
+        const formattedServices = await Promise.all(
+            services.map(
+                async (service) => {
+                    let iconDownloadUrl;
+                    if (service.iconUrl) {
+                        // Generate download URL here
+                        iconDownloadUrl = await this.s3Service.getDownloadUrl(service.iconUrl);
+                    }
+                    const serviceData = {
+                        ...service,
+                        iconDownloadUrl
+                    };
 
-                return serviceData;
-            },
+                    return serviceData;
+                },
+            ),
         );
 
         const response: any = {
@@ -197,7 +206,7 @@ export class UserService {
         (serviceData as any).iconDownloadUrl = undefined;
         if (service.iconUrl) {
             // Generate download URL here
-            (serviceData as any).iconDownloadUrl = this.s3Service.getDownloadUrl(service.iconUrl);
+            (serviceData as any).iconDownloadUrl = await this.s3Service.getDownloadUrl(service.iconUrl);
         }
 
         return {
@@ -267,187 +276,223 @@ export class UserService {
             throw new BadRequestException('Email is required');
         }
 
-        const existingUser = await this.userRepository.findByEmail(dto.email);
-        if (existingUser) {
-            throw new ConflictException('Email already in use');
-        }
+        return this.dataSource.transaction(async (manager) => {
+            const userRepository = manager.getRepository(User);
+            const otpRepository = manager.getRepository(Otp);
+            const technicianProfileRepository = manager.getRepository(TechnicianProfile);
+            const locationRepository = manager.getRepository(TechnicianLocation);
+            const technicianServiceRepository = manager.getRepository(TechnicianService);
+            const technicianBrandExpertiseRepository = manager.getRepository(TechnicianBrandExpertise);
+            const customerAddressRepository = manager.getRepository(CustomerAddress);
 
-        if (dto.username) {
-            const existingUserByUsername = await this.userRepository.findOne({
-                where: { username: dto.username },
-            });
-            if (existingUserByUsername) {
-                throw new ConflictException('Username already in use');
+            const existingUser = await userRepository.findOne({ where: { email: dto.email } });
+            if (existingUser) {
+                throw new ConflictException('Email already in use');
             }
-        }
 
-        const existingUserByPhone = await this.userRepository.findOne({
-            where: { phone: dto.phone },
+            if (dto.username) {
+                const existingUserByUsername = await userRepository.findOne({
+                    where: { username: dto.username },
+                });
+                if (existingUserByUsername) {
+                    throw new ConflictException('Username already in use');
+                }
+            }
+
+            const existingUserByPhone = await userRepository.findOne({
+                where: { phone: dto.phone },
+            });
+            if (existingUserByPhone) {
+                throw new ConflictException('Phone number already in use');
+            }
+
+            const otpRecord = await otpRepository.findOne({
+                where: { email: dto.email, phone: dto.phone },
+            });
+
+            if (!otpRecord) {
+                throw new BadRequestException('OTP record not found for this email and phone');
+            }
+
+            if (!otpRecord.isVerified) {
+                throw new ForbiddenException('OTP is not verified');
+            }
+
+            await otpRepository.delete(otpRecord.id);
+
+            const hashedPassword = await bcrypt.hash(dto.password, 10);
+
+            const newUser = userRepository.create({
+                email: dto.email,
+                username: dto.username,
+                phone: dto.phone,
+                firstName: dto.firstName,
+                lastName: dto.lastName,
+                password: hashedPassword,
+                role: otpRecord.role || USER_ROLE.CUSTOMER,
+                status: otpRecord.role === USER_ROLE.TECHNICIAN ? USER_STATUS.PENDING : USER_STATUS.ACTIVE,
+            });
+
+            let savedUser = await userRepository.save(newUser);
+
+            if (savedUser.role === USER_ROLE.TECHNICIAN) {
+                const profileData = dto.technicianProfile || {};
+                let panUrl;
+                let policeCertUrl;
+                let tradeLicenseUrl;
+                let selfieUrl;
+                let aadharUrl;
+
+                if (files?.panUrl?.[0]) {
+                    panUrl = await this.s3Service.uploadFileHelper(savedUser.id, 'pan', files?.panUrl);
+                }
+                if (files?.policeCertUrl?.[0]) {
+                    policeCertUrl = await this.s3Service.uploadFileHelper(savedUser.id, 'police-cert', files?.policeCertUrl);
+                }
+                if (files?.tradeLicenseUrl?.[0]) {
+                    tradeLicenseUrl = await this.s3Service.uploadFileHelper(savedUser.id, 'trade-license', files?.tradeLicenseUrl);
+                }
+                if (files?.selfieUrl?.[0]) {
+                    selfieUrl = await this.s3Service.uploadFileHelper(savedUser.id, 'selfie', files?.selfieUrl);
+                }
+                if (files?.aadharUrl?.[0]) {
+                    aadharUrl = await this.s3Service.uploadFileHelper(savedUser.id, 'aadhar', files?.aadharUrl);
+                }
+
+                const newProfile = technicianProfileRepository.create({
+                    userId: savedUser.id,
+                    yearsOfExperience: profileData.yearsOfExperience,
+                    languages: profileData.languages,
+                    status: TECHNICIAN_STATUS.PENDING_APPROVAL,
+                    jobStatus: JOB_STATUS.OFFLINE,
+                    aadharUrl,
+                    panUrl,
+                    policeCertUrl,
+                    tradeLicenseUrl,
+                    selfieUrl,
+                    hasLadder: profileData.hasLadder || false,
+                    hasACGauges: profileData.hasACGauges || false,
+                    hasSafetyEquipment: profileData.hasSafetyEquipment || false,
+                    hasVehicle: profileData.hasVehicle || false,
+                    accountHolderName: profileData.accountHolderName || '',
+                    accountNumber: profileData.accountNumber || '',
+                    ifscCode: profileData.ifscCode || '',
+                    bankName: profileData.bankName || '',
+                });
+                const savedProfile = await technicianProfileRepository.save(newProfile);
+
+                // Save location
+                const newLocation = locationRepository.create({
+                    technicianId: savedProfile.id,
+                    latitude: profileData.latitude ?? 0,
+                    longitude: profileData.longitude ?? 0,
+                    currentLat: profileData.latitude ?? 0,
+                    currentLng: profileData.longitude ?? 0,
+                    locationUpdatedAt: new Date(),
+                    serviceRadiusKm: profileData.serviceRadiusKm ?? 0,
+                    fullAddress: profileData.address,
+                    city: profileData.city,
+                    state: profileData.state,
+                    pincode: profileData.pincode,
+                    isActive: true,
+                });
+                await locationRepository.save(newLocation);
+
+                // Save services
+                if (profileData.services && profileData.services.length > 0) {
+                    const servicesToSave = profileData.services.map((s) =>
+                        technicianServiceRepository.create({
+                            technicianProfileId: savedProfile.id,
+                            serviceId: s.serviceId,
+                        })
+                    );
+                    await technicianServiceRepository.save(servicesToSave);
+                }
+
+
+                // Save brand expertise
+                if (profileData.brandExpertise && profileData.brandExpertise.length > 0) {
+                    const brandsToSave = profileData.brandExpertise.map((b) =>
+                        technicianBrandExpertiseRepository.create({
+                            technicianProfileId: savedProfile.id,
+                            brandName: b.brandName,
+                        })
+                    );
+                    await technicianBrandExpertiseRepository.save(brandsToSave);
+                }
+
+                savedUser.technicianProfileId = savedProfile.id;
+                savedUser = await userRepository.save(savedUser);
+            }
+
+            if (savedUser.role === USER_ROLE.CUSTOMER && dto.customerAddress) {
+                const newAddress = customerAddressRepository.create({
+                    userId: savedUser.id,
+                    latitude: dto.customerAddress.latitude,
+                    longitude: dto.customerAddress.longitude,
+                    fullAddress: dto.customerAddress.fullAddress,
+                    city: dto.customerAddress.city,
+                    state: dto.customerAddress.state,
+                    pincode: dto.customerAddress.pincode,
+                    label: dto.customerAddress.label || 'Home',
+                    isDefault: true,
+                    isActive: true,
+                });
+                await customerAddressRepository.save(newAddress);
+            }
+
+            const tokenData = await this.authModuleService.issueAuthTokens(savedUser);
+
+            let userResponse: any = {
+                id: savedUser.id,
+                email: savedUser.email,
+                username: savedUser.username,
+                phone: savedUser.phone,
+                firstName: savedUser.firstName,
+                lastName: savedUser.lastName,
+                role: savedUser.role,
+                status: savedUser.status,
+                createdAt: savedUser.createdAt,
+                updatedAt: savedUser.updatedAt,
+            };
+
+            if (savedUser.role === USER_ROLE.TECHNICIAN) {
+                const fullUser = await userRepository.findOne({
+                    where: { id: savedUser.id },
+                    relations: [
+                        'technicianProfile',
+                        'technicianProfile.services',
+                        'technicianProfile.brandExpertise',
+                        'technicianProfile.locations',
+                    ],
+                });
+                if (fullUser) {
+                    userResponse = {
+                        ...userResponse,
+                        technicianProfile: fullUser.technicianProfile,
+                    };
+                }
+            }
+
+            if (savedUser.role === USER_ROLE.CUSTOMER) {
+                const fullUser = await userRepository.findOne({
+                    where: { id: savedUser.id },
+                    relations: ['addresses'],
+                });
+                if (fullUser) {
+                    userResponse = {
+                        ...userResponse,
+                        addresses: fullUser.addresses,
+                    };
+                }
+            }
+
+            return {
+                message: 'Registration successful',
+                tokens: tokenData.tokens,
+                user: userResponse,
+            };
         });
-        if (existingUserByPhone) {
-            throw new ConflictException('Phone number already in use');
-        }
-
-        const otpRecord = await this.otpRepository.findOne({
-            where: { email: dto.email, phone: dto.phone },
-        });
-
-        if (!otpRecord) {
-            throw new BadRequestException('OTP record not found for this email and phone');
-        }
-
-        if (!otpRecord.isVerified) {
-            throw new ForbiddenException('OTP is not verified');
-        }
-
-        await this.otpRepository.delete(otpRecord.id);
-
-        const hashedPassword = await bcrypt.hash(dto.password, 10);
-
-        const newUser = this.userRepository.create({
-            email: dto.email,
-            username: dto.username,
-            phone: dto.phone,
-            firstName: dto.firstName,
-            lastName: dto.lastName,
-            password: hashedPassword,
-            role: otpRecord.role || USER_ROLE.CUSTOMER,
-            status: otpRecord.role === USER_ROLE.TECHNICIAN ? USER_STATUS.PENDING : USER_STATUS.ACTIVE,
-        });
-
-        let savedUser = await this.userRepository.save(newUser);
-
-        if (savedUser.role === USER_ROLE.TECHNICIAN) {
-            const profileData = dto.technicianProfile || {};
-            let panUrl;
-            let policeCertUrl;
-            let tradeLicenseUrl;
-            let selfieUrl;
-            let aadharUrl;
-
-            if (files?.panUrl?.[0]) {
-                panUrl = await this.s3Service.uploadFileHelper(savedUser.id, 'pan', files?.panUrl);
-            }
-            if (files?.policeCertUrl?.[0]) {
-                policeCertUrl = await this.s3Service.uploadFileHelper(savedUser.id, 'police-cert', files?.policeCertUrl);
-            }
-            if (files?.tradeLicenseUrl?.[0]) {
-                tradeLicenseUrl = await this.s3Service.uploadFileHelper(savedUser.id, 'trade-license', files?.tradeLicenseUrl);
-            }
-            if (files?.selfieUrl?.[0]) {
-                selfieUrl = await this.s3Service.uploadFileHelper(savedUser.id, 'selfie', files?.selfieUrl);
-            }
-            if (files?.aadharUrl?.[0]) {
-                aadharUrl = await this.s3Service.uploadFileHelper(savedUser.id, 'aadhar', files?.aadharUrl);
-            }
-
-            const newProfile = this.technicianProfileRepository.create({
-                userId: savedUser.id,
-                address: profileData.address,
-                yearsOfExperience: profileData.yearsOfExperience,
-                languages: profileData.languages,
-                serviceRadiusKm: profileData.serviceRadiusKm,
-                preferredAreas: profileData.preferredAreas,
-                pincodes: profileData.pincodes,
-                status: TECHNICIAN_STATUS.INCOMPLETE,
-                isAvailable: false,
-                aadharUrl,
-                panUrl,
-                policeCertUrl,
-                tradeLicenseUrl,
-                selfieUrl,
-                hasLadder: profileData.hasLadder || false,
-                hasACGauges: profileData.hasACGauges || false,
-                hasSafetyEquipment: profileData.hasSafetyEquipment || false,
-                hasVehicle: profileData.hasVehicle || false,
-                accountHolderName: profileData.accountHolderName || '',
-                accountNumber: profileData.accountNumber || '',
-                ifscCode: profileData.ifscCode || '',
-                bankName: profileData.bankName || '',
-                isVerified: false,
-            });
-            const savedProfile = await this.technicianProfileRepository.save(newProfile);
-
-            // Save location
-            const locationRepository = this.dataSource.getRepository(TechnicianLocation);
-            const newLocation = locationRepository.create({
-                technicianId: savedProfile.id,
-                latitude: profileData.latitude ?? 0,
-                longitude: profileData.longitude ?? 0,
-                serviceRadiusKm: profileData.serviceRadiusKm ?? 0,
-                fullAddress: profileData.address,
-                city: profileData.city,
-                state: profileData.state,
-                pincode: profileData.pincode,
-                isActive: true,
-            });
-            await locationRepository.save(newLocation);
-
-            // Save services
-            if (profileData.services && profileData.services.length > 0) {
-                const servicesToSave = profileData.services.map((s) =>
-                    this.dataSource.getRepository(TechnicianService).create({
-                        technicianProfileId: savedProfile.id,
-                        serviceId: s.serviceId,
-                    })
-                );
-                await this.dataSource.getRepository(TechnicianService).save(servicesToSave);
-            }
-
-
-            // Save brand expertise
-            if (profileData.brandExpertise && profileData.brandExpertise.length > 0) {
-                const brandsToSave = profileData.brandExpertise.map((b) =>
-                    this.dataSource.getRepository(TechnicianBrandExpertise).create({
-                        technicianProfileId: savedProfile.id,
-                        brandName: b.brandName,
-                    })
-                );
-                await this.dataSource.getRepository(TechnicianBrandExpertise).save(brandsToSave);
-            }
-
-            savedUser.technicianProfileId = savedProfile.id;
-            savedUser = await this.userRepository.save(savedUser);
-        }
-
-        const tokenData = await this.authModuleService.issueAuthTokens(savedUser);
-
-        let userResponse: any = {
-            id: savedUser.id,
-            email: savedUser.email,
-            username: savedUser.username,
-            phone: savedUser.phone,
-            firstName: savedUser.firstName,
-            lastName: savedUser.lastName,
-            role: savedUser.role,
-            status: savedUser.status,
-            createdAt: savedUser.createdAt,
-            updatedAt: savedUser.updatedAt,
-        };
-
-        if (savedUser.role === USER_ROLE.TECHNICIAN) {
-            const fullUser = await this.userRepository.findOne({
-                where: { id: savedUser.id },
-                relations: [
-                    'technicianProfile',
-                    'technicianProfile.services',
-                    'technicianProfile.brandExpertise',
-                    'technicianProfile.locations',
-                ],
-            });
-            if (fullUser) {
-                userResponse = {
-                    ...userResponse,
-                    technicianProfile: fullUser.technicianProfile,
-                };
-            }
-        }
-
-        return {
-            message: 'Registration successful',
-            tokens: tokenData.tokens,
-            user: userResponse,
-        };
     }
 
     async createServiceWithPricing(
@@ -502,12 +547,29 @@ export class UserService {
             });
             const savedPricingRule = await pricingRuleRepository.save(pricingRule);
 
+            let savedSpecs: ServiceSpecification[] = [];
+            if (dto.specifications && dto.specifications.length > 0) {
+                const specRepository = manager.getRepository(ServiceSpecification);
+                const specsToCreate = dto.specifications.map((spec) =>
+                    specRepository.create({
+                        serviceId: savedService.id,
+                        name: spec.name,
+                        type: spec.type,
+                        values: spec.values,
+                        isRequired: spec.isRequired ?? false,
+                        isActive: spec.isActive ?? true,
+                    })
+                );
+                savedSpecs = await specRepository.save(specsToCreate);
+            }
+
             return {
                 success: true,
                 message: 'Service with pricing created successfully',
                 data: {
                     service: savedService,
                     pricingRule: savedPricingRule,
+                    specifications: savedSpecs,
                 },
             };
         });
@@ -540,5 +602,129 @@ export class UserService {
             message: 'Platform setting saved successfully',
             data: savedSetting,
         };
+    }
+
+    async addCustomerAddressService(userId: number, dto: CustomerAddressDto) {
+        return this.dataSource.transaction(async (manager) => {
+            const addressRepository = manager.getRepository(CustomerAddress);
+
+            // If this is the user's first address or explicitly marked as default,
+            // we will set all other addresses for this user to default: false.
+            const existingCount = await addressRepository.count({
+                where: { userId, isActive: true },
+            });
+
+            const isDefault = dto.isDefault || existingCount === 0;
+
+            if (isDefault) {
+                await addressRepository.update({ userId }, { isDefault: false });
+            }
+
+            const newAddress = addressRepository.create({
+                userId,
+                latitude: dto.latitude,
+                longitude: dto.longitude,
+                fullAddress: dto.fullAddress,
+                city: dto.city,
+                state: dto.state,
+                pincode: dto.pincode,
+                label: dto.label || 'Home',
+                isDefault,
+                isActive: true,
+            });
+
+            const savedAddress = await addressRepository.save(newAddress);
+
+            return {
+                success: true,
+                message: 'Address added successfully',
+                data: savedAddress,
+            };
+        });
+    }
+
+    async updateCustomerAddressService(userId: number, addressId: number, dto: UpdateCustomerAddressDto) {
+        return this.dataSource.transaction(async (manager) => {
+            const addressRepository = manager.getRepository(CustomerAddress);
+
+            const address = await addressRepository.findOne({
+                where: { id: addressId, userId, isActive: true },
+            });
+
+            if (!address) {
+                throw new NotFoundException('Address not found');
+            }
+
+            // If we are changing the default address to true
+            if (dto.isDefault === true && !address.isDefault) {
+                // Set all other addresses for this user to default: false
+                await addressRepository.update({ userId }, { isDefault: false });
+            }
+
+            const willBeDeactivated = dto.isActive === false;
+            const willBeUnsetDefault = dto.isDefault === false;
+
+            // If this is/was the default address and it's being deactivated or unset
+            if ((willBeDeactivated || willBeUnsetDefault) && address.isDefault) {
+                address.isDefault = false;
+                // Find another active address to promote to default
+                const anotherAddress = await addressRepository.findOne({
+                    where: { userId, id: Not(addressId), isActive: true },
+                    order: { createdAt: 'DESC' },
+                });
+                if (anotherAddress) {
+                    anotherAddress.isDefault = true;
+                    await addressRepository.save(anotherAddress);
+                }
+            }
+
+            // Save the updated address fields
+            const updatedAddress = await addressRepository.save({
+                ...address,
+                ...dto,
+            });
+
+            return {
+                success: true,
+                message: 'Address updated successfully',
+                data: updatedAddress,
+            };
+        });
+    }
+
+    async deleteCustomerAddressService(userId: number, addressId: number) {
+        return this.dataSource.transaction(async (manager) => {
+            const addressRepository = manager.getRepository(CustomerAddress);
+
+            const address = await addressRepository.findOne({
+                where: { id: addressId, userId, isActive: true },
+            });
+
+            if (!address) {
+                throw new NotFoundException('Address not found');
+            }
+
+            const wasDefault = address.isDefault;
+
+            // Hard delete the address from the database
+            await addressRepository.delete(addressId);
+
+            // Promote another active address to default if the deleted one was default
+            if (wasDefault) {
+                const anotherAddress = await addressRepository.findOne({
+                    where: { userId, id: Not(addressId), isActive: true },
+                    order: { createdAt: 'DESC' },
+                });
+                if (anotherAddress) {
+                    anotherAddress.isDefault = true;
+                    await addressRepository.save(anotherAddress);
+                }
+            }
+
+            return {
+                success: true,
+                message: 'Address deleted successfully',
+            };
+        });
     }
 }

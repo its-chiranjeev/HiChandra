@@ -345,9 +345,12 @@ export class S3Service {
         }
 
         const url = new URL(value);
+        let key = decodeURIComponent(url.pathname.slice(1));
 
-        return decodeURIComponent(
-            url.pathname.slice(1),
-        );
+        if (key.startsWith(`${this.bucketName}/`)) {
+            key = key.slice(this.bucketName.length + 1);
+        }
+
+        return key;
     }
 }

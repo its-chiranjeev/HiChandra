@@ -11,6 +11,7 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { TechnicianProfile } from './technician-profile.entity';
+import { CustomerAddress } from './customer-address.entity';
 
 export enum USER_ROLE {
   CUSTOMER = 'CUSTOMER',
@@ -100,4 +101,7 @@ export class User {
 
   @DeleteDateColumn()
   deletedAt?: Date;
+
+  @OneToMany(() => CustomerAddress, (address) => address.user)
+  addresses?: CustomerAddress[];
 }

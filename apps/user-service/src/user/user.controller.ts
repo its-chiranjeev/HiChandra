@@ -4,7 +4,7 @@ import { Body, Controller, Query, Get, Patch, Delete, Param, ParseIntPipe, HttpC
 import { UserService } from "./user.service";
 import { AuthGuard } from "@nestjs/passport";
 import { JwtAuthGuard, Roles, RolesGuard } from "@hichandra/common";
-import { RegisterDto, UpdateUserDto, CreateServiceDto, CreatePlatformSettingDto } from "@hichandra/dtos";
+import { RegisterDto, UpdateUserDto, CreateServiceDto, CreatePlatformSettingDto, CustomerAddressDto, UpdateCustomerAddressDto } from "@hichandra/dtos";
 import { USER_ROLE, USER_STATUS } from '@hichandra/entities';
 
 @Controller('users')
@@ -58,7 +58,7 @@ export class UserController {
     );
   }
 
-  @Get('userId/:id')
+  @Get(':id')
   @UseGuards(JwtAuthGuard)
   async getUserById(
     @Param('id', ParseIntPipe) id: number,
@@ -140,5 +140,41 @@ export class UserController {
     dto: RegisterDto,
   ) {
     return this.userService.userRegisterService(dto, files);
+  }
+
+  @Post('customer/address')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLE.CUSTOMER)
+  @HttpCode(HttpStatus.OK)
+  async addCustomerAddress(
+    @Req() req: any,
+    @Body(new ValidationPipe({ whitelist: true, transform: true }))
+    dto: CustomerAddressDto,
+  ) {
+    return this.userService.addCustomerAddressService(req.user.id, dto);
+  }
+
+  @Patch('customer/address/:addressId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLE.CUSTOMER)
+  @HttpCode(HttpStatus.OK)
+  async updateCustomerAddress(
+    @Req() req: any,
+    @Param('addressId', ParseIntPipe) addressId: number,
+    @Body(new ValidationPipe({ whitelist: true, transform: true }))
+    dto: UpdateCustomerAddressDto,
+  ) {
+    return this.userService.updateCustomerAddressService(req.user.id, addressId, dto);
+  }
+
+  @Delete('customer/address/:addressId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLE.CUSTOMER)
+  @HttpCode(HttpStatus.OK)
+  async deleteCustomerAddress(
+    @Req() req: any,
+    @Param('addressId', ParseIntPipe) addressId: number,
+  ) {
+    return this.userService.deleteCustomerAddressService(req.user.id, addressId);
   }
 }

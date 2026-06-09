@@ -6,6 +6,7 @@ import { AuthGuard } from "@nestjs/passport";
 import { JwtAuthGuard, Roles, RolesGuard } from "@hichandra/common";
 import { RegisterDto, UpdateUserDto, CreateServiceDto, CreatePlatformSettingDto, CustomerAddressDto, UpdateCustomerAddressDto } from "@hichandra/dtos";
 import { USER_ROLE, USER_STATUS } from '@hichandra/entities';
+import { filter } from "rxjs";
 
 @Controller('users')
 export class UserController {
@@ -38,7 +39,7 @@ export class UserController {
   async upsertPlatformSetting(
     @Body(new ValidationPipe({ whitelist: true, transform: true }))
     dto: CreatePlatformSettingDto,
-  ) {
+  ) { 
     return this.userService.upsertPlatformSetting(dto);
   }
 
@@ -105,6 +106,30 @@ export class UserController {
     return this.userService.getServiceById(
       Number(id),
     );
+  }
+
+  @Get('platform-settings/all')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLE.ADMIN)
+  async getAllPlatformSettings(
+    @Query('page') page = 1,
+    @Query('limit') limit = 10,
+    @Query('filter') filter?: string,
+  ) {
+    return this.userService.getAllPlatformSettingsService(
+      Number(page),
+      Number(limit),
+      filter,
+    );
+  }
+
+  @Get('platform-settings/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLE.ADMIN)
+  async getPlatformSettingById(
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.userService.getPlatformSettingByIdService(id);
   }
 
   @Post('admin/register')

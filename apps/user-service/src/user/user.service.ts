@@ -4,7 +4,7 @@ import * as bcrypt from 'bcryptjs';
 import { randomUUID } from 'crypto';
 import { DataSource, QueryRunner, Not } from 'typeorm';
 import { last, single } from 'rxjs';
-import { UserRepository, OtpRepository, TechnicianProfileRepository, ServiceRepository } from '@hichandra/repositories';
+import { UserRepository, OtpRepository, TechnicianProfileRepository, ServiceRepository, PlatformSettingRepository } from '@hichandra/repositories';
 import {
     USER_ROLE,
     USER_STATUS,
@@ -33,6 +33,7 @@ export class UserService {
         private readonly userRepository: UserRepository,
         private readonly otpRepository: OtpRepository,
         private readonly serviceRepository: ServiceRepository,
+        private readonly platformSettingRepository: PlatformSettingRepository,
         private readonly technicianProfileRepository: TechnicianProfileRepository,
         private readonly dataSource: DataSource,
         private readonly authModuleService: AuthModuleService,
@@ -75,16 +76,46 @@ export class UserService {
                 role,
                 status,
             );
+        const formattedUsers = users.map((user) => {
+            const {
+                password,
+                hashedRefreshToken,
+                tokenVersion,
+                technicianProfileId,
+                technicianProfile,
+                addresses,
+                ...safeUser
+            } = user;
 
+            if (user.role === USER_ROLE.CUSTOMER) {
+                return {
+                    ...safeUser,
+                    addresses: addresses || [],
+                };
+            }
+
+            if (user.role === USER_ROLE.TECHNICIAN) {
+                return {
+                    ...safeUser,
+                    technicianProfileId,
+                    technicianProfile,
+                };
+            }
+
+            return safeUser;
+        });
         return {
             success: true,
-            message: 'All users fetched successfully',
-            data: users,
+            message:
+                'All users fetched successfully',
+            data: formattedUsers,
             pagination: {
                 total,
                 page,
                 limit,
-                totalPages: Math.ceil(total / limit),
+                totalPages: Math.ceil(
+                    total / limit,
+                ),
             },
         };
     }
@@ -96,7 +127,18 @@ export class UserService {
             throw new NotFoundException('User not found');
         }
 
-        return user;
+        const {
+            password,
+            hashedRefreshToken,
+            tokenVersion,
+            ...safeUser
+        } = user;
+
+        return {
+            success: true,
+            message: 'User fetched successfully',
+            data: safeUser,
+        };
     }
 
     async updateUserService(
@@ -213,6 +255,49 @@ export class UserService {
             success: true,
             message: 'Service fetched successfully',
             data: serviceData,
+        };
+    }
+
+    async getAllPlatformSettingsService(
+        page: number,
+        limit: number,
+        filter?: string,
+    ) {
+        const { settings, total } =
+            await this.platformSettingRepository.findAllPlatformSettings(
+                page,
+                limit,
+                filter,
+            );
+
+        return {
+            success: true,
+            message: 'Platform settings fetched successfully',
+            data: settings,
+            pagination: {
+                total,
+                page,
+                limit,
+                totalPages: Math.ceil(total / limit),
+            },
+        };
+    }
+
+    async getPlatformSettingByIdService(id: number) {
+        const setting =
+            await this.platformSettingRepository.findById(id);
+
+        if (!setting) {
+            throw new NotFoundException(
+                'Platform setting not found',
+            );
+        }
+
+        return {
+            success: true,
+            message:
+                'Platform setting fetched successfully',
+            data: setting,
         };
     }
 

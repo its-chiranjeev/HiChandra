@@ -6,6 +6,7 @@ import { AuthGuard } from "@nestjs/passport";
 import { JwtAuthGuard, Roles, RolesGuard } from "@hichandra/common";
 import { RegisterDto, UpdateUserDto, CreateServiceDto, CreatePlatformSettingDto, CustomerAddressDto, UpdateCustomerAddressDto } from "@hichandra/dtos";
 import { USER_ROLE, USER_STATUS } from '@hichandra/entities';
+import { filter } from "rxjs";
 
 @Controller('users')
 export class UserController {
@@ -105,6 +106,15 @@ export class UserController {
     return this.userService.getServiceById(
       Number(id),
     );
+  }
+
+  @Get('platform-settings/all')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLE.ADMIN)
+  async getAllPlatformSettings(
+    @Query('filter') filter?: string,
+  ) {
+    return this.userService.getAllPlatformSettingsService(filter);
   }
 
   @Post('admin/register')

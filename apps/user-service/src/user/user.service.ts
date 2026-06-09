@@ -4,7 +4,7 @@ import * as bcrypt from 'bcryptjs';
 import { randomUUID } from 'crypto';
 import { DataSource, QueryRunner, Not } from 'typeorm';
 import { last, single } from 'rxjs';
-import { UserRepository, OtpRepository, TechnicianProfileRepository, ServiceRepository } from '@hichandra/repositories';
+import { UserRepository, OtpRepository, TechnicianProfileRepository, ServiceRepository, PlatformSettingRepository } from '@hichandra/repositories';
 import {
     USER_ROLE,
     USER_STATUS,
@@ -33,6 +33,7 @@ export class UserService {
         private readonly userRepository: UserRepository,
         private readonly otpRepository: OtpRepository,
         private readonly serviceRepository: ServiceRepository,
+        private readonly platformSettingRepository: PlatformSettingRepository,
         private readonly technicianProfileRepository: TechnicianProfileRepository,
         private readonly dataSource: DataSource,
         private readonly authModuleService: AuthModuleService,
@@ -76,15 +77,30 @@ export class UserService {
                 status,
             );
 
+        const formattedUsers = users.map((user) => {
+            const {
+                password,
+                hashedRefreshToken,
+                tokenVersion,
+                ...safeUser
+            } = user;
+
+
+            return safeUser;
+        });
+
         return {
             success: true,
-            message: 'All users fetched successfully',
-            data: users,
+            message:
+                'All users fetched successfully',
+            data: formattedUsers,
             pagination: {
                 total,
                 page,
                 limit,
-                totalPages: Math.ceil(total / limit),
+                totalPages: Math.ceil(
+                    total / limit,
+                ),
             },
         };
     }
@@ -96,7 +112,18 @@ export class UserService {
             throw new NotFoundException('User not found');
         }
 
-        return user;
+        const {
+            password,
+            hashedRefreshToken,
+            tokenVersion,
+            ...safeUser
+        } = user;
+
+        return {
+            success: true,
+            message: 'User fetched successfully',
+            data: safeUser,
+        };
     }
 
     async updateUserService(
@@ -215,6 +242,18 @@ export class UserService {
             data: serviceData,
         };
     }
+
+    async getAllPlatformSettingsService(filter?: string) {
+        const settings =
+            await this.platformSettingRepository.findAllPlatformSettings(filter);
+
+        return {
+            success: true,
+            message: 'Platform settings fetched successfully',
+            data: settings,
+        };
+    }
+
 
     async adminRegisterService(dto: RegisterDto) {
         const existingUser = await this.userRepository.findByEmail(dto.email);

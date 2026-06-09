@@ -20,6 +20,7 @@ import {
     User,
     Otp,
     TechnicianProfile,
+    JOB_STATUS,
 } from '@hichandra/entities';
 import { AuthModuleService } from 'apps/auth-service/src/auth/auth-module.service';
 import { S3Service } from '@hichandra/s3';
@@ -362,8 +363,8 @@ export class UserService {
                     userId: savedUser.id,
                     yearsOfExperience: profileData.yearsOfExperience,
                     languages: profileData.languages,
-                    status: TECHNICIAN_STATUS.INCOMPLETE,
-                    isAvailable: false,
+                    status: TECHNICIAN_STATUS.PENDING_APPROVAL,
+                    jobStatus: JOB_STATUS.OFFLINE,
                     aadharUrl,
                     panUrl,
                     policeCertUrl,
@@ -377,7 +378,6 @@ export class UserService {
                     accountNumber: profileData.accountNumber || '',
                     ifscCode: profileData.ifscCode || '',
                     bankName: profileData.bankName || '',
-                    isVerified: false,
                 });
                 const savedProfile = await technicianProfileRepository.save(newProfile);
 

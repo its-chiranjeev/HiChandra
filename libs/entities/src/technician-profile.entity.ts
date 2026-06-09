@@ -14,11 +14,15 @@ import { TechnicianBrandExpertise } from './technician-brand-expertise.entity';
 import { TechnicianLocation } from './technician-location.entity';
 
 export enum TECHNICIAN_STATUS {
-  INCOMPLETE = 'INCOMPLETE',
   PENDING_APPROVAL = 'PENDING_APPROVAL',
   APPROVED = 'APPROVED',
   REJECTED = 'REJECTED',
-  SUSPENDED = 'SUSPENDED',
+}
+
+export enum JOB_STATUS {
+  OFFLINE = 'OFFLINE',
+  BUSY = 'BUSY',
+  AVAILABLE = 'AVAILABLE',
 }
 
 @Entity('technician_profiles')
@@ -44,16 +48,19 @@ export class TechnicianProfile {
   @Column({
     type: 'enum',
     enum: TECHNICIAN_STATUS,
-    default: TECHNICIAN_STATUS.INCOMPLETE,
+    default: TECHNICIAN_STATUS.PENDING_APPROVAL,
   })
   status!: TECHNICIAN_STATUS;
 
   @Column({ type: 'text', nullable: true })
   rejectionReason?: string;
 
-  // Availability
-  @Column({ default: false })
-  isAvailable!: boolean;
+  @Column({
+    type: 'enum',
+    enum: JOB_STATUS,
+    default: JOB_STATUS.OFFLINE,
+  })
+  jobStatus!: JOB_STATUS;
 
   @Column({ type: 'timestamp', nullable: true })
   lastSeenAt?: Date;
@@ -103,8 +110,6 @@ export class TechnicianProfile {
   @Column({ type: 'varchar', length: 100, nullable: true })
   bankName?: string;
 
-  @Column({ default: false })
-  isVerified!: boolean;
 
   // Timestamps
   @CreateDateColumn()

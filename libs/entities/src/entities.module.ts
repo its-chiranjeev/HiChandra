@@ -12,6 +12,7 @@ import { PlatformSetting } from './platform-setting.entity';
 import { TechnicianLocation } from './technician-location.entity';
 import { ServiceSpecification } from './service-specification.entity';
 import { CustomerAddress } from './customer-address.entity';
+import { Booking } from './booking.entity';
 import { EntitiesService } from './entities.service';
 
 @Module({
@@ -28,6 +29,7 @@ import { EntitiesService } from './entities.service';
       TechnicianLocation,
       ServiceSpecification,
       CustomerAddress,
+      Booking,
     ]),
   ],
   providers: [EntitiesService],

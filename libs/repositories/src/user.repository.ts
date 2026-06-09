@@ -26,7 +26,7 @@ export class UserRepository extends BaseRepository<User> {
   async findByEmailOrUsername(identifier: string) {
     const normalized = identifier.trim().toLowerCase();
     return this.repo.findOne({
-      where: [{ email: normalized }, { username: normalized }],
+      where: [{ email: normalized }],
     });
   }
 

@@ -11,7 +11,5 @@ export * from './platform-setting.entity';
 export * from './technician-location.entity';
 export * from './service-specification.entity';
 export * from './customer-address.entity';
-
-
-
+export * from './booking.entity';
 

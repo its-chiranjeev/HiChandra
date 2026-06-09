@@ -76,19 +76,34 @@ export class UserService {
                 role,
                 status,
             );
-
         const formattedUsers = users.map((user) => {
             const {
                 password,
                 hashedRefreshToken,
                 tokenVersion,
+                technicianProfileId,
+                technicianProfile,
+                addresses,
                 ...safeUser
             } = user;
 
+            if (user.role === USER_ROLE.CUSTOMER) {
+                return {
+                    ...safeUser,
+                    addresses: addresses || [],
+                };
+            }
+
+            if (user.role === USER_ROLE.TECHNICIAN) {
+                return {
+                    ...safeUser,
+                    technicianProfileId,
+                    technicianProfile,
+                };
+            }
 
             return safeUser;
         });
-
         return {
             success: true,
             message:
@@ -243,17 +258,48 @@ export class UserService {
         };
     }
 
-    async getAllPlatformSettingsService(filter?: string) {
-        const settings =
-            await this.platformSettingRepository.findAllPlatformSettings(filter);
+    async getAllPlatformSettingsService(
+        page: number,
+        limit: number,
+        filter?: string,
+    ) {
+        const { settings, total } =
+            await this.platformSettingRepository.findAllPlatformSettings(
+                page,
+                limit,
+                filter,
+            );
 
         return {
             success: true,
             message: 'Platform settings fetched successfully',
             data: settings,
+            pagination: {
+                total,
+                page,
+                limit,
+                totalPages: Math.ceil(total / limit),
+            },
         };
     }
 
+    async getPlatformSettingByIdService(id: number) {
+        const setting =
+            await this.platformSettingRepository.findById(id);
+
+        if (!setting) {
+            throw new NotFoundException(
+                'Platform setting not found',
+            );
+        }
+
+        return {
+            success: true,
+            message:
+                'Platform setting fetched successfully',
+            data: setting,
+        };
+    }
 
     async adminRegisterService(dto: RegisterDto) {
         const existingUser = await this.userRepository.findByEmail(dto.email);

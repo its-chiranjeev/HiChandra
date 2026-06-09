@@ -16,23 +16,36 @@ export class PlatformSettingRepository extends BaseRepository<PlatformSetting> {
     }
 
 
-    async findAllPlatformSettings(filter?: string) {
+    async findAllPlatformSettings(
+        page = 1,
+        limit = 10,
+        filter?: string,
+    ) {
+        const where = filter
+            ? {
+                key: ILike(`%${filter}%`),
+            }
+            : {};
 
-        if (!filter) {
-            return this.repo.find({
+        const [settings, total] =
+            await this.repo.findAndCount({
+                where,
                 order: {
                     createdAt: 'DESC',
                 },
+                skip: (page - 1) * limit,
+                take: limit,
             });
-        }
 
-        return this.repo.find({
-            where: {
-                key: ILike(`%${filter}%`),
-            },
-            order: {
-                createdAt: 'DESC',
-            },
+        return {
+            settings,
+            total,
+        };
+    }
+
+    async findById(id: number) {
+        return this.repo.findOne({
+            where: { id },
         });
     }
 

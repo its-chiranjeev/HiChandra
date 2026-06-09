@@ -112,9 +112,24 @@ export class UserController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(USER_ROLE.ADMIN)
   async getAllPlatformSettings(
+    @Query('page') page = 1,
+    @Query('limit') limit = 10,
     @Query('filter') filter?: string,
   ) {
-    return this.userService.getAllPlatformSettingsService(filter);
+    return this.userService.getAllPlatformSettingsService(
+      Number(page),
+      Number(limit),
+      filter,
+    );
+  }
+
+  @Get('platform-settings/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLE.ADMIN)
+  async getPlatformSettingById(
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.userService.getPlatformSettingByIdService(id);
   }
 
   @Post('admin/register')

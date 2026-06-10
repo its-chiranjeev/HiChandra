@@ -879,7 +879,6 @@ export class UserService {
                         status: TECHNICIAN_STATUS.PENDING_APPROVAL,
                     });
                     profile = await profileRepo.save(profile);
-                    user.technicianProfile = profile;
                     await userRepo.save(user);
                 }
 

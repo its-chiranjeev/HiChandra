@@ -1,5 +1,5 @@
 import { IsOptional, IsString, IsNumber, IsBoolean, IsArray, ValidateNested, IsObject } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 
 export class UpdateTechnicianLocationDto {
   @IsOptional()
@@ -101,7 +101,16 @@ export class UpdateProfileDto {
 
   // Technician specific fields (ignored for non-technicians)
   @IsOptional()
-  @IsObject()
+  @Transform(({ value }) => {
+    if (typeof value === 'string') {
+      try {
+        return JSON.parse(value);
+      } catch {
+        return value;
+      }
+    }
+    return value;
+  })
   // @ValidateNested()
   @Type(() => UpdateTechnicianProfileDetailsDto)
   technicianProfile?: UpdateTechnicianProfileDetailsDto;

@@ -2,13 +2,9 @@ import { IsNotEmpty, IsNumber, IsOptional, IsBoolean, IsDate, IsArray, ValidateN
 import { Type } from 'class-transformer';
 
 export class BookingSpecificationDto {
-  @IsOptional()
   @IsNumber()
-  specificationId?: number;
-
-  @IsOptional()
-  @IsNumber()
-  subSpecificationServiceId?: number;
+  @IsNotEmpty()
+  specificationId!: number;
 
   @IsOptional()
   @IsString()

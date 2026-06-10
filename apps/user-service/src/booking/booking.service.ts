@@ -41,7 +41,7 @@ export class BookingService {
       // 1. Check if all required specs are present in userSpecs
       const requiredSpecs = dbSpecs.filter(s => s.isRequired && s.isActive);
       for (const reqSpec of requiredSpecs) {
-        const found = userSpecs.find(u => u.specificationId === reqSpec.id || u.subSpecificationServiceId === reqSpec.id);
+        const found = userSpecs.find(u => u.specificationId === reqSpec.id);
         if (!found || found.value === undefined || found.value === null) {
           throw new BadRequestException(`Specification "${reqSpec.name}" (ID ${reqSpec.id}) is required`);
         }
@@ -49,19 +49,10 @@ export class BookingService {
 
       // 2. Validate userSpecs and fill names automatically
       for (const uSpec of userSpecs) {
-        const specId = uSpec.specificationId || uSpec.subSpecificationServiceId;
-        if (!specId) {
-          throw new BadRequestException('Each service specification must have a specificationId or subSpecificationServiceId');
-        }
-
-        const dbSpec = dbSpecsMap.get(specId);
+        const dbSpec = dbSpecsMap.get(uSpec.specificationId);
         if (!dbSpec || !dbSpec.isActive) {
-          throw new BadRequestException(`Specification ID ${specId} is not valid for this service`);
+          throw new BadRequestException(`Specification ID ${uSpec.specificationId} is not valid for this service`);
         }
-
-        // Normalize specification identifiers
-        uSpec.specificationId = specId;
-        uSpec.subSpecificationServiceId = specId;
 
         // Autofill name from DB if not provided
         uSpec.name = dbSpec.name;
@@ -112,11 +103,16 @@ export class BookingService {
         throw new NotFoundException('Address not found or does not belong to this customer');
       }
 
+      const serviceSpecifications = userSpecs.map(uSpec => ({
+        specificationId: uSpec.specificationId,
+        value: uSpec.value,
+      }));
+
       const booking = bookingRepo.create({
         customerId,
         serviceId: dto.serviceId,
         addressId: dto.customerAddressId,
-        serviceSpecifications: dto.serviceSpecifications as any,
+        serviceSpecifications: serviceSpecifications as any,
         isEmergency: dto.isEmergency ?? false,
         scheduledAt: dto.scheduledAt,
         status: BOOKING_STATUS.PENDING,

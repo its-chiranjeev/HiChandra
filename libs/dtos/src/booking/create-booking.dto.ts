@@ -23,11 +23,10 @@ export class CreateBookingDto {
   @IsNotEmpty()
   customerAddressId!: number;
 
-  @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => BookingSpecificationDto)
-  serviceSpecifications?: BookingSpecificationDto[];
+  serviceSpecifications: BookingSpecificationDto[];
 
   @IsOptional()
   @IsBoolean()

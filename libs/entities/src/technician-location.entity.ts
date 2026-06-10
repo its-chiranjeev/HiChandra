@@ -44,6 +44,9 @@ export class TechnicianLocation {
   @Column({ type: 'varchar', length: 10, nullable: true })
   pincode?: string;
 
+  @Column({ type: 'boolean', default: false })
+  isDefault!: boolean;
+
   @Column({ type: 'boolean', default: true })
   isActive!: boolean;
 

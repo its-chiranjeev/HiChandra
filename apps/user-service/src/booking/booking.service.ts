@@ -1,14 +1,12 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
-import { Booking, BOOKING_STATUS, Service, CustomerAddress, User, USER_ROLE, USER_STATUS, TECHNICIAN_STATUS } from '@hichandra/entities';
+import { Booking, BOOKING_STATUS, Service, CustomerAddress, User, USER_ROLE, USER_STATUS, TECHNICIAN_STATUS, TechnicianService, TechnicianLocation } from '@hichandra/entities';
 import { CreateBookingDto } from '@hichandra/dtos';
-import { AssignmentService } from '../assignment/assignment.service';
 
 @Injectable()
 export class BookingService {
   constructor(
     private readonly dataSource: DataSource,
-    private readonly assignmentService: AssignmentService,
   ) { }
 
   async createBooking(customerId: number, dto: CreateBookingDto): Promise<Booking> {
@@ -16,15 +14,20 @@ export class BookingService {
       const serviceRepo = manager.getRepository(Service);
       const addressRepo = manager.getRepository(CustomerAddress);
       const bookingRepo = manager.getRepository(Booking);
-      const allTechnicianWithService = await manager.getRepository(User)
-        .createQueryBuilder('user')
-        .innerJoinAndSelect('user.technicianProfile', 'profile')
-        .innerJoinAndSelect('profile.services', 'service')
-        .where('user.role = :role', { role: USER_ROLE.TECHNICIAN })
-        .andWhere('user.status = :userStatus', { userStatus: USER_STATUS.ACTIVE })
-        .andWhere('profile.status = :profileStatus', { profileStatus: TECHNICIAN_STATUS.APPROVED })
-        .andWhere('service.id = :serviceId', { serviceId: dto.serviceId })
-        .getMany();
+      const technicianServices = await manager.getRepository(TechnicianService).find({
+        where: { serviceId: dto.serviceId },
+      });
+      let allTechnicianWithService = await Promise.all(technicianServices.map(async ts => {
+        const technicianProfileId = ts.technicianProfileId;
+        const user = await manager.getRepository(User).findOne({
+          where: { technicianProfileId: technicianProfileId },
+          relations: ["technicianProfile", "technicianProfile.locations"]
+        });
+        if (user?.technicianProfile?.locations) {
+          user.technicianProfile.locations = user.technicianProfile.locations.filter(loc => loc.isDefault);
+        }
+        return user;
+      }));
 
       const service = await serviceRepo.findOne({
         where: { id: dto.serviceId, isActive: true },
@@ -33,6 +36,36 @@ export class BookingService {
       if (!service) {
         throw new NotFoundException('Service not found or inactive');
       }
+
+      // Check for existing pending booking of the same service (across all dates)
+      const pendingBooking = await bookingRepo.findOne({
+        where: {
+          customerId,
+          serviceId: dto.serviceId,
+          status: BOOKING_STATUS.PENDING,
+        },
+      });
+      // if (pendingBooking) {
+      //   throw new BadRequestException('You already have a pending booking for this service');
+      // }
+
+      // Check for same-day booking of the same service
+      const targetDate = dto.scheduledAt ? new Date(dto.scheduledAt) : new Date();
+      const startOfDay = new Date(targetDate);
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date(targetDate);
+      endOfDay.setHours(23, 59, 59, 999);
+
+      const sameDayBooking = await bookingRepo.createQueryBuilder('booking')
+        .where('booking.customerId = :customerId', { customerId })
+        .andWhere('booking.serviceId = :serviceId', { serviceId: dto.serviceId })
+        .andWhere('booking.scheduledAt BETWEEN :startOfDay AND :endOfDay', { startOfDay, endOfDay })
+        .andWhere('booking.status != :cancelledStatus', { cancelledStatus: BOOKING_STATUS.CANCELLED })
+        .getOne();
+
+      // if (sameDayBooking) {
+      //   throw new BadRequestException(`You already have an active booking for this service on this date (Status: ${sameDayBooking.status})`);
+      // }
 
       const dbSpecs = service.specifications || [];
       const userSpecs = dto.serviceSpecifications || [];
@@ -98,11 +131,10 @@ export class BookingService {
         }
       }
 
-      const address = await addressRepo.findOne({ where: { id: dto.customerAddressId, userId: customerId, isActive: true } });
+      const address = await addressRepo.findOne({ where: { id: dto.customerAddressId, userId: customerId, isActive: true, isDefault: true } });
       if (!address) {
         throw new NotFoundException('Address not found or does not belong to this customer');
       }
-
       const serviceSpecifications = userSpecs.map(uSpec => ({
         specificationId: uSpec.specificationId,
         value: uSpec.value,
@@ -114,16 +146,38 @@ export class BookingService {
         addressId: dto.customerAddressId,
         serviceSpecifications: serviceSpecifications as any,
         isEmergency: dto.isEmergency ?? false,
-        scheduledAt: dto.scheduledAt,
+        scheduledAt: targetDate,
         status: BOOKING_STATUS.PENDING,
       });
 
       const savedBooking = await bookingRepo.save(booking);
 
-      await this.assignmentService.autoAssign(savedBooking);
+      // Filter technician list based on availability
+      allTechnicianWithService = allTechnicianWithService.filter((user) => {
+        if (user && user.technicianProfile && user.technicianProfile.locations) {
+          return this.filterTechnicianBasedOnLocationLatLong(user.technicianProfile.locations[0], address);
+        }
+        return false;
+      });
+
+      // Send notification to filtered technician
+
 
       return savedBooking;
     });
+  }
+
+  filterTechnicianBasedOnLocationLatLong(technicianLocations: TechnicianLocation, customerAddress: CustomerAddress) {
+    const haversineDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
+      const R = 6371;
+      const dLat = (lat2 - lat1) * (Math.PI / 180);
+      const dLon = (lon2 - lon1) * (Math.PI / 180);
+      const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return R * c;
+    };
+    const distance = haversineDistance(technicianLocations.latitude, technicianLocations.longitude, customerAddress.latitude, customerAddress.longitude);
+    return distance <= technicianLocations.serviceRadiusKm;
   }
 
   async getBooking(customerId: number, bookingId: number): Promise<Booking> {

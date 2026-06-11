@@ -38,8 +38,10 @@
     "@nestjs/core": "^11.0.1",
     "@nestjs/passport": "^11.0.5",
     "@nestjs/platform-express": "^11.0.1",
+    "@nestjs/platform-socket.io": "^11.1.26",
     "@nestjs/schedule": "^6.1.1",
     "@nestjs/typeorm": "^11.0.0",
+    "@nestjs/websockets": "^11.1.26",
     "@sendgrid/mail": "^8.1.6",
     "axios": "^1.13.6",
     "bcryptjs": "^3.0.3",
@@ -53,6 +55,7 @@
     "pg": "^8.20.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
+    "socket.io": "^4.8.3",
     "stripe": "^20.4.0",
     "typeorm": "^0.3.28"
   },
@@ -69,6 +72,7 @@
     "@types/nodemailer": "^8.0.0",
     "@types/passport-jwt": "^4.0.1",
     "@types/passport-local": "^1.0.38",
+    "@types/socket.io": "^3.0.1",
     "@types/supertest": "^6.0.2",
     "eslint": "^9.18.0",
     "eslint-config-prettier": "^10.0.1",
@@ -103,20 +107,21 @@
     "coverageDirectory": "coverage",
     "testEnvironment": "node",
     "moduleNameMapping": {
-      "^@community/(.*)": "<rootDir>/libs/$1/src"
+      "^@hichandra/(.*)": "<rootDir>/libs/$1/src"
     },
     "roots": [
       "<rootDir>/libs/",
       "<rootDir>/apps/"
     ],
     "moduleNameMapper": {
-      "^@community/billing(|/.*)$": "<rootDir>/libs/billing/src/$1",
-      "^@community/common(|/.*)$": "<rootDir>/libs/common/src/$1",
-      "^@community/database(|/.*)$": "<rootDir>/libs/database/src/$1",
-      "^@community/dtos(|/.*)$": "<rootDir>/libs/dtos/src/$1",
-      "^@community/email-services(|/.*)$": "<rootDir>/libs/email-services/src/$1",
-      "^@community/repositories(|/.*)$": "<rootDir>/libs/repositories/src/$1",
-      "^@community/s3(|/.*)$": "<rootDir>/libs/s3/src/$1"
+      "^@hichandra/billing(|/.*)$": "<rootDir>/libs/billing/src/$1",
+      "^@hichandra/common(|/.*)$": "<rootDir>/libs/common/src/$1",
+      "^@hichandra/database(|/.*)$": "<rootDir>/libs/database/src/$1",
+      "^@hichandra/dtos(|/.*)$": "<rootDir>/libs/dtos/src/$1",
+      "^@hichandra/email-services(|/.*)$": "<rootDir>/libs/email-services/src/$1",
+      "^@hichandra/repositories(|/.*)$": "<rootDir>/libs/repositories/src/$1",
+      "^@hichandra/s3(|/.*)$": "<rootDir>/libs/s3/src/$1",
+      "^@hichandra/gateway(|/.*)$": "<rootDir>/libs/gateway/src/$1"
     }
   }
 }

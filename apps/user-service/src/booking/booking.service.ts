@@ -2,11 +2,13 @@ import { Injectable, NotFoundException, BadRequestException } from '@nestjs/comm
 import { DataSource } from 'typeorm';
 import { Booking, BOOKING_STATUS, Service, CustomerAddress, User, USER_ROLE, USER_STATUS, TECHNICIAN_STATUS, TechnicianService, TechnicianLocation } from '@hichandra/entities';
 import { CreateBookingDto } from '@hichandra/dtos';
+import { AssignmentService } from '../assignment/assignment.service';
 
 @Injectable()
 export class BookingService {
   constructor(
     private readonly dataSource: DataSource,
+    private readonly assignmentService: AssignmentService,
   ) { }
 
   async createBooking(customerId: number, dto: CreateBookingDto): Promise<Booking> {
@@ -45,9 +47,9 @@ export class BookingService {
           status: BOOKING_STATUS.PENDING,
         },
       });
-      // if (pendingBooking) {
-      //   throw new BadRequestException('You already have a pending booking for this service');
-      // }
+      if (pendingBooking) {
+        throw new BadRequestException('You already have a pending booking for this service');
+      }
 
       // Check for same-day booking of the same service
       const targetDate = dto.scheduledAt ? new Date(dto.scheduledAt) : new Date();
@@ -63,9 +65,9 @@ export class BookingService {
         .andWhere('booking.status != :cancelledStatus', { cancelledStatus: BOOKING_STATUS.CANCELLED })
         .getOne();
 
-      // if (sameDayBooking) {
-      //   throw new BadRequestException(`You already have an active booking for this service on this date (Status: ${sameDayBooking.status})`);
-      // }
+      if (sameDayBooking) {
+        throw new BadRequestException(`You already have an active booking for this service on this date (Status: ${sameDayBooking.status})`);
+      }
 
       const dbSpecs = service.specifications || [];
       const userSpecs = dto.serviceSpecifications || [];
@@ -152,32 +154,17 @@ export class BookingService {
 
       const savedBooking = await bookingRepo.save(booking);
 
-      // Filter technician list based on availability
-      allTechnicianWithService = allTechnicianWithService.filter((user) => {
-        if (user && user.technicianProfile && user.technicianProfile.locations) {
-          return this.filterTechnicianBasedOnLocationLatLong(user.technicianProfile.locations[0], address);
-        }
-        return false;
-      });
-
-      // Send notification to filtered technician
-
-
+      // Filter technician list based on availability and send notifications
+      const activeTechnicians = allTechnicianWithService.filter((u): u is User => !!u);
+      await this.assignmentService.assignTechnician(
+        savedBooking,
+        activeTechnicians,
+        address,
+        service,
+      );
+      throw new Error("hell");
       return savedBooking;
     });
-  }
-
-  filterTechnicianBasedOnLocationLatLong(technicianLocations: TechnicianLocation, customerAddress: CustomerAddress) {
-    const haversineDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
-      const R = 6371;
-      const dLat = (lat2 - lat1) * (Math.PI / 180);
-      const dLon = (lon2 - lon1) * (Math.PI / 180);
-      const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-      return R * c;
-    };
-    const distance = haversineDistance(technicianLocations.latitude, technicianLocations.longitude, customerAddress.latitude, customerAddress.longitude);
-    return distance <= technicianLocations.serviceRadiusKm;
   }
 
   async getBooking(customerId: number, bookingId: number): Promise<Booking> {

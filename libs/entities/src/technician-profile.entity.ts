@@ -42,7 +42,7 @@ export class TechnicianProfile {
   @Column({ type: 'int', nullable: true })
   yearsOfExperience?: number;
 
-  @Column({ type: 'simple-array', nullable: true })
+  @Column({ type: 'json', nullable: true })
   languages?: string[];                   // ["Hindi", "English"]
 
   @Column({

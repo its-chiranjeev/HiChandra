@@ -60,6 +60,12 @@
       ],
       "@hichandra/s3/*": [
         "libs/s3/src/*"
+      ],
+      "@hichandra/gateway": [
+        "libs/gateway/src"
+      ],
+      "@hichandra/gateway/*": [
+        "libs/gateway/src/*"
       ]
     }
   },

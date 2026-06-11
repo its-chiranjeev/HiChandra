@@ -70,6 +70,15 @@
         "tsConfigPath": "libs/s3/tsconfig.lib.json"
       }
     },
+    "gateway": {
+      "type": "library",
+      "root": "libs/gateway",
+      "entryFile": "index",
+      "sourceRoot": "libs/gateway/src",
+      "compilerOptions": {
+        "tsConfigPath": "libs/gateway/tsconfig.lib.json"
+      }
+    },
     "user-service": {
       "type": "application",
       "root": "apps/user-service",

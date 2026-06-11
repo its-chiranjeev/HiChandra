@@ -77,6 +77,9 @@ export class Booking {
   @Column({ type: 'boolean', default: false })
   isEmergency!: boolean;
 
+  @Column({ type: 'boolean', default: false })
+  isManualAssign!: boolean;
+
   @Column({ type: 'timestamp', nullable: true })
   scheduledAt?: Date;
 
@@ -94,6 +97,9 @@ export class Booking {
 
   @Column({ type: 'text', nullable: true })
   cancellationReason?: string;
+
+  @Column({ type: 'jsonb', nullable: true })
+  filteredTechnicians: number[];
 
   @CreateDateColumn()
   createdAt!: Date;

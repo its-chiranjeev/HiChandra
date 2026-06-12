@@ -1,14 +1,18 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
-import { Booking, BOOKING_STATUS, Service, CustomerAddress, User, USER_ROLE, USER_STATUS, TECHNICIAN_STATUS, TechnicianService, TechnicianLocation } from '@hichandra/entities';
-import { CreateBookingDto } from '@hichandra/dtos';
+import { Booking, BOOKING_STATUS, Service, CustomerAddress, User, USER_ROLE, USER_STATUS, TECHNICIAN_STATUS, TechnicianService, TechnicianLocation, Otp, PriceBreakdown, Payment, PAYMENT_STATUS } from '@hichandra/entities';
+import { CreateBookingDto, UpdateBookingStatusDto, StartBookingDto } from '@hichandra/dtos';
 import { AssignmentService } from '../assignment/assignment.service';
+import { EmailService } from '@hichandra/email-services';
+import { PaymentService } from '@hichandra/common';
 
 @Injectable()
 export class BookingService {
   constructor(
     private readonly dataSource: DataSource,
     private readonly assignmentService: AssignmentService,
+    private readonly emailService: EmailService,
+    private readonly paymentService: PaymentService,
   ) { }
 
   async createBooking(customerId: number, dto: CreateBookingDto): Promise<Booking> {
@@ -33,10 +37,13 @@ export class BookingService {
 
       const service = await serviceRepo.findOne({
         where: { id: dto.serviceId, isActive: true },
-        relations: ['specifications'],
+        relations: ['specifications', 'pricingRule'],
       });
       if (!service) {
         throw new NotFoundException('Service not found or inactive');
+      }
+      if (!service.pricingRule) {
+        throw new BadRequestException('Pricing rules are not configured for this service');
       }
 
       // Check for existing pending booking of the same service (across all dates)
@@ -142,6 +149,62 @@ export class BookingService {
         value: uSpec.value,
       }));
 
+      // Calculate Fare and Breakdown using new toggle booleans
+      const pricingRule = service.pricingRule;
+      const serviceBasePrice = Number(pricingRule.serviceBasePrice);
+      const isWeekend = targetDate.getDay() === 0 || targetDate.getDay() === 6;
+      const weekendMultiplier = isWeekend ? Number(pricingRule.weekendMultiplier) : 1.0;
+
+      let isPeakHour = false;
+      const hour = targetDate.getHours();
+      if (pricingRule.peakHours && Array.isArray(pricingRule.peakHours)) {
+        for (const range of pricingRule.peakHours) {
+          if (hour >= range.start && hour <= range.end) {
+            isPeakHour = true;
+            break;
+          }
+        }
+      }
+      const peakHourMultiplier = isPeakHour ? Number(pricingRule.peakHourMultiplier) : 1.0;
+      const surgeMultiplier = pricingRule.isSurgeEnabled ? Number(pricingRule.surgeFactor) : 1.0;
+
+      const weekendCharge = (pricingRule.isWeekendApplied && isWeekend) ? Number((serviceBasePrice * (weekendMultiplier - 1)).toFixed(2)) : 0;
+      const peakHourCharge = (pricingRule.isPeakHourApplied && isPeakHour) ? Number((serviceBasePrice * (peakHourMultiplier - 1)).toFixed(2)) : 0;
+      const surgeCharge = pricingRule.isSurgeEnabled ? Number((serviceBasePrice * (surgeMultiplier - 1)).toFixed(2)) : 0;
+      const emergencyCharge = (pricingRule.isEmergencyApplied && dto.isEmergency) ? Number(pricingRule.emergencyCharge) : 0;
+      const distanceCharge = 0; // Calculated dynamically if isDistanceKmApplied is true during assignment/completion
+
+      const subtotal = serviceBasePrice + weekendCharge + peakHourCharge + surgeCharge + emergencyCharge + distanceCharge;
+
+      const platformFee = pricingRule.isPlatformFeeApplied ? Number(pricingRule.platformFee) : 0;
+      const gstRate = Number(pricingRule.gst) / 100;
+      const gst = pricingRule.isGstApplied ? Number(((subtotal + platformFee) * gstRate).toFixed(2)) : 0;
+
+      const totalAmount = Number((subtotal + platformFee + gst).toFixed(2));
+
+      // Make validation that totalAmount is greater than serviceBasePrice
+      if (totalAmount <= serviceBasePrice) {
+        throw new BadRequestException('Calculation error: Total amount must be greater than the service base price.');
+      }
+
+      const commissionRate = 0.15; // 15% platform commission
+      const platformCommission = Number((subtotal * commissionRate).toFixed(2));
+      const platformEarning = Number((platformFee + platformCommission).toFixed(2));
+      const technicianEarning = Number((subtotal - platformCommission).toFixed(2));
+
+      const priceBreakdown: PriceBreakdown = {
+        serviceBasePrice,
+        distanceCharge,
+        emergencyCharge,
+        peakHourCharge,
+        weekendCharge,
+        surgeCharge,
+        gst,
+        platformFee,
+        technicianEarning,
+        platformEarning,
+      };
+
       const booking = bookingRepo.create({
         customerId,
         serviceId: dto.serviceId,
@@ -150,6 +213,8 @@ export class BookingService {
         isEmergency: dto.isEmergency ?? false,
         scheduledAt: targetDate,
         status: BOOKING_STATUS.PENDING,
+        totalAmount,
+        priceBreakdown,
       });
 
       const savedBooking = await bookingRepo.save(booking);
@@ -162,7 +227,7 @@ export class BookingService {
         address,
         service,
       );
-      throw new Error("hell");
+      // throw new Error("hell");
       return savedBooking;
     });
   }
@@ -211,6 +276,243 @@ export class BookingService {
       booking.status = BOOKING_STATUS.ACCEPTED;
 
       return bookingRepo.save(booking);
+    });
+  }
+
+  async updateBookingStatus(
+    technicianId: number,
+    bookingId: number,
+    dto: UpdateBookingStatusDto,
+  ): Promise<Booking> {
+    return this.dataSource.transaction(async (manager) => {
+      const bookingRepo = manager.getRepository(Booking);
+      const otpRepo = manager.getRepository(Otp);
+
+      const booking = await bookingRepo.findOne({
+        where: { id: bookingId },
+        relations: ['customer'],
+      });
+
+      if (!booking) {
+        throw new NotFoundException('Booking not found');
+      }
+
+      if (booking.technicianId !== technicianId) {
+        throw new BadRequestException('You are not assigned to this booking');
+      }
+
+      if (
+        dto.status !== BOOKING_STATUS.ENROUTE &&
+        dto.status !== BOOKING_STATUS.ARRIVED &&
+        dto.status !== BOOKING_STATUS.CANCELLED &&
+        dto.status !== BOOKING_STATUS.COMPLETED
+      ) {
+        throw new BadRequestException('Invalid status transition');
+      }
+
+      // Enforce sequence: ACCEPTED -> ENROUTE -> ARRIVED
+      if (dto.status === BOOKING_STATUS.ENROUTE) {
+        if (booking.status !== BOOKING_STATUS.ACCEPTED) {
+          throw new BadRequestException('Booking must be in ACCEPTED state to change to ENROUTE');
+        }
+      }
+
+      if (dto.status === BOOKING_STATUS.ARRIVED) {
+        if (booking.status !== BOOKING_STATUS.ENROUTE) {
+          throw new BadRequestException('Booking must be in ENROUTE state to change to ARRIVED');
+        }
+      }
+
+      if (dto.status === BOOKING_STATUS.CANCELLED) {
+        // Cancel can be up to ARRIVED, once it's ONGOING it cannot be cancelled
+        if (
+          booking.status === BOOKING_STATUS.ONGOING ||
+          booking.status === BOOKING_STATUS.COMPLETED ||
+          booking.status === BOOKING_STATUS.CANCELLED
+        ) {
+          throw new BadRequestException('Booking cannot be cancelled once it is ongoing, completed, or already cancelled');
+        }
+        if (dto.cancellationReason) {
+          booking.cancellationReason = dto.cancellationReason;
+          booking.cancelledBy = technicianId;
+        }
+      }
+
+      if (dto.status === BOOKING_STATUS.COMPLETED) {
+        // Ongoing -> Completed transition
+        if (booking.status !== BOOKING_STATUS.ONGOING) {
+          throw new BadRequestException('Booking must be in ONGOING state to change to COMPLETED');
+        }
+        booking.completedAt = new Date();
+      }
+
+      booking.status = dto.status;
+      const updatedBooking = await bookingRepo.save(booking);
+
+      if (dto.status === BOOKING_STATUS.ARRIVED) {
+        if (!booking.customer || !booking.customer.email) {
+          throw new BadRequestException('Customer does not have a registered email address');
+        }
+
+        // Generate 6-digit OTP
+        const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+
+        // Send Email
+        await this.emailService.sendOtpEmail(
+          booking.customer.email,
+          otpCode,
+          booking.customer.firstName,
+        );
+
+        // Delete previous unverified OTPs for the customer's email
+        await otpRepo.delete({ email: booking.customer.email, isVerified: false });
+
+        // Save new OTP
+        const expiresAt = new Date();
+        expiresAt.setMinutes(expiresAt.getMinutes() + 10); // OTP expires in 10 minutes
+
+        const newOtp = otpRepo.create({
+          email: booking.customer.email,
+          otp: otpCode,
+          expiresAt,
+          role: USER_ROLE.CUSTOMER,
+          isVerified: false,
+        });
+        await otpRepo.save(newOtp);
+      }
+
+      return updatedBooking;
+    });
+  }
+
+  async startBooking(
+    technicianId: number,
+    bookingId: number,
+    dto: StartBookingDto,
+  ): Promise<Booking> {
+    return this.dataSource.transaction(async (manager) => {
+      const bookingRepo = manager.getRepository(Booking);
+      const otpRepo = manager.getRepository(Otp);
+
+      const booking = await bookingRepo.findOne({
+        where: { id: bookingId },
+        relations: ['customer'],
+      });
+
+      if (!booking) {
+        throw new NotFoundException('Booking not found');
+      }
+
+      if (booking.technicianId !== technicianId) {
+        throw new BadRequestException('You are not assigned to this booking');
+      }
+
+      if (booking.status !== BOOKING_STATUS.ARRIVED) {
+        throw new BadRequestException('Booking must be in ARRIVED status to start work');
+      }
+
+      if (!booking.customer || !booking.customer.email) {
+        throw new BadRequestException('Customer does not have a registered email address');
+      }
+
+      // Verify the latest unverified OTP
+      const latestOtp = await otpRepo.findOne({
+        where: { email: booking.customer.email, isVerified: false },
+        order: { createdAt: 'DESC' },
+      });
+
+      if (!latestOtp) {
+        throw new BadRequestException('No active OTP found for this customer. Please send it again.');
+      }
+
+      if (latestOtp.otp !== dto.otp) {
+        throw new BadRequestException('Invalid OTP');
+      }
+
+      if (latestOtp.expiresAt < new Date()) {
+        throw new BadRequestException('OTP has expired');
+      }
+
+      // Delete the verified OTP to prevent reuse and clean up
+      await otpRepo.remove(latestOtp);
+
+      // Transition booking to ONGOING and record startedAt time
+      booking.status = BOOKING_STATUS.ONGOING;
+      booking.startedAt = new Date();
+      const updatedBooking = await bookingRepo.save(booking);
+
+      return updatedBooking;
+    });
+  }
+
+  async getPaymentUrl(
+    userId: number,
+    bookingId: number,
+  ): Promise<{ paymentUrl: string }> {
+    return this.dataSource.transaction(async (manager) => {
+      const bookingRepo = manager.getRepository(Booking);
+      const paymentRepo = manager.getRepository(Payment);
+
+      const booking = await bookingRepo.findOne({
+        where: { id: bookingId },
+        relations: ['customer'],
+      });
+
+      if (!booking) {
+        throw new NotFoundException('Booking not found');
+      }
+
+      if (booking.customerId !== userId) {
+        throw new BadRequestException('You do not have permission to generate a payment link for this booking');
+      }
+
+      if (booking.status !== BOOKING_STATUS.COMPLETED) {
+        throw new BadRequestException('Payment can only be requested for COMPLETED bookings');
+      }
+
+      // Check for any successful payments to prevent double charging
+      const successfulPayment = await paymentRepo.findOne({
+        where: { bookingId, status: PAYMENT_STATUS.SUCCESS },
+      });
+      if (successfulPayment) {
+        throw new BadRequestException('This booking has already been paid successfully.');
+      }
+
+      if (!booking.customer) {
+        throw new BadRequestException('Customer associated with the booking not found');
+      }
+
+      const amount = Number(booking.totalAmount);
+      if (!amount || amount <= 0) {
+        throw new BadRequestException('Booking does not have a valid total amount');
+      }
+
+      const customerName = `${booking.customer.firstName || ''} ${booking.customer.lastName || ''}`.trim() || 'Customer';
+      const customerEmail = booking.customer.email;
+      const customerPhone = booking.customer.phone || '';
+
+      const paymentLink = await this.paymentService.createPaymentLink(
+        amount,
+        booking.id,
+        {
+          name: customerName,
+          email: customerEmail,
+          phone: customerPhone,
+        },
+      );
+
+      // Save a new pending payment record in DB
+      const newPayment = paymentRepo.create({
+        bookingId: booking.id,
+        customerId: booking.customerId,
+        amount,
+        currency: 'INR',
+        status: PAYMENT_STATUS.PENDING,
+        paymentLinkId: paymentLink.paymentLinkId,
+      });
+      await paymentRepo.save(newPayment);
+
+      return { paymentUrl: paymentLink.url };
     });
   }
 }

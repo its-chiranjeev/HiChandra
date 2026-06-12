@@ -1,7 +1,7 @@
-import { Body, Controller, Get, Param, ParseIntPipe, HttpCode, HttpStatus, Post, Req, UseGuards, ValidationPipe } from '@nestjs/common';
+import { Body, Controller, Get, Param, Query, ParseIntPipe, HttpCode, HttpStatus, Post, Patch, Req, UseGuards, ValidationPipe } from '@nestjs/common';
 import { BookingService } from './booking.service';
 import { JwtAuthGuard, Roles, RolesGuard } from '@hichandra/common';
-import { CreateBookingDto } from '@hichandra/dtos';
+import { CreateBookingDto, UpdateBookingStatusDto, StartBookingDto } from '@hichandra/dtos';
 import { USER_ROLE } from '@hichandra/entities';
 
 @Controller('bookings')
@@ -22,6 +22,21 @@ export class BookingController {
       success: true,
       message: 'Booking created successfully',
       data: booking,
+    };
+  }
+
+  @Get(':bookingId/payment')
+  @Roles(USER_ROLE.CUSTOMER)
+  @HttpCode(HttpStatus.OK)
+  async getPaymentUrl(
+    @Req() req: any,
+    @Param('bookingId', ParseIntPipe) bookingId: number,
+  ) {
+    const data = await this.bookingService.getPaymentUrl(req.user.id, bookingId);
+    return {
+      success: true,
+      message: 'Payment URL generated successfully',
+      data,
     };
   }
 
@@ -51,6 +66,40 @@ export class BookingController {
     return {
       success: true,
       message: 'Booking accepted successfully',
+      data: booking,
+    };
+  }
+
+  @Patch(':id/status')
+  @Roles(USER_ROLE.TECHNICIAN)
+  @HttpCode(HttpStatus.OK)
+  async updateBookingStatus(
+    @Req() req: any,
+    @Param('id', ParseIntPipe) id: number,
+    @Body(new ValidationPipe({ whitelist: true, transform: true }))
+    dto: UpdateBookingStatusDto,
+  ) {
+    const booking = await this.bookingService.updateBookingStatus(req.user.id, id, dto);
+    return {
+      success: true,
+      message: `Booking status updated to ${dto.status} successfully`,
+      data: booking,
+    };
+  }
+
+  @Post(':id/start')
+  @Roles(USER_ROLE.TECHNICIAN)
+  @HttpCode(HttpStatus.OK)
+  async startBooking(
+    @Req() req: any,
+    @Param('id', ParseIntPipe) id: number,
+    @Body(new ValidationPipe({ whitelist: true, transform: true }))
+    dto: StartBookingDto,
+  ) {
+    const booking = await this.bookingService.startBooking(req.user.id, id, dto);
+    return {
+      success: true,
+      message: 'Booking started successfully',
       data: booking,
     };
   }

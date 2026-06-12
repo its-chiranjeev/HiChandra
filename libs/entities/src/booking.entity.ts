@@ -26,11 +26,13 @@ export interface PriceBreakdown {
 }
 
 export enum BOOKING_STATUS {
-  PENDING = 'PENDING',
-  ACCEPTED = 'ACCEPTED',
-  ONGOING = 'ONGOING',
-  COMPLETED = 'COMPLETED',
-  CANCELLED = 'CANCELLED',
+  PENDING = 'PENDING',       // booking created, finding technician
+  ACCEPTED = 'ACCEPTED',     // technician accepted
+  ENROUTE = 'ENROUTE',       // technician on the way
+  ARRIVED = 'ARRIVED',       // technician reached customer location
+  ONGOING = 'ONGOING',       // work started
+  COMPLETED = 'COMPLETED',   // work done
+  CANCELLED = 'CANCELLED',   // cancelled by technician
 }
 
 @Entity('bookings')
@@ -49,6 +51,10 @@ export class Booking {
   @Index()
   @Column({ type: 'int', nullable: true })
   technicianId?: number;
+
+  @Index()
+  @Column({ type: 'int', nullable: true })
+  cancelledBy?: number;
 
   @ManyToOne(() => User, { nullable: true })
   @JoinColumn({ name: 'technicianId' })

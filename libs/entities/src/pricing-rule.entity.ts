@@ -62,6 +62,27 @@ export class PricingRule {
   @Column({ type: 'decimal', precision: 5, scale: 2, default: 0 })
   gst!: number;
 
+  @Column({ type: 'boolean', default: false })
+  isGstApplied!: boolean;
+
+  @Column({ type: 'boolean', default: false })
+  isDistanceKmApplied!: boolean;
+
+  @Column({ type: 'boolean', default: false })
+  isWeekendApplied!: boolean;
+
+  @Column({ type: 'boolean', default: false })
+  isPeakHourApplied!: boolean;
+
+  @Column({ type: 'boolean', default: false })
+  isEmergencyApplied!: boolean;
+
+  @Column({ type: 'boolean', default: false })
+  isPlatformFeeApplied!: boolean;
+
+  @Column({ type: 'boolean', default: false })
+  isPerHourRateApplied!: boolean;
+
   @CreateDateColumn()
   createdAt!: Date;
 

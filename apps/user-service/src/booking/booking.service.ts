@@ -1,10 +1,4 @@
 import {
-  Injectable,
-  NotFoundException,
-  BadRequestException,
-} from '@nestjs/common';
-import { DataSource } from 'typeorm';
-import {
   Booking,
   BOOKING_STATUS,
   Service,
@@ -19,16 +13,16 @@ import {
   PriceBreakdown,
   Payment,
   PAYMENT_STATUS,
+  COMPLAINT_STATUS,
 } from '@hichandra/entities';
-import {
-  CreateBookingDto,
-  UpdateBookingStatusDto,
-  StartBookingDto,
-} from '@hichandra/dtos';
-import { AssignmentService } from '../assignment/assignment.service';
 import { EmailService } from '@hichandra/email-services';
 import { PaymentService } from '@hichandra/payment';
-
+import { Injectable, NotFoundException, BadRequestException, UnprocessableEntityException } from '@nestjs/common';
+import { DataSource } from 'typeorm';
+import { CreateBookingDto, UpdateBookingStatusDto, StartBookingDto, AssignBookingDto, CancelBookingDto, CreateComplaintDto, UpdateComplaintDto } from '@hichandra/dtos';
+import { AssignmentService } from '../assignment/assignment.service';
+import { BookingRepository, UserRepository, ComplaintRepository, PaymentRepository } from '@hichandra/repositories';
+import { UnauthorizedException } from '@nestjs/common';
 @Injectable()
 export class BookingService {
   constructor(
@@ -36,7 +30,11 @@ export class BookingService {
     private readonly assignmentService: AssignmentService,
     private readonly emailService: EmailService,
     private readonly paymentService: PaymentService,
-  ) {}
+    private readonly bookingRepository: BookingRepository,
+    private readonly userRepository: UserRepository,
+    private readonly complaintRepository: ComplaintRepository,
+    private readonly paymentRepository: PaymentRepository,
+  ) { }
 
   async createBooking(
     customerId: number,
@@ -357,10 +355,76 @@ export class BookingService {
     return booking;
   }
 
-  async acceptBooking(
-    technicianId: number,
-    bookingId: number,
-  ): Promise<Booking> {
+  async getAllBookings(
+    page: number,
+    limit: number,
+    status?: BOOKING_STATUS,
+  ) {
+    const { bookings, total } =
+      await this.bookingRepository.findAllBookings(
+        page,
+        limit,
+        status,
+      );
+
+    return {
+      success: true,
+      message: 'Bookings fetched successfully',
+      data: bookings,
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+  //complaint 
+  async getAllComplaints(
+    page: number,
+    limit: number,
+    status?: COMPLAINT_STATUS,
+  ) {
+    const {
+      complaints,
+      total,
+    } = await this.complaintRepository.findAllComplaints(
+      page,
+      limit,
+      status,
+    );
+
+    return {
+      success: true,
+      message: 'Complaints fetched successfully',
+      data: complaints,
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  async getBookingById(id: number) {
+    const booking =
+      await this.bookingRepository.findBookingById(id);
+
+    if (!booking) {
+      throw new NotFoundException(
+        'Booking not found',
+      );
+    }
+
+    return {
+      success: true,
+      message: 'Booking fetched successfully',
+      data: booking,
+    };
+  }
+
+  async acceptBooking(technicianId: number, bookingId: number): Promise<Booking> {
     return this.dataSource.transaction(async (manager) => {
       const bookingRepo = manager.getRepository(Booking);
       const userRepo = manager.getRepository(User);
@@ -405,6 +469,246 @@ export class BookingService {
     });
   }
 
+  async assignBookingManually(
+    dto: AssignBookingDto,
+  ) {
+    const { bookingId, technicianId } = dto;
+
+    // Validate booking
+    const booking =
+      await this.bookingRepository.findManualAssignableBooking(
+        bookingId,
+      );
+
+    if (!booking) {
+      throw new UnprocessableEntityException(
+        'Booking not found, not pending, or manual assignment not allowed',
+      );
+    }
+
+    // Prevent reassignment
+    if (booking.technicianId) {
+      throw new UnprocessableEntityException(
+        'Booking already assigned',
+      );
+    }
+
+    // Validate technician
+    const technician =
+      await this.userRepository.findTechnicianById(
+        technicianId,
+      );
+
+    if (!technician) {
+      throw new UnprocessableEntityException(
+        'Technician not found or inactive',
+      );
+    }
+
+    // Assign booking
+    booking.technicianId = technician.id;
+    booking.technician = technician;
+
+    booking.status = BOOKING_STATUS.ACCEPTED;
+
+    const updated =
+      await this.bookingRepository.saveBooking(
+        booking,
+      );
+
+    return {
+      success: true,
+      message: 'Booking assigned successfully',
+      data: updated,
+    };
+  }
+
+  async cancelBooking(
+    customerId: number,
+    dto: CancelBookingDto,
+  ) {
+    const { bookingId, cancellationReason } = dto;
+
+    const booking =
+      await this.bookingRepository.findCustomerBooking(
+        bookingId,
+        customerId,
+      );
+
+    if (!booking) {
+      throw new UnprocessableEntityException(
+        'Booking not found or does not belong to customer',
+      );
+    }
+
+    if (booking.status === BOOKING_STATUS.CANCELLED) {
+      throw new UnprocessableEntityException(
+        'Booking already cancelled',
+      );
+    }
+
+    if (booking.status === BOOKING_STATUS.COMPLETED) {
+      throw new UnprocessableEntityException(
+        'Completed booking cannot be cancelled',
+      );
+    }
+
+    booking.status = BOOKING_STATUS.CANCELLED;
+    booking.cancellationReason = cancellationReason;
+
+    const updated =
+      await this.bookingRepository.saveBooking(
+        booking,
+      );
+
+    return {
+      success: true,
+      message: 'Booking cancelled successfully',
+      data: updated,
+    };
+  }
+
+  async createComplaint(
+    user: any,
+    dto: CreateComplaintDto,
+  ) {
+    const booking =
+      await this.bookingRepository.findBookingById(
+        dto.bookingId,
+      );
+
+    if (!booking) {
+      throw new NotFoundException(
+        'Booking not found',
+      );
+    }
+    if (!user?.id) {
+      throw new UnauthorizedException(
+        'Invalid user',
+      );
+    }
+
+    if (booking.serviceId !== dto.serviceId) {
+      throw new BadRequestException(
+        'Invalid service for this booking',
+      );
+    }
+
+    if (user.role === USER_ROLE.CUSTOMER) {
+      if (booking.customerId !== user.id) {
+        throw new BadRequestException(
+          'This booking does not belong to you',
+        );
+      }
+    } else if (
+      user.role === USER_ROLE.TECHNICIAN
+    ) {
+      if (booking.technicianId !== user.id) {
+        throw new BadRequestException(
+          'This booking is not assigned to you',
+        );
+      }
+    } else {
+      throw new BadRequestException(
+        'Invalid role for complaint creation',
+      );
+    }
+    const pendingComplaint =
+      await this.complaintRepository.findPendingComplaint(
+        dto.bookingId,
+        dto.serviceId,
+      );
+
+    if (pendingComplaint) {
+      throw new BadRequestException(
+        'A complaint is already pending for this booking',
+      );
+    }
+
+    const complaint =
+      await this.complaintRepository.createComplaint({
+        bookingId: dto.bookingId,
+        serviceId: dto.serviceId,
+        title: dto.title,
+        description: dto.description,
+        createdBy: user.id,
+        createdByRole: user.role,
+        status: COMPLAINT_STATUS.PENDING,
+      });
+
+    return {
+      success: true,
+      message: 'Complaint created successfully',
+      data: complaint,
+    };
+  }
+  //edit complaint
+  async updateComplaint(
+    user: any,
+    complaintId: number,
+    dto: UpdateComplaintDto,
+  ) {
+    const complaint =
+      await this.complaintRepository.findComplaintById(
+        complaintId,
+      );
+
+    if (!complaint) {
+      throw new NotFoundException(
+        'Complaint not found',
+      );
+    }
+
+    if (complaint.createdBy !== user.id) {
+      throw new BadRequestException(
+        'You can only edit your own complaint',
+      );
+    }
+
+    if (
+      complaint.status !==
+      COMPLAINT_STATUS.PENDING
+    ) {
+      throw new BadRequestException(
+        'Only pending complaints can be edited',
+      );
+    }
+
+    const booking =
+      await this.bookingRepository.findBookingById(
+        dto.bookingId,
+      );
+
+    if (!booking) {
+      throw new NotFoundException(
+        'Booking not found',
+      );
+    }
+
+    if (
+      booking.serviceId !== dto.serviceId
+    ) {
+      throw new BadRequestException(
+        'Invalid service for this booking',
+      );
+    }
+
+    complaint.bookingId = dto.bookingId;
+    complaint.serviceId = dto.serviceId;
+    complaint.title = dto.title;
+    complaint.description = dto.description;
+
+    await this.complaintRepository.saveComplaint(
+      complaint,
+    );
+
+    return {
+      success: true,
+      message:
+        'Complaint updated successfully',
+      data: complaint,
+    };
+  }
   async updateBookingStatus(
     technicianId: number,
     bookingId: number,
@@ -671,5 +975,17 @@ export class BookingService {
 
       return { paymentUrl: paymentLink.url };
     });
+  }
+  //payment
+  async getAllPayments(
+    page: number,
+    limit: number,
+    status?: PAYMENT_STATUS,
+  ) {
+    return this.paymentRepository.findAllPayments(
+      page,
+      limit,
+      status,
+    );
   }
 }

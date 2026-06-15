@@ -1,20 +1,14 @@
-import {
-  IsOptional,
-  IsString,
-  IsNumber,
-  IsBoolean,
-  IsArray,
-  ValidateNested,
-  IsObject,
-} from 'class-validator';
-import { Transform, Type } from 'class-transformer';
+import { IsOptional, IsString, IsNumber, IsBoolean, IsArray, ValidateNested, IsObject } from 'class-validator';
+import { plainToInstance, Transform, Type } from 'class-transformer';
 
 export class UpdateTechnicianLocationDto {
   @IsOptional()
+  @Type(() => Number)
   @IsNumber()
   latitude?: number;
 
   @IsOptional()
+  @Type(() => Number)
   @IsNumber()
   longitude?: number;
 
@@ -35,12 +29,14 @@ export class UpdateTechnicianLocationDto {
   pincode?: string;
 
   @IsOptional()
+  @Type(() => Number)
   @IsNumber()
   serviceRadiusKm?: number;
 }
 
 export class UpdateTechnicianProfileDetailsDto {
   @IsOptional()
+  @Type(() => Number)
   @IsNumber()
   yearsOfExperience?: number;
 
@@ -50,18 +46,22 @@ export class UpdateTechnicianProfileDetailsDto {
   languages?: string[];
 
   @IsOptional()
+  @Transform(({ value }) => value === true || value === 'true')
   @IsBoolean()
   hasLadder?: boolean;
 
   @IsOptional()
+  @Transform(({ value }) => value === true || value === 'true')
   @IsBoolean()
   hasACGauges?: boolean;
 
   @IsOptional()
+  @Transform(({ value }) => value === true || value === 'true')
   @IsBoolean()
   hasSafetyEquipment?: boolean;
 
   @IsOptional()
+  @Transform(({ value }) => value === true || value === 'true')
   @IsBoolean()
   hasVehicle?: boolean;
 
@@ -112,29 +112,60 @@ export class UpdateProfileDto {
   @Transform(({ value }) => {
     if (typeof value === 'string') {
       try {
-        return JSON.parse(value);
+        const parsed = JSON.parse(value);
+        return plainToInstance(UpdateTechnicianProfileDetailsDto, parsed);
       } catch {
         return value;
       }
     }
     return value;
   })
-  // @ValidateNested()
+  @ValidateNested()
   @Type(() => UpdateTechnicianProfileDetailsDto)
   technicianProfile?: UpdateTechnicianProfileDetailsDto;
 
   @IsOptional()
-  @IsObject()
+  @Transform(({ value }) => {
+    if (typeof value === 'string') {
+      try {
+        const parsed = JSON.parse(value);
+        return plainToInstance(UpdateTechnicianLocationDto, parsed);
+      } catch {
+        return value;
+      }
+    }
+    return value;
+  })
   @ValidateNested()
   @Type(() => UpdateTechnicianLocationDto)
   location?: UpdateTechnicianLocationDto;
 
   @IsOptional()
+  @Transform(({ value }) => {
+    if (typeof value === 'string') {
+      try {
+        return JSON.parse(value);
+      } catch {
+        return value.split(',').map(Number);
+      }
+    }
+    return value;
+  })
   @IsArray()
   @IsNumber({}, { each: true })
   services?: number[];
 
   @IsOptional()
+  @Transform(({ value }) => {
+    if (typeof value === 'string') {
+      try {
+        return JSON.parse(value);
+      } catch {
+        return value.split(',').map(v => v.trim());
+      }
+    }
+    return value;
+  })
   @IsArray()
   @IsString({ each: true })
   brandExpertise?: string[];

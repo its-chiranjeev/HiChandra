@@ -1,0 +1,92 @@
+import { Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Booking, BOOKING_STATUS } from '@hichandra/entities';
+import { Repository } from 'typeorm';
+
+@Injectable()
+export class BookingRepository {
+  constructor(
+    @InjectRepository(Booking)
+    private readonly repo: Repository<Booking>,
+  ) { }
+
+  async findAllBookings(
+    page = 1,
+    limit = 10,
+    status?: BOOKING_STATUS,
+  ) {
+    const where: any = {};
+
+    if (status) {
+      where.status = status;
+    }
+
+    const [bookings, total] =
+      await this.repo.findAndCount({
+        where,
+        relations: {
+          customer: true,
+          technician: true,
+          service: true,
+          address: true,
+        },
+        skip: (page - 1) * limit,
+        take: limit,
+        order: {
+          createdAt: 'DESC',
+        },
+      });
+
+    return {
+      bookings,
+      total,
+    };
+  }
+
+  async findBookingById(id: number) {
+    return this.repo.findOne({
+      where: { id },
+      relations: {
+        customer: true,
+        technician: true,
+        service: true,
+        address: true,
+      },
+    });
+  }
+
+  async findManualAssignableBooking(
+    bookingId: number,
+  ) {
+    return this.repo.findOne({
+      where: {
+        id: bookingId,
+        isManualAssign: true,
+        status: BOOKING_STATUS.PENDING,
+      },
+      relations: {
+        customer: true,
+        technician: true,
+        service: true,
+        address: true,
+      },
+    });
+  }
+
+  async saveBooking(booking: Booking) {
+    return this.repo.save(booking);
+  }
+
+  async findCustomerBooking(
+    bookingId: number,
+    customerId: number,
+  ) {
+    return this.repo.findOne({
+      where: {
+        id: bookingId,
+        customerId,
+      },
+    });
+  }
+
+}

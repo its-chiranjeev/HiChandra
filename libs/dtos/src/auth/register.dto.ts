@@ -17,7 +17,6 @@ export class TechnicianServiceDto {
   serviceId!: number;
 }
 
-
 export class TechnicianBrandExpertiseDto {
   @IsString()
   @IsNotEmpty()
@@ -62,7 +61,6 @@ export class TechnicianProfileDto {
   @IsNumber()
   serviceRadiusKm?: number;
 
-
   @IsOptional()
   @IsString()
   accountHolderName?: string;
@@ -100,7 +98,6 @@ export class TechnicianProfileDto {
   @ValidateNested({ each: true })
   @Type(() => TechnicianServiceDto)
   services?: TechnicianServiceDto[];
-
 
   @IsOptional()
   @IsArray()
@@ -242,4 +239,3 @@ export class UpdateCustomerAddressDto {
   @IsBoolean()
   isActive?: boolean;
 }
-

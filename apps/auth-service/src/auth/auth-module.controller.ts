@@ -17,7 +17,7 @@ import { LoginDto, RegisterUserDto, VerifyOtpDto } from '@hichandra/dtos';
 
 @Controller('auth')
 export class AuthModuleController {
-  constructor(private readonly authModuleService: AuthModuleService) { }
+  constructor(private readonly authModuleService: AuthModuleService) {}
 
   @Post('logout')
   @UseGuards(JwtAuthGuard)

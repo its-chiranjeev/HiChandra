@@ -81,10 +81,7 @@ export class UserRepository extends BaseRepository<User> {
     });
   }
 
-  async updateUser(
-    id: number,
-    payload: Partial<User>,
-  ) {
+  async updateUser(id: number, payload: Partial<User>) {
     await this.repo.update(id, payload);
 
     return this.repo.findOne({
@@ -95,5 +92,4 @@ export class UserRepository extends BaseRepository<User> {
   async softDeleteUser(id: number) {
     return this.repo.softDelete(id);
   }
-
 }

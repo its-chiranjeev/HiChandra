@@ -1,4 +1,13 @@
-import { IsNotEmpty, IsNumber, IsOptional, IsBoolean, IsDate, IsArray, ValidateNested, IsString } from 'class-validator';
+import {
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsBoolean,
+  IsDate,
+  IsArray,
+  ValidateNested,
+  IsString,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class BookingSpecificationDto {

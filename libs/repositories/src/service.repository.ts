@@ -14,52 +14,45 @@ export class ServiceRepository extends BaseRepository<Service> {
     super(repo);
   }
 
-  async findAllServices(
-  page?: number,
-  limit?: number,
-) {
+  async findAllServices(page?: number, limit?: number) {
     const queryOptions: any = {
-        where: {
+      where: {
         isActive: true,
-        },
-        relations: {
+      },
+      relations: {
         pricingRule: true,
-        },
-        order: {
+      },
+      order: {
         createdAt: 'DESC',
-        },
+      },
     };
 
-        if (page || limit) {
-            const currentPage = page || 1;
-            const currentLimit = limit || 10;
+    if (page || limit) {
+      const currentPage = page || 1;
+      const currentLimit = limit || 10;
 
-            queryOptions.skip =
-            (currentPage - 1) * currentLimit;
+      queryOptions.skip = (currentPage - 1) * currentLimit;
 
-            queryOptions.take = currentLimit;
-        }
-
-    const [services, total] =
-        await this.repo.findAndCount(
-        queryOptions,
-        );
-
-        return {
-            services,
-            total,
-        };
+      queryOptions.take = currentLimit;
     }
 
-    async findServiceById(id: number) {
-        return this.repo.findOne({
-            where: {
-            id,
-            isActive: true,
-            },
-            relations: {
-            pricingRule: true,
-            },
-        });
-    }
+    const [services, total] = await this.repo.findAndCount(queryOptions);
+
+    return {
+      services,
+      total,
+    };
+  }
+
+  async findServiceById(id: number) {
+    return this.repo.findOne({
+      where: {
+        id,
+        isActive: true,
+      },
+      relations: {
+        pricingRule: true,
+      },
+    });
+  }
 }

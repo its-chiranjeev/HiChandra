@@ -16,7 +16,6 @@ import { PlatformSettingRepository } from './platform-setting.repository';
     TechnicianProfileRepository,
     ServiceRepository,
     PlatformSettingRepository,
-    
   ],
   exports: [
     RepositoriesService,
@@ -24,7 +23,7 @@ import { PlatformSettingRepository } from './platform-setting.repository';
     OtpRepository,
     TechnicianProfileRepository,
     ServiceRepository,
-    PlatformSettingRepository
+    PlatformSettingRepository,
   ],
 })
 export class RepositoriesModule {}

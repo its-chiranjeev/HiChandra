@@ -19,7 +19,9 @@ export class TechnicianLocation {
   @Column({ type: 'int' })
   technicianId!: number;
 
-  @ManyToOne(() => TechnicianProfile, (profile) => profile.locations, { onDelete: 'CASCADE' })
+  @ManyToOne(() => TechnicianProfile, (profile) => profile.locations, {
+    onDelete: 'CASCADE',
+  })
   @JoinColumn({ name: 'technicianId' })
   technicianProfile!: TechnicianProfile;
 

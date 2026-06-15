@@ -122,7 +122,8 @@
       "^@hichandra/email-services(|/.*)$": "<rootDir>/libs/email-services/src/$1",
       "^@hichandra/repositories(|/.*)$": "<rootDir>/libs/repositories/src/$1",
       "^@hichandra/s3(|/.*)$": "<rootDir>/libs/s3/src/$1",
-      "^@hichandra/gateway(|/.*)$": "<rootDir>/libs/gateway/src/$1"
+      "^@hichandra/gateway(|/.*)$": "<rootDir>/libs/gateway/src/$1",
+      "^@hichandra/payment(|/.*)$": "<rootDir>/libs/payment/src/$1"
     }
   }
 }

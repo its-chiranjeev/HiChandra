@@ -2,6 +2,27 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import Razorpay from 'razorpay';
 import * as crypto from 'crypto';
 
+interface CustomerData {
+  name: string;
+  email?: string;
+  contact?: string;
+}
+
+interface NotifyData {
+  email?: boolean;
+  sms?: boolean;
+}
+
+interface PaymentLinkPayload {
+  amount: number;
+  currency: string;
+  description: string;
+  customer: CustomerData;
+  reminder_enable: boolean;
+  reference_id: string;
+  notify?: NotifyData;
+}
+
 @Injectable()
 export class PaymentService {
   private razorpay: Razorpay;
@@ -18,10 +39,10 @@ export class PaymentService {
     bookingId: number,
     customer: { name: string; email?: string; phone?: string },
   ) {
-    const customerData: any = {
+    const customerData: CustomerData = {
       name: customer.name,
     };
-    const notifyData: any = {};
+    const notifyData: NotifyData = {};
 
     if (customer.email && customer.email.trim() !== '') {
       customerData.email = customer.email;
@@ -35,7 +56,7 @@ export class PaymentService {
     // Append unique timestamp so the customer can retry payment without duplicate reference_id error
     const referenceId = `booking_${bookingId}_${Date.now()}`;
 
-    const payload: any = {
+    const payload: PaymentLinkPayload = {
       amount: amount * 100,
       currency: 'INR',
       description: `Payment for Booking #${bookingId}`,
@@ -49,15 +70,23 @@ export class PaymentService {
     }
 
     try {
-      const paymentLink = await this.razorpay.paymentLink.create(payload);
+      const paymentLink = await this.razorpay.paymentLink.create(
+        payload as unknown as Parameters<Razorpay['paymentLink']['create']>[0],
+      );
       return {
         paymentLinkId: paymentLink.id,
         url: paymentLink.short_url,
         amount: amount,
       };
-    } catch (error: any) {
+    } catch (err: unknown) {
+      const error = err as {
+        error?: { description?: string };
+        message?: string;
+      };
       throw new BadRequestException(
-        error.error?.description || error.message || 'Razorpay payment link creation failed',
+        error.error?.description ||
+          error.message ||
+          'Razorpay payment link creation failed',
       );
     }
   }

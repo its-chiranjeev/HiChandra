@@ -1,25 +1,47 @@
-
-import { FileFieldsInterceptor } from "@nestjs/platform-express";
-import { Body, Controller, Query, Get, Put, Patch, Delete, Param, ParseIntPipe, HttpCode, HttpStatus, Post, Req, UnauthorizedException, UseGuards, UseInterceptors, ValidationPipe, UploadedFiles } from "@nestjs/common";
-import { UserService } from "./user.service";
-import { AuthGuard } from "@nestjs/passport";
-import { JwtAuthGuard, Roles, RolesGuard } from "@hichandra/common";
-import { RegisterDto, UpdateUserDto, CreateServiceDto, CreatePlatformSettingDto, CustomerAddressDto, UpdateCustomerAddressDto, UpdateProfileDto } from "@hichandra/dtos";
+import { FileFieldsInterceptor } from '@nestjs/platform-express';
+import {
+  Body,
+  Controller,
+  Query,
+  Get,
+  Put,
+  Patch,
+  Delete,
+  Param,
+  ParseIntPipe,
+  HttpCode,
+  HttpStatus,
+  Post,
+  Req,
+  UnauthorizedException,
+  UseGuards,
+  UseInterceptors,
+  ValidationPipe,
+  UploadedFiles,
+} from '@nestjs/common';
+import { UserService } from './user.service';
+import { AuthGuard } from '@nestjs/passport';
+import { JwtAuthGuard, Roles, RolesGuard } from '@hichandra/common';
+import {
+  RegisterDto,
+  UpdateUserDto,
+  CreateServiceDto,
+  CreatePlatformSettingDto,
+  CustomerAddressDto,
+  UpdateCustomerAddressDto,
+  UpdateProfileDto,
+} from '@hichandra/dtos';
 import { USER_ROLE, USER_STATUS } from '@hichandra/entities';
-import { filter } from "rxjs";
+import { filter } from 'rxjs';
 
 @Controller('users')
 export class UserController {
-  constructor(private readonly userService: UserService) { }
+  constructor(private readonly userService: UserService) {}
 
   @Post('admin/service')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(USER_ROLE.ADMIN)
-  @UseInterceptors(
-    FileFieldsInterceptor([
-      { name: 'icon', maxCount: 1 },
-    ]),
-  )
+  @UseInterceptors(FileFieldsInterceptor([{ name: 'icon', maxCount: 1 }]))
   @HttpCode(HttpStatus.OK)
   async createService(
     @UploadedFiles()
@@ -39,7 +61,7 @@ export class UserController {
   async upsertPlatformSetting(
     @Body(new ValidationPipe({ whitelist: true, transform: true }))
     dto: CreatePlatformSettingDto,
-  ) { 
+  ) {
     return this.userService.upsertPlatformSetting(dto);
   }
 
@@ -61,9 +83,7 @@ export class UserController {
 
   @Get(':id')
   @UseGuards(JwtAuthGuard)
-  async getUserById(
-    @Param('id', ParseIntPipe) id: number,
-  ) {
+  async getUserById(@Param('id', ParseIntPipe) id: number) {
     return this.userService.getUserByIdService(id);
   }
 
@@ -74,17 +94,12 @@ export class UserController {
     @Param('id', ParseIntPipe) id: number,
     @Body() updateUserDto: UpdateUserDto,
   ) {
-    return this.userService.updateUserService(
-      id,
-      updateUserDto,
-    );
+    return this.userService.updateUserService(id, updateUserDto);
   }
 
   @Delete('delete/:id')
   @UseGuards(JwtAuthGuard)
-  async deleteUser(
-    @Param('id', ParseIntPipe) id: number,
-  ) {
+  async deleteUser(@Param('id', ParseIntPipe) id: number) {
     return this.userService.deleteUserService(id);
   }
 
@@ -100,12 +115,8 @@ export class UserController {
   }
 
   @Get('service/:id')
-  async getServiceById(
-    @Param('id') id: string,
-  ) {
-    return this.userService.getServiceById(
-      Number(id),
-    );
+  async getServiceById(@Param('id') id: string) {
+    return this.userService.getServiceById(Number(id));
   }
 
   @Get('platform-settings/all')
@@ -126,9 +137,7 @@ export class UserController {
   @Get('platform-settings/:id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(USER_ROLE.ADMIN)
-  async getPlatformSettingById(
-    @Param('id', ParseIntPipe) id: number,
-  ) {
+  async getPlatformSettingById(@Param('id', ParseIntPipe) id: number) {
     return this.userService.getPlatformSettingByIdService(id);
   }
 
@@ -189,7 +198,11 @@ export class UserController {
     @Body(new ValidationPipe({ whitelist: true, transform: true }))
     dto: UpdateCustomerAddressDto,
   ) {
-    return this.userService.updateCustomerAddressService(req.user.id, addressId, dto);
+    return this.userService.updateCustomerAddressService(
+      req.user.id,
+      addressId,
+      dto,
+    );
   }
 
   @Delete('customer/address/:addressId')
@@ -200,15 +213,16 @@ export class UserController {
     @Req() req: any,
     @Param('addressId', ParseIntPipe) addressId: number,
   ) {
-    return this.userService.deleteCustomerAddressService(req.user.id, addressId);
+    return this.userService.deleteCustomerAddressService(
+      req.user.id,
+      addressId,
+    );
   }
 
   @Patch('profile')
   @UseGuards(JwtAuthGuard)
   @UseInterceptors(
-    FileFieldsInterceptor([
-      { name: 'profileImage', maxCount: 1 },
-    ]),
+    FileFieldsInterceptor([{ name: 'profileImage', maxCount: 1 }]),
   )
   @HttpCode(HttpStatus.OK)
   async updateProfile(

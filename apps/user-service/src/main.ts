@@ -1,10 +1,13 @@
 import { NestFactory } from '@nestjs/core';
 import { UserManagementModule } from './user-management.module';
-import { Logger, UnprocessableEntityException, ValidationPipe } from '@nestjs/common';
+import {
+  Logger,
+  UnprocessableEntityException,
+  ValidationPipe,
+} from '@nestjs/common';
 import { ResponseInterceptor } from '@hichandra/common';
 import { GlobalExceptionFilter } from '@hichandra/common';
 import { Request, Response, NextFunction } from 'express';
-
 
 async function bootstrap() {
   const app = await NestFactory.create(UserManagementModule);
@@ -63,12 +66,13 @@ async function bootstrap() {
       },
     }),
   );
-  
+
   const port = process.env.USER_MANAGEMENT_PORT || 5001;
   await app.listen(port);
 
-  Logger.log(`🚀 User Management Server running on http://localhost:${port}/api`);
+  Logger.log(
+    `🚀 User Management Server running on http://localhost:${port}/api`,
+  );
 }
 
 bootstrap();
-

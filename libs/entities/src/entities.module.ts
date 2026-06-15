@@ -39,4 +39,4 @@ import { EntitiesService } from './entities.service';
     TypeOrmModule, // VERY IMPORTANT
   ],
 })
-export class EntitiesModule { }
+export class EntitiesModule {}

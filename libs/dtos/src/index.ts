@@ -12,4 +12,3 @@ export * from './booking/create-booking.dto';
 export * from './booking/update-booking-status.dto';
 export * from './booking/start-booking.dto';
 export * from './user/update-profile.dto';
-

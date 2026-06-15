@@ -5,3 +5,6 @@ export * from './otp.repository';
 export * from './technician-profile.repository';
 export * from './service.repository';
 export * from './platform-setting.repository';
+export * from './booking.repository';
+export * from './complaint.repository';
+export * from './payment.repository';

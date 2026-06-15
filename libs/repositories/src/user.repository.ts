@@ -80,8 +80,27 @@ export class UserRepository extends BaseRepository<User> {
       },
     });
   }
-
-  async updateUser(id: number, payload: Partial<User>) {
+  async findTechnicianById(id: number) {
+    return this.repo.findOne({
+      where: {
+        id,
+        role: USER_ROLE.TECHNICIAN,
+        status: USER_STATUS.ACTIVE,
+      },
+      relations: {
+        technicianProfile: {
+          services: true,
+          brandExpertise: true,
+          locations: true,
+        },
+      },
+    });
+  }
+  
+  async updateUser(
+    id: number,
+    payload: Partial<User>,
+  ) {
     await this.repo.update(id, payload);
 
     return this.repo.findOne({

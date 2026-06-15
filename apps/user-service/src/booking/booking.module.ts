@@ -7,6 +7,7 @@ import { AuthModuleModule } from 'apps/auth-service/src/auth/auth-module.module'
 import { AssignmentModule } from '../assignment/assignment.module';
 import { EmailServicesModule } from '@hichandra/email-services';
 import { PaymentModule } from '@hichandra/payment';
+import { RepositoriesModule } from '@hichandra/repositories';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { PaymentModule } from '@hichandra/payment';
     AuthModuleModule,
     AssignmentModule,
     EmailServicesModule,
+    RepositoriesModule
   ],
   controllers: [BookingController],
   providers: [BookingService],

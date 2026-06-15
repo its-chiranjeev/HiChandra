@@ -6,7 +6,9 @@ import { OtpRepository } from './otp.repository';
 import { TechnicianProfileRepository } from './technician-profile.repository';
 import { ServiceRepository } from './service.repository';
 import { PlatformSettingRepository } from './platform-setting.repository';
-
+import { BookingRepository } from './booking.repository';
+import { ComplaintRepository } from './complaint.repository';
+import { PaymentRepository } from './payment.repository';
 @Module({
   imports: [EntitiesModule],
   providers: [
@@ -16,6 +18,10 @@ import { PlatformSettingRepository } from './platform-setting.repository';
     TechnicianProfileRepository,
     ServiceRepository,
     PlatformSettingRepository,
+    BookingRepository,
+     ComplaintRepository,
+    PaymentRepository,
+    
   ],
   exports: [
     RepositoriesService,
@@ -24,6 +30,9 @@ import { PlatformSettingRepository } from './platform-setting.repository';
     TechnicianProfileRepository,
     ServiceRepository,
     PlatformSettingRepository,
+    BookingRepository,
+    ComplaintRepository,
+    PaymentRepository,
   ],
 })
 export class RepositoriesModule {}

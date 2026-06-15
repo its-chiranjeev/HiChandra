@@ -35,11 +35,15 @@ export class CreateBookingDto {
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => BookingSpecificationDto)
-  serviceSpecifications: BookingSpecificationDto[];
+  serviceSpecifications!: BookingSpecificationDto[];
 
   @IsOptional()
   @IsBoolean()
   isEmergency?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isManualAssign?: boolean;
 
   @IsOptional()
   @Type(() => Date)

@@ -43,8 +43,8 @@ export class TechnicianProfile {
   @Column({ type: 'int', nullable: true })
   yearsOfExperience?: number;
 
-  @Column({ type: 'json', nullable: true })
-  languages?: string[]; // ["Hindi", "English"]
+  @Column({ type: 'jsonb', nullable: true })
+  languages?: string[];                   // ["Hindi", "English"]
 
   @Column({
     type: 'enum',

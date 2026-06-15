@@ -109,7 +109,7 @@ export class Booking {
   cancellationReason?: string;
 
   @Column({ type: 'jsonb', nullable: true })
-  filteredTechnicians: number[];
+  filteredTechnicians!: number[];
 
   @CreateDateColumn()
   createdAt!: Date;

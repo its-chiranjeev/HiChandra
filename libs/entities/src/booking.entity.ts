@@ -26,13 +26,13 @@ export interface PriceBreakdown {
 }
 
 export enum BOOKING_STATUS {
-  PENDING = 'PENDING',       // booking created, finding technician
-  ACCEPTED = 'ACCEPTED',     // technician accepted
-  ENROUTE = 'ENROUTE',       // technician on the way
-  ARRIVED = 'ARRIVED',       // technician reached customer location
-  ONGOING = 'ONGOING',       // work started
-  COMPLETED = 'COMPLETED',   // work done
-  CANCELLED = 'CANCELLED',   // cancelled by technician
+  PENDING = 'PENDING', // booking created, finding technician
+  ACCEPTED = 'ACCEPTED', // technician accepted
+  ENROUTE = 'ENROUTE', // technician on the way
+  ARRIVED = 'ARRIVED', // technician reached customer location
+  ONGOING = 'ONGOING', // work started
+  COMPLETED = 'COMPLETED', // work done
+  CANCELLED = 'CANCELLED', // cancelled by technician
 }
 
 @Entity('bookings')
@@ -77,7 +77,11 @@ export class Booking {
   @Column({ type: 'jsonb', nullable: true })
   serviceSpecifications?: Record<string, any>;
 
-  @Column({ type: 'enum', enum: BOOKING_STATUS, default: BOOKING_STATUS.PENDING })
+  @Column({
+    type: 'enum',
+    enum: BOOKING_STATUS,
+    default: BOOKING_STATUS.PENDING,
+  })
   status!: BOOKING_STATUS;
 
   @Column({ type: 'boolean', default: false })

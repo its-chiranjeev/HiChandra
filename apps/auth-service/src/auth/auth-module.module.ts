@@ -11,10 +11,10 @@ import { EmailServicesModule } from '@hichandra/email-services';
     EntitiesModule,
     RepositoriesModule,
     CommonAuthModule,
-    EmailServicesModule
+    EmailServicesModule,
   ],
   controllers: [AuthModuleController],
   providers: [AuthModuleService],
-  exports: [AuthModuleService]
+  exports: [AuthModuleService],
 })
-export class AuthModuleModule { }
+export class AuthModuleModule {}

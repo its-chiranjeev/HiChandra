@@ -13,4 +13,3 @@ export * from './service-specification.entity';
 export * from './customer-address.entity';
 export * from './booking.entity';
 export * from './payment.entity';
-

@@ -8,16 +8,15 @@ import { CommonAuthModule } from '@hichandra/common';
 import { AuthModuleModule } from 'apps/auth-service/src/auth/auth-module.module';
 import { S3Module } from '@hichandra/s3';
 
-
 @Module({
   imports: [
     EntitiesModule,
     RepositoriesModule,
     CommonAuthModule,
     AuthModuleModule,
-    S3Module
+    S3Module,
   ],
   controllers: [UserController],
   providers: [UserService],
 })
-export class UserModule { }
+export class UserModule {}

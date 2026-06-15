@@ -1,10 +1,33 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { DataSource } from 'typeorm';
-import { Booking, BOOKING_STATUS, Service, CustomerAddress, User, USER_ROLE, USER_STATUS, TECHNICIAN_STATUS, TechnicianService, TechnicianLocation, Otp, PriceBreakdown, Payment, PAYMENT_STATUS } from '@hichandra/entities';
-import { CreateBookingDto, UpdateBookingStatusDto, StartBookingDto } from '@hichandra/dtos';
+import {
+  Booking,
+  BOOKING_STATUS,
+  Service,
+  CustomerAddress,
+  User,
+  USER_ROLE,
+  USER_STATUS,
+  TECHNICIAN_STATUS,
+  TechnicianService,
+  TechnicianLocation,
+  Otp,
+  PriceBreakdown,
+  Payment,
+  PAYMENT_STATUS,
+} from '@hichandra/entities';
+import {
+  CreateBookingDto,
+  UpdateBookingStatusDto,
+  StartBookingDto,
+} from '@hichandra/dtos';
 import { AssignmentService } from '../assignment/assignment.service';
 import { EmailService } from '@hichandra/email-services';
-import { PaymentService } from '@hichandra/common';
+import { PaymentService } from '@hichandra/payment';
 
 @Injectable()
 export class BookingService {
@@ -13,27 +36,35 @@ export class BookingService {
     private readonly assignmentService: AssignmentService,
     private readonly emailService: EmailService,
     private readonly paymentService: PaymentService,
-  ) { }
+  ) {}
 
-  async createBooking(customerId: number, dto: CreateBookingDto): Promise<Booking> {
+  async createBooking(
+    customerId: number,
+    dto: CreateBookingDto,
+  ): Promise<Booking> {
     return this.dataSource.transaction(async (manager) => {
       const serviceRepo = manager.getRepository(Service);
       const addressRepo = manager.getRepository(CustomerAddress);
       const bookingRepo = manager.getRepository(Booking);
-      const technicianServices = await manager.getRepository(TechnicianService).find({
-        where: { serviceId: dto.serviceId },
-      });
-      let allTechnicianWithService = await Promise.all(technicianServices.map(async ts => {
-        const technicianProfileId = ts.technicianProfileId;
-        const user = await manager.getRepository(User).findOne({
-          where: { technicianProfileId: technicianProfileId },
-          relations: ["technicianProfile", "technicianProfile.locations"]
+      const technicianServices = await manager
+        .getRepository(TechnicianService)
+        .find({
+          where: { serviceId: dto.serviceId },
         });
-        if (user?.technicianProfile?.locations) {
-          user.technicianProfile.locations = user.technicianProfile.locations.filter(loc => loc.isDefault);
-        }
-        return user;
-      }));
+      const allTechnicianWithService = await Promise.all(
+        technicianServices.map(async (ts) => {
+          const technicianProfileId = ts.technicianProfileId;
+          const user = await manager.getRepository(User).findOne({
+            where: { technicianProfileId: technicianProfileId },
+            relations: ['technicianProfile', 'technicianProfile.locations'],
+          });
+          if (user?.technicianProfile?.locations) {
+            user.technicianProfile.locations =
+              user.technicianProfile.locations.filter((loc) => loc.isDefault);
+          }
+          return user;
+        }),
+      );
 
       const service = await serviceRepo.findOne({
         where: { id: dto.serviceId, isActive: true },
@@ -43,7 +74,9 @@ export class BookingService {
         throw new NotFoundException('Service not found or inactive');
       }
       if (!service.pricingRule) {
-        throw new BadRequestException('Pricing rules are not configured for this service');
+        throw new BadRequestException(
+          'Pricing rules are not configured for this service',
+        );
       }
 
       // Check for existing pending booking of the same service (across all dates)
@@ -55,37 +88,53 @@ export class BookingService {
         },
       });
       if (pendingBooking) {
-        throw new BadRequestException('You already have a pending booking for this service');
+        throw new BadRequestException(
+          'You already have a pending booking for this service',
+        );
       }
 
       // Check for same-day booking of the same service
-      const targetDate = dto.scheduledAt ? new Date(dto.scheduledAt) : new Date();
+      const targetDate = dto.scheduledAt
+        ? new Date(dto.scheduledAt)
+        : new Date();
       const startOfDay = new Date(targetDate);
       startOfDay.setHours(0, 0, 0, 0);
       const endOfDay = new Date(targetDate);
       endOfDay.setHours(23, 59, 59, 999);
 
-      const sameDayBooking = await bookingRepo.createQueryBuilder('booking')
+      const sameDayBooking = await bookingRepo
+        .createQueryBuilder('booking')
         .where('booking.customerId = :customerId', { customerId })
-        .andWhere('booking.serviceId = :serviceId', { serviceId: dto.serviceId })
-        .andWhere('booking.scheduledAt BETWEEN :startOfDay AND :endOfDay', { startOfDay, endOfDay })
-        .andWhere('booking.status != :cancelledStatus', { cancelledStatus: BOOKING_STATUS.CANCELLED })
+        .andWhere('booking.serviceId = :serviceId', {
+          serviceId: dto.serviceId,
+        })
+        .andWhere('booking.scheduledAt BETWEEN :startOfDay AND :endOfDay', {
+          startOfDay,
+          endOfDay,
+        })
+        .andWhere('booking.status != :cancelledStatus', {
+          cancelledStatus: BOOKING_STATUS.CANCELLED,
+        })
         .getOne();
 
       if (sameDayBooking) {
-        throw new BadRequestException(`You already have an active booking for this service on this date (Status: ${sameDayBooking.status})`);
+        throw new BadRequestException(
+          `You already have an active booking for this service on this date (Status: ${sameDayBooking.status})`,
+        );
       }
 
       const dbSpecs = service.specifications || [];
       const userSpecs = dto.serviceSpecifications || [];
-      const dbSpecsMap = new Map(dbSpecs.map(s => [s.id, s]));
+      const dbSpecsMap = new Map(dbSpecs.map((s) => [s.id, s]));
 
       // 1. Check if all required specs are present in userSpecs
-      const requiredSpecs = dbSpecs.filter(s => s.isRequired && s.isActive);
+      const requiredSpecs = dbSpecs.filter((s) => s.isRequired && s.isActive);
       for (const reqSpec of requiredSpecs) {
-        const found = userSpecs.find(u => u.specificationId === reqSpec.id);
+        const found = userSpecs.find((u) => u.specificationId === reqSpec.id);
         if (!found || found.value === undefined || found.value === null) {
-          throw new BadRequestException(`Specification "${reqSpec.name}" (ID ${reqSpec.id}) is required`);
+          throw new BadRequestException(
+            `Specification "${reqSpec.name}" (ID ${reqSpec.id}) is required`,
+          );
         }
       }
 
@@ -93,7 +142,9 @@ export class BookingService {
       for (const uSpec of userSpecs) {
         const dbSpec = dbSpecsMap.get(uSpec.specificationId);
         if (!dbSpec || !dbSpec.isActive) {
-          throw new BadRequestException(`Specification ID ${uSpec.specificationId} is not valid for this service`);
+          throw new BadRequestException(
+            `Specification ID ${uSpec.specificationId} is not valid for this service`,
+          );
         }
 
         // Autofill name from DB if not provided
@@ -102,49 +153,74 @@ export class BookingService {
         // Type checks
         if (dbSpec.type === 'number') {
           if (typeof uSpec.value !== 'number') {
-            throw new BadRequestException(`Specification "${dbSpec.name}" must be a number`);
+            throw new BadRequestException(
+              `Specification "${dbSpec.name}" must be a number`,
+            );
           }
         } else if (dbSpec.type === 'select') {
           if (typeof uSpec.value !== 'string') {
-            throw new BadRequestException(`Specification "${dbSpec.name}" must be a string value`);
+            throw new BadRequestException(
+              `Specification "${dbSpec.name}" must be a string value`,
+            );
           }
           if (dbSpec.values && Array.isArray(dbSpec.values)) {
             const allowed = dbSpec.values as string[];
             if (!allowed.includes(uSpec.value)) {
-              throw new BadRequestException(`Value "${uSpec.value}" is not valid for "${dbSpec.name}". Allowed values: ${allowed.join(', ')}`);
+              throw new BadRequestException(
+                `Value "${uSpec.value}" is not valid for "${dbSpec.name}". Allowed values: ${allowed.join(', ')}`,
+              );
             }
           }
         } else if (dbSpec.type === 'multiselect') {
           if (!Array.isArray(uSpec.value)) {
-            throw new BadRequestException(`Specification "${dbSpec.name}" must be an array of string values`);
+            throw new BadRequestException(
+              `Specification "${dbSpec.name}" must be an array of string values`,
+            );
           }
           if (dbSpec.values && Array.isArray(dbSpec.values)) {
             const allowed = dbSpec.values as string[];
             for (const val of uSpec.value) {
               if (typeof val !== 'string') {
-                throw new BadRequestException(`Each value in "${dbSpec.name}" must be a string`);
+                throw new BadRequestException(
+                  `Each value in "${dbSpec.name}" must be a string`,
+                );
               }
               if (!allowed.includes(val)) {
-                throw new BadRequestException(`Value "${val}" is not valid for "${dbSpec.name}". Allowed values: ${allowed.join(', ')}`);
+                throw new BadRequestException(
+                  `Value "${val}" is not valid for "${dbSpec.name}". Allowed values: ${allowed.join(', ')}`,
+                );
               }
             }
           }
         } else if (dbSpec.type === 'text') {
           if (typeof uSpec.value !== 'string') {
-            throw new BadRequestException(`Specification "${dbSpec.name}" must be a string`);
+            throw new BadRequestException(
+              `Specification "${dbSpec.name}" must be a string`,
+            );
           }
         } else if (dbSpec.type === 'image') {
           if (typeof uSpec.value !== 'string') {
-            throw new BadRequestException(`Specification "${dbSpec.name}" must be an image URL string`);
+            throw new BadRequestException(
+              `Specification "${dbSpec.name}" must be an image URL string`,
+            );
           }
         }
       }
 
-      const address = await addressRepo.findOne({ where: { id: dto.customerAddressId, userId: customerId, isActive: true, isDefault: true } });
+      const address = await addressRepo.findOne({
+        where: {
+          id: dto.customerAddressId,
+          userId: customerId,
+          isActive: true,
+          isDefault: true,
+        },
+      });
       if (!address) {
-        throw new NotFoundException('Address not found or does not belong to this customer');
+        throw new NotFoundException(
+          'Address not found or does not belong to this customer',
+        );
       }
-      const serviceSpecifications = userSpecs.map(uSpec => ({
+      const serviceSpecifications = userSpecs.map((uSpec) => ({
         specificationId: uSpec.specificationId,
         value: uSpec.value,
       }));
@@ -153,7 +229,9 @@ export class BookingService {
       const pricingRule = service.pricingRule;
       const serviceBasePrice = Number(pricingRule.serviceBasePrice);
       const isWeekend = targetDate.getDay() === 0 || targetDate.getDay() === 6;
-      const weekendMultiplier = isWeekend ? Number(pricingRule.weekendMultiplier) : 1.0;
+      const weekendMultiplier = isWeekend
+        ? Number(pricingRule.weekendMultiplier)
+        : 1.0;
 
       let isPeakHour = false;
       const hour = targetDate.getHours();
@@ -165,32 +243,63 @@ export class BookingService {
           }
         }
       }
-      const peakHourMultiplier = isPeakHour ? Number(pricingRule.peakHourMultiplier) : 1.0;
-      const surgeMultiplier = pricingRule.isSurgeEnabled ? Number(pricingRule.surgeFactor) : 1.0;
+      const peakHourMultiplier = isPeakHour
+        ? Number(pricingRule.peakHourMultiplier)
+        : 1.0;
+      const surgeMultiplier = pricingRule.isSurgeEnabled
+        ? Number(pricingRule.surgeFactor)
+        : 1.0;
 
-      const weekendCharge = (pricingRule.isWeekendApplied && isWeekend) ? Number((serviceBasePrice * (weekendMultiplier - 1)).toFixed(2)) : 0;
-      const peakHourCharge = (pricingRule.isPeakHourApplied && isPeakHour) ? Number((serviceBasePrice * (peakHourMultiplier - 1)).toFixed(2)) : 0;
-      const surgeCharge = pricingRule.isSurgeEnabled ? Number((serviceBasePrice * (surgeMultiplier - 1)).toFixed(2)) : 0;
-      const emergencyCharge = (pricingRule.isEmergencyApplied && dto.isEmergency) ? Number(pricingRule.emergencyCharge) : 0;
+      const weekendCharge =
+        pricingRule.isWeekendApplied && isWeekend
+          ? Number((serviceBasePrice * (weekendMultiplier - 1)).toFixed(2))
+          : 0;
+      const peakHourCharge =
+        pricingRule.isPeakHourApplied && isPeakHour
+          ? Number((serviceBasePrice * (peakHourMultiplier - 1)).toFixed(2))
+          : 0;
+      const surgeCharge = pricingRule.isSurgeEnabled
+        ? Number((serviceBasePrice * (surgeMultiplier - 1)).toFixed(2))
+        : 0;
+      const emergencyCharge =
+        pricingRule.isEmergencyApplied && dto.isEmergency
+          ? Number(pricingRule.emergencyCharge)
+          : 0;
       const distanceCharge = 0; // Calculated dynamically if isDistanceKmApplied is true during assignment/completion
 
-      const subtotal = serviceBasePrice + weekendCharge + peakHourCharge + surgeCharge + emergencyCharge + distanceCharge;
+      const subtotal =
+        serviceBasePrice +
+        weekendCharge +
+        peakHourCharge +
+        surgeCharge +
+        emergencyCharge +
+        distanceCharge;
 
-      const platformFee = pricingRule.isPlatformFeeApplied ? Number(pricingRule.platformFee) : 0;
+      const platformFee = pricingRule.isPlatformFeeApplied
+        ? Number(pricingRule.platformFee)
+        : 0;
       const gstRate = Number(pricingRule.gst) / 100;
-      const gst = pricingRule.isGstApplied ? Number(((subtotal + platformFee) * gstRate).toFixed(2)) : 0;
+      const gst = pricingRule.isGstApplied
+        ? Number(((subtotal + platformFee) * gstRate).toFixed(2))
+        : 0;
 
       const totalAmount = Number((subtotal + platformFee + gst).toFixed(2));
 
       // Make validation that totalAmount is greater than serviceBasePrice
       if (totalAmount <= serviceBasePrice) {
-        throw new BadRequestException('Calculation error: Total amount must be greater than the service base price.');
+        throw new BadRequestException(
+          'Calculation error: Total amount must be greater than the service base price.',
+        );
       }
 
       const commissionRate = 0.15; // 15% platform commission
       const platformCommission = Number((subtotal * commissionRate).toFixed(2));
-      const platformEarning = Number((platformFee + platformCommission).toFixed(2));
-      const technicianEarning = Number((subtotal - platformCommission).toFixed(2));
+      const platformEarning = Number(
+        (platformFee + platformCommission).toFixed(2),
+      );
+      const technicianEarning = Number(
+        (subtotal - platformCommission).toFixed(2),
+      );
 
       const priceBreakdown: PriceBreakdown = {
         serviceBasePrice,
@@ -220,7 +329,9 @@ export class BookingService {
       const savedBooking = await bookingRepo.save(booking);
 
       // Filter technician list based on availability and send notifications
-      const activeTechnicians = allTechnicianWithService.filter((u): u is User => !!u);
+      const activeTechnicians = allTechnicianWithService.filter(
+        (u): u is User => !!u,
+      );
       await this.assignmentService.assignTechnician(
         savedBooking,
         activeTechnicians,
@@ -246,17 +357,30 @@ export class BookingService {
     return booking;
   }
 
-  async acceptBooking(technicianId: number, bookingId: number): Promise<Booking> {
+  async acceptBooking(
+    technicianId: number,
+    bookingId: number,
+  ): Promise<Booking> {
     return this.dataSource.transaction(async (manager) => {
       const bookingRepo = manager.getRepository(Booking);
       const userRepo = manager.getRepository(User);
 
-      const technician = await userRepo.findOne({ where: { id: technicianId, role: USER_ROLE.TECHNICIAN }, relations: ['technicianProfile'] });
+      const technician = await userRepo.findOne({
+        where: { id: technicianId, role: USER_ROLE.TECHNICIAN },
+        relations: ['technicianProfile'],
+      });
       if (!technician) {
-        throw new NotFoundException('Technician not found or user is not a technician');
+        throw new NotFoundException(
+          'Technician not found or user is not a technician',
+        );
       }
-      if (technician.status !== USER_STATUS.ACTIVE || technician.technicianProfile?.status !== TECHNICIAN_STATUS.APPROVED) {
-        throw new BadRequestException('Technician is not active or not approved');
+      if (
+        technician.status !== USER_STATUS.ACTIVE ||
+        technician.technicianProfile?.status !== TECHNICIAN_STATUS.APPROVED
+      ) {
+        throw new BadRequestException(
+          'Technician is not active or not approved',
+        );
       }
 
       const booking = await bookingRepo.findOne({ where: { id: bookingId } });
@@ -269,7 +393,9 @@ export class BookingService {
       }
 
       if (booking.technicianId) {
-        throw new BadRequestException('Booking is already accepted by another technician');
+        throw new BadRequestException(
+          'Booking is already accepted by another technician',
+        );
       }
 
       booking.technicianId = technicianId;
@@ -313,13 +439,17 @@ export class BookingService {
       // Enforce sequence: ACCEPTED -> ENROUTE -> ARRIVED
       if (dto.status === BOOKING_STATUS.ENROUTE) {
         if (booking.status !== BOOKING_STATUS.ACCEPTED) {
-          throw new BadRequestException('Booking must be in ACCEPTED state to change to ENROUTE');
+          throw new BadRequestException(
+            'Booking must be in ACCEPTED state to change to ENROUTE',
+          );
         }
       }
 
       if (dto.status === BOOKING_STATUS.ARRIVED) {
         if (booking.status !== BOOKING_STATUS.ENROUTE) {
-          throw new BadRequestException('Booking must be in ENROUTE state to change to ARRIVED');
+          throw new BadRequestException(
+            'Booking must be in ENROUTE state to change to ARRIVED',
+          );
         }
       }
 
@@ -330,7 +460,9 @@ export class BookingService {
           booking.status === BOOKING_STATUS.COMPLETED ||
           booking.status === BOOKING_STATUS.CANCELLED
         ) {
-          throw new BadRequestException('Booking cannot be cancelled once it is ongoing, completed, or already cancelled');
+          throw new BadRequestException(
+            'Booking cannot be cancelled once it is ongoing, completed, or already cancelled',
+          );
         }
         if (dto.cancellationReason) {
           booking.cancellationReason = dto.cancellationReason;
@@ -341,7 +473,9 @@ export class BookingService {
       if (dto.status === BOOKING_STATUS.COMPLETED) {
         // Ongoing -> Completed transition
         if (booking.status !== BOOKING_STATUS.ONGOING) {
-          throw new BadRequestException('Booking must be in ONGOING state to change to COMPLETED');
+          throw new BadRequestException(
+            'Booking must be in ONGOING state to change to COMPLETED',
+          );
         }
         booking.completedAt = new Date();
       }
@@ -351,7 +485,9 @@ export class BookingService {
 
       if (dto.status === BOOKING_STATUS.ARRIVED) {
         if (!booking.customer || !booking.customer.email) {
-          throw new BadRequestException('Customer does not have a registered email address');
+          throw new BadRequestException(
+            'Customer does not have a registered email address',
+          );
         }
 
         // Generate 6-digit OTP
@@ -365,7 +501,10 @@ export class BookingService {
         );
 
         // Delete previous unverified OTPs for the customer's email
-        await otpRepo.delete({ email: booking.customer.email, isVerified: false });
+        await otpRepo.delete({
+          email: booking.customer.email,
+          isVerified: false,
+        });
 
         // Save new OTP
         const expiresAt = new Date();
@@ -408,11 +547,15 @@ export class BookingService {
       }
 
       if (booking.status !== BOOKING_STATUS.ARRIVED) {
-        throw new BadRequestException('Booking must be in ARRIVED status to start work');
+        throw new BadRequestException(
+          'Booking must be in ARRIVED status to start work',
+        );
       }
 
       if (!booking.customer || !booking.customer.email) {
-        throw new BadRequestException('Customer does not have a registered email address');
+        throw new BadRequestException(
+          'Customer does not have a registered email address',
+        );
       }
 
       // Verify the latest unverified OTP
@@ -422,7 +565,9 @@ export class BookingService {
       });
 
       if (!latestOtp) {
-        throw new BadRequestException('No active OTP found for this customer. Please send it again.');
+        throw new BadRequestException(
+          'No active OTP found for this customer. Please send it again.',
+        );
       }
 
       if (latestOtp.otp !== dto.otp) {
@@ -463,11 +608,15 @@ export class BookingService {
       }
 
       if (booking.customerId !== userId) {
-        throw new BadRequestException('You do not have permission to generate a payment link for this booking');
+        throw new BadRequestException(
+          'You do not have permission to generate a payment link for this booking',
+        );
       }
 
       if (booking.status !== BOOKING_STATUS.COMPLETED) {
-        throw new BadRequestException('Payment can only be requested for COMPLETED bookings');
+        throw new BadRequestException(
+          'Payment can only be requested for COMPLETED bookings',
+        );
       }
 
       // Check for any successful payments to prevent double charging
@@ -475,19 +624,27 @@ export class BookingService {
         where: { bookingId, status: PAYMENT_STATUS.SUCCESS },
       });
       if (successfulPayment) {
-        throw new BadRequestException('This booking has already been paid successfully.');
+        throw new BadRequestException(
+          'This booking has already been paid successfully.',
+        );
       }
 
       if (!booking.customer) {
-        throw new BadRequestException('Customer associated with the booking not found');
+        throw new BadRequestException(
+          'Customer associated with the booking not found',
+        );
       }
 
       const amount = Number(booking.totalAmount);
       if (!amount || amount <= 0) {
-        throw new BadRequestException('Booking does not have a valid total amount');
+        throw new BadRequestException(
+          'Booking does not have a valid total amount',
+        );
       }
 
-      const customerName = `${booking.customer.firstName || ''} ${booking.customer.lastName || ''}`.trim() || 'Customer';
+      const customerName =
+        `${booking.customer.firstName || ''} ${booking.customer.lastName || ''}`.trim() ||
+        'Customer';
       const customerEmail = booking.customer.email;
       const customerPhone = booking.customer.phone || '';
 
@@ -516,4 +673,3 @@ export class BookingService {
     });
   }
 }
-

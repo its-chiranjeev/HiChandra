@@ -19,7 +19,9 @@ export class PricingRule {
   @Column({ type: 'int' })
   serviceId!: number;
 
-  @OneToOne(() => Service, (service) => service.pricingRule, { onDelete: 'CASCADE' })
+  @OneToOne(() => Service, (service) => service.pricingRule, {
+    onDelete: 'CASCADE',
+  })
   @JoinColumn({ name: 'serviceId' })
   service!: Service;
 

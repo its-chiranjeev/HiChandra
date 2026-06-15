@@ -1,4 +1,12 @@
-import { IsOptional, IsString, IsNumber, IsBoolean, IsArray, ValidateNested, IsObject } from 'class-validator';
+import {
+  IsOptional,
+  IsString,
+  IsNumber,
+  IsBoolean,
+  IsArray,
+  ValidateNested,
+  IsObject,
+} from 'class-validator';
 import { Transform, Type } from 'class-transformer';
 
 export class UpdateTechnicianLocationDto {

@@ -21,11 +21,11 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
         logging: false,
         ssl: {
           rejectUnauthorized: false,
-        }
+        },
       }),
     }),
   ],
   providers: [DatabaseService],
   exports: [DatabaseService],
 })
-export class DatabaseModule { }
+export class DatabaseModule {}

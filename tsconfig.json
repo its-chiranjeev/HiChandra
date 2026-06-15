@@ -66,6 +66,12 @@
       ],
       "@hichandra/gateway/*": [
         "libs/gateway/src/*"
+      ],
+      "@hichandra/payment": [
+        "libs/payment/src"
+      ],
+      "@hichandra/payment/*": [
+        "libs/payment/src/*"
       ]
     }
   },

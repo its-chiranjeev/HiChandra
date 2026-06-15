@@ -7,4 +7,4 @@ import { GatewayModule } from '@hichandra/gateway';
   providers: [AssignmentService],
   exports: [AssignmentService],
 })
-export class AssignmentModule { }
+export class AssignmentModule {}

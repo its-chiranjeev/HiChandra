@@ -13,7 +13,10 @@ export class OtpRepository extends BaseRepository<Otp> {
     super(repo);
   }
 
-  async findLatestValidOtp(email?: string, phone?: string): Promise<Otp | null> {
+  async findLatestValidOtp(
+    email?: string,
+    phone?: string,
+  ): Promise<Otp | null> {
     const query: any = {
       isUsed: false,
     };

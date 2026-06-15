@@ -12,7 +12,12 @@ import * as bcrypt from 'bcryptjs';
 import { User, USER_STATUS, USER_ROLE } from '@hichandra/entities';
 import { ConfigService } from '@nestjs/config';
 import { createHmac } from 'crypto';
-import { LoginDto, RegisterDto, RegisterUserDto, VerifyOtpDto } from '@hichandra/dtos';
+import {
+  LoginDto,
+  RegisterDto,
+  RegisterUserDto,
+  VerifyOtpDto,
+} from '@hichandra/dtos';
 import { DataSource } from 'typeorm';
 import { EmailService } from '@hichandra/email-services';
 
@@ -23,8 +28,8 @@ export class AuthModuleService {
     private readonly otpRepository: OtpRepository,
     private readonly dataSource: DataSource,
     private readonly configService: ConfigService,
-    private readonly emailService: EmailService
-  ) { }
+    private readonly emailService: EmailService,
+  ) {}
 
   async issueAuthTokens(user: User) {
     const accessSecret =
@@ -100,7 +105,9 @@ export class AuthModuleService {
 
   async generateOtpService(dto: RegisterUserDto) {
     if (!dto.email && !dto.phone) {
-      throw new BadRequestException('At least email or phone number must be provided');
+      throw new BadRequestException(
+        'At least email or phone number must be provided',
+      );
     }
 
     if (![USER_ROLE.CUSTOMER, USER_ROLE.TECHNICIAN].includes(dto.role)) {
@@ -109,11 +116,15 @@ export class AuthModuleService {
 
     // 1. Verify if user already exists by email
     if (dto.email) {
-      const existingUserByEmail = await this.userRepository.findByEmail(dto.email);
+      const existingUserByEmail = await this.userRepository.findByEmail(
+        dto.email,
+      );
       if (existingUserByEmail) {
         throw new ConflictException('Email already in use');
       }
-      const verifyAccount = await this.otpRepository.findOne({ where: { email: dto.email } });
+      const verifyAccount = await this.otpRepository.findOne({
+        where: { email: dto.email },
+      });
       if (verifyAccount) {
         await this.otpRepository.delete(verifyAccount.id);
       }
@@ -127,7 +138,9 @@ export class AuthModuleService {
       if (existingUserByPhone) {
         throw new ConflictException('Phone number already in use');
       }
-      const verifyAccount = await this.otpRepository.findOne({ where: { phone: dto.phone } });
+      const verifyAccount = await this.otpRepository.findOne({
+        where: { phone: dto.phone },
+      });
       if (verifyAccount) {
         await this.otpRepository.delete(verifyAccount.id);
       }
@@ -225,7 +238,6 @@ export class AuthModuleService {
     if (!user) {
       throw new NotFoundException('User not found');
     }
-
 
     const passwordMatch = await bcrypt.compare(dto.password, user.password);
     if (!passwordMatch) {

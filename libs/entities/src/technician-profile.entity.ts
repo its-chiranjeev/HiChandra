@@ -27,14 +27,15 @@ export enum JOB_STATUS {
 
 @Entity('technician_profiles')
 export class TechnicianProfile {
-
   @PrimaryGeneratedColumn()
   id!: number;
 
   @Column()
-  userId!: number;                        // FK → users.id
+  userId!: number; // FK → users.id
 
-  @OneToOne(() => User, (user) => user.technicianProfile, { onDelete: 'CASCADE' })
+  @OneToOne(() => User, (user) => user.technicianProfile, {
+    onDelete: 'CASCADE',
+  })
   @JoinColumn({ name: 'userId' })
   user?: User;
 
@@ -43,7 +44,7 @@ export class TechnicianProfile {
   yearsOfExperience?: number;
 
   @Column({ type: 'json', nullable: true })
-  languages?: string[];                   // ["Hindi", "English"]
+  languages?: string[]; // ["Hindi", "English"]
 
   @Column({
     type: 'enum',
@@ -109,7 +110,6 @@ export class TechnicianProfile {
 
   @Column({ type: 'varchar', length: 100, nullable: true })
   bankName?: string;
-
 
   // Timestamps
   @CreateDateColumn()

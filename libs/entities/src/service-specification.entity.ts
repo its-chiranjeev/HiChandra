@@ -19,14 +19,19 @@ export class ServiceSpecification {
   @Column({ type: 'int' })
   serviceId!: number;
 
-  @ManyToOne(() => Service, (service) => service.specifications, { onDelete: 'CASCADE' })
+  @ManyToOne(() => Service, (service) => service.specifications, {
+    onDelete: 'CASCADE',
+  })
   @JoinColumn({ name: 'serviceId' })
   service!: Service;
 
   @Column({ type: 'varchar', length: 100 })
   name!: string;
 
-  @Column({ type: 'enum', enum: ['text', 'select', 'multiselect', 'number', 'image'] })
+  @Column({
+    type: 'enum',
+    enum: ['text', 'select', 'multiselect', 'number', 'image'],
+  })
   type!: string;
 
   @Column({ type: 'jsonb', nullable: true })

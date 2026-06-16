@@ -8,7 +8,7 @@ export class PaymentRepository {
   constructor(
     @InjectRepository(Payment)
     private readonly repo: Repository<Payment>,
-  ) {}
+  ) { }
 
   async findAllPayments(
     page: number,
@@ -51,5 +51,22 @@ export class PaymentRepository {
       limit,
       totalPages: Math.ceil(total / limit),
     };
+  }
+  async findByPaymentLinkId(
+    paymentLinkId: string,
+  ) {
+    return this.repo.findOne({
+      where: { paymentLinkId },
+      relations: {
+        booking: true,
+        customer: true,
+      },
+    });
+  }
+
+  async updatePayment(
+    payment: Payment,
+  ) {
+    return this.repo.save(payment);
   }
 }

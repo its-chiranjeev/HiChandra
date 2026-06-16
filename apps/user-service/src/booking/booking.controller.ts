@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseIntPipe, HttpCode, Patch, HttpStatus, Query, Post, Req, UseGuards, ValidationPipe } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseIntPipe, HttpCode, Patch, HttpStatus, Query, Post, Req, Headers, UseGuards, ValidationPipe } from '@nestjs/common';
 import { BookingService } from './booking.service';
 import { JwtAuthGuard, Roles, RolesGuard } from '@hichandra/common';
 import { StartBookingDto, CreateBookingDto, AssignBookingDto, CancelBookingDto, CreateComplaintDto, UpdateComplaintDto, UpdateBookingStatusDto } from '@hichandra/dtos';
@@ -41,6 +41,23 @@ export class BookingController {
       message: 'Payment URL generated successfully',
       data,
     };
+  }
+
+  @Post('payment/webhook')
+  @HttpCode(HttpStatus.OK)
+  async paymentWebhook(
+    @Req() req: Request,
+    @Headers('x-razorpay-signature')
+    signature: string,
+  ) {
+
+    console.log("====== RAZORPAY WEBHOOK HIT ======");
+  console.log("BODY:", req.body);
+
+    return this.bookingService.handlePaymentWebhook(
+      req.body,
+      signature,
+    );
   }
 
   @Get('all')

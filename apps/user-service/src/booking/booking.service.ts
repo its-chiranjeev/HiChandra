@@ -976,6 +976,70 @@ export class BookingService {
       return { paymentUrl: paymentLink.url };
     });
   }
+
+  async handlePaymentWebhook(
+    payload: any,
+    signature: string,
+  ) {
+
+    const isValid =
+      this.paymentService.verifyWebhook(
+        JSON.stringify(payload),
+        signature,
+      );
+
+    if (!isValid) {
+      throw new BadRequestException(
+        'Invalid webhook signature',
+      );
+    }
+
+    if (
+      payload.event !==
+      'payment_link.paid'
+    ) {
+      return {
+        success: true,
+        message: 'Event ignored',
+      };
+    }
+
+    const paymentLinkId =
+      payload.payload.payment_link.entity.id;
+
+    const paymentId =
+      payload?.payload?.payment?.entity?.id;
+
+    const payment =
+      await this.paymentRepository.findByPaymentLinkId(
+        paymentLinkId,
+      );
+
+    if (!payment) {
+      throw new NotFoundException(
+        'Payment not found',
+      );
+    }
+
+    payment.status =
+      PAYMENT_STATUS.SUCCESS;
+
+    payment.paymentId =
+      paymentId;
+
+    await this.paymentRepository.updatePayment(
+      payment,
+    );
+
+    return {
+      success: true,
+      message:
+        'Payment updated successfully',
+      data: payment,
+    };
+  }
+
+
   //payment
   async getAllPayments(
     page: number,
@@ -988,4 +1052,5 @@ export class BookingService {
       status,
     );
   }
+
 }

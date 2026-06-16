@@ -32,6 +32,9 @@ export class PaymentService {
       key_id: process.env.RAZORPAY_KEY_ID || '',
       key_secret: process.env.RAZORPAY_KEY_SECRET || '',
     });
+
+    console.log('KEY ID:', process.env.RAZORPAY_KEY_ID);
+console.log('KEY SECRET:', process.env.RAZORPAY_KEY_SECRET);
   }
 
   async createPaymentLink(
@@ -70,9 +73,13 @@ export class PaymentService {
     }
 
     try {
+
+       console.log('Creating payment link...');
       const paymentLink = await this.razorpay.paymentLink.create(
         payload as unknown as Parameters<Razorpay['paymentLink']['create']>[0],
       );
+
+      console.log(paymentLink);
       return {
         paymentLinkId: paymentLink.id,
         url: paymentLink.short_url,

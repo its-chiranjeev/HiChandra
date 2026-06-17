@@ -206,6 +206,8 @@ export class AuthModuleService {
     };
   }
 
+
+
   // async registerService(dto: RegisterDto) {
   //   const existingUser = await this.userRepository.findByEmail(dto.email);
   //   if (existingUser) {
@@ -340,4 +342,34 @@ export class AuthModuleService {
       throw new UnauthorizedException(e.message || 'Invalid refresh token');
     }
   }
+
+  async getProfileService(userId: number) {
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+      relations: ['addresses'],
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    return {
+      success: true,
+      message: 'Profile fetched successfully',
+      data: {
+        id: user.id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        username: user.username,
+        phone: user.phone,
+        emergencyContact: user.emergencyContact,
+        profileImage: user.profileImage,
+        role: user.role,
+        status: user.status,
+        createdAt: user.createdAt,
+        lastLoginAt: user.lastLoginAt,
+      },
+    };
+  }
+
 }

@@ -64,6 +64,15 @@ export class AuthModuleController {
     return this.authModuleService.refreshToken(refreshToken);
   }
 
+  @Get('profile')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async getProfile(@Req() req: any) {
+    return this.authModuleService.getProfileService(
+      req.user.sub || req.user.id,
+    );
+  }
+
   // @Post('forgot-password')
   // @HttpCode(HttpStatus.OK)
   // async forgotPassword(

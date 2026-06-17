@@ -5,11 +5,11 @@ import { StartBookingDto, CreateBookingDto, AssignBookingDto, CancelBookingDto, 
 import { USER_ROLE, BOOKING_STATUS, COMPLAINT_STATUS, PAYMENT_STATUS } from '@hichandra/entities';
 
 @Controller('bookings')
-@UseGuards(JwtAuthGuard, RolesGuard)
 export class BookingController {
   constructor(private readonly bookingService: BookingService) { }
 
   @Post()
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(USER_ROLE.CUSTOMER)
   @HttpCode(HttpStatus.CREATED)
   async createBooking(
@@ -26,6 +26,7 @@ export class BookingController {
   }
 
   @Get(':bookingId/payment')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(USER_ROLE.CUSTOMER)
   @HttpCode(HttpStatus.OK)
   async getPaymentUrl(
@@ -50,10 +51,6 @@ export class BookingController {
     @Headers('x-razorpay-signature')
     signature: string,
   ) {
-
-    console.log("====== RAZORPAY WEBHOOK HIT ======");
-  console.log("BODY:", req.body);
-
     return this.bookingService.handlePaymentWebhook(
       req.body,
       signature,
@@ -61,6 +58,7 @@ export class BookingController {
   }
 
   @Get('all')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(USER_ROLE.ADMIN)
   @HttpCode(HttpStatus.OK)
   async getAllBookings(
@@ -78,6 +76,7 @@ export class BookingController {
   }
   //complaint api
   @Get('admin/complaints')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(USER_ROLE.ADMIN)
   @HttpCode(HttpStatus.OK)
   async getAllComplaints(
@@ -93,6 +92,7 @@ export class BookingController {
   }
   //get payment
   @Get('admin/payments')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(USER_ROLE.ADMIN)
   @HttpCode(HttpStatus.OK)
   async getAllPayments(
@@ -108,6 +108,7 @@ export class BookingController {
   }
 
   @Get(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(USER_ROLE.CUSTOMER)
   @HttpCode(HttpStatus.OK)
   async getBooking(@Req() req: any, @Param('id', ParseIntPipe) id: number) {
@@ -120,6 +121,7 @@ export class BookingController {
   }
 
   @Get('admin/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(USER_ROLE.ADMIN)
   @HttpCode(HttpStatus.OK)
   async getBookingById(
@@ -129,6 +131,7 @@ export class BookingController {
   }
 
   @Post(':id/accept')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(USER_ROLE.TECHNICIAN)
   @HttpCode(HttpStatus.OK)
   async acceptBooking(@Req() req: any, @Param('id', ParseIntPipe) id: number) {
@@ -141,6 +144,7 @@ export class BookingController {
   }
 
   @Patch(':id/status')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(USER_ROLE.TECHNICIAN)
   @HttpCode(HttpStatus.OK)
   async updateBookingStatus(
@@ -162,6 +166,7 @@ export class BookingController {
   }
 
   @Post(':id/start')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(USER_ROLE.TECHNICIAN)
   @HttpCode(HttpStatus.OK)
   async startBooking(
@@ -258,7 +263,5 @@ export class BookingController {
       dto,
     );
   }
-
-
 
 }

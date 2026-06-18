@@ -69,4 +69,11 @@ export class PaymentRepository {
   ) {
     return this.repo.save(payment);
   }
+
+  async createPayment(
+    data: Partial<Payment>,
+  ) {
+    const payment = this.repo.create(data);
+    return this.repo.save(payment);
+  }
 }

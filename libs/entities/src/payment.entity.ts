@@ -38,6 +38,17 @@ export class Payment {
   @JoinColumn({ name: 'customerId' })
   customer!: User;
 
+  @Index()
+  @Column({ type: 'int', nullable: true })
+  technicianId?: number;
+
+  @ManyToOne(() => User, {
+    nullable: true,
+    onDelete: 'SET NULL',
+  })
+  @JoinColumn({ name: 'technicianId' })
+  technician?: User;
+
   @Column({ type: 'decimal', precision: 10, scale: 2 })
   amount!: number;
 

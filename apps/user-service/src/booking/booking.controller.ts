@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Param, ParseIntPipe, HttpCode, Patch, HttpStatus, Query, Post, Req, Headers, UseGuards, ValidationPipe } from '@nestjs/common';
 import { BookingService } from './booking.service';
 import { JwtAuthGuard, Roles, RolesGuard } from '@hichandra/common';
-import { StartBookingDto, CreateBookingDto, AssignBookingDto, CancelBookingDto, CreateComplaintDto, UpdateComplaintDto, UpdateBookingStatusDto } from '@hichandra/dtos';
+import { StartBookingDto, CreateBookingDto, AssignBookingDto, CancelBookingDto, CreateComplaintDto, UpdateComplaintDto, UpdateBookingStatusDto, CreateTechnicianPayoutDto} from '@hichandra/dtos';
 import { USER_ROLE, BOOKING_STATUS, COMPLAINT_STATUS, PAYMENT_STATUS } from '@hichandra/entities';
 
 @Controller('bookings')
@@ -54,6 +54,26 @@ export class BookingController {
     return this.bookingService.handlePaymentWebhook(
       req.body,
       signature,
+    );
+  }
+
+  @Post('admin/payout')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLE.ADMIN)
+  @HttpCode(HttpStatus.CREATED)
+  async createTechnicianPayout(
+    @Req() req: any,
+    @Body(
+      new ValidationPipe({
+        whitelist: true,
+        transform: true,
+      }),
+    )
+    dto: CreateTechnicianPayoutDto,
+  ) {
+    return this.bookingService.createTechnicianPayout(
+      req.user.id,
+      dto,
     );
   }
 

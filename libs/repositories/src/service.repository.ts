@@ -55,4 +55,8 @@ export class ServiceRepository extends BaseRepository<Service> {
       },
     });
   }
+
+  // async softDeleteService(id: number) {
+  //   return this.repo.softDelete(id);
+  // }
 }

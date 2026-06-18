@@ -1,6 +1,7 @@
 import {
   Booking,
   BOOKING_STATUS,
+  BOOKING_PAYMENT_STATUS,
   Service,
   CustomerAddress,
   User,
@@ -19,9 +20,9 @@ import { EmailService } from '@hichandra/email-services';
 import { PaymentService } from '@hichandra/payment';
 import { Injectable, NotFoundException, BadRequestException, UnprocessableEntityException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
-import { CreateBookingDto, UpdateBookingStatusDto, StartBookingDto, AssignBookingDto, CancelBookingDto, CreateComplaintDto, UpdateComplaintDto } from '@hichandra/dtos';
+import { CreateBookingDto, UpdateBookingStatusDto, StartBookingDto, AssignBookingDto, CancelBookingDto, CreateComplaintDto, UpdateComplaintDto, CreateTechnicianPayoutDto} from '@hichandra/dtos';
 import { AssignmentService } from '../assignment/assignment.service';
-import { BookingRepository, UserRepository, ComplaintRepository, PaymentRepository } from '@hichandra/repositories';
+import { BookingRepository, UserRepository, ComplaintRepository, PaymentRepository, TechnicianPayoutRepository } from '@hichandra/repositories';
 import { UnauthorizedException } from '@nestjs/common';
 @Injectable()
 export class BookingService {
@@ -34,6 +35,8 @@ export class BookingService {
     private readonly userRepository: UserRepository,
     private readonly complaintRepository: ComplaintRepository,
     private readonly paymentRepository: PaymentRepository,
+    private readonly technicianPayoutRepository: TechnicianPayoutRepository,
+
   ) { }
 
   async createBooking(
@@ -1021,6 +1024,13 @@ export class BookingService {
       );
     }
 
+    if (payment.status === PAYMENT_STATUS.SUCCESS) {
+      return {
+        success: true,
+        message: 'Payment already processed',
+      };
+    }
+
     payment.status =
       PAYMENT_STATUS.SUCCESS;
 
@@ -1031,6 +1041,27 @@ export class BookingService {
       payment,
     );
 
+    payment.booking.paymentStatus =
+      BOOKING_PAYMENT_STATUS.PAID;
+
+    await this.bookingRepository.saveBooking(
+      payment.booking,
+    );
+
+    const payout =
+      await this.technicianPayoutRepository.findByPaymentRecordId(
+        payment.id,
+    );
+
+    if (payout) {
+      payout.status =
+        PAYMENT_STATUS.SUCCESS;
+
+      await this.technicianPayoutRepository.updatePayout(
+        payout,
+      );
+    }
+
     return {
       success: true,
       message:
@@ -1039,6 +1070,125 @@ export class BookingService {
     };
   }
 
+  async createTechnicianPayout(
+    adminId: number,
+    dto: CreateTechnicianPayoutDto,
+  ) {
+    const booking =
+      await this.bookingRepository.findBookingById(
+        dto.bookingId,
+      );
+
+    if (!booking) {
+      throw new NotFoundException(
+        'Booking not found',
+      );
+    }
+
+    if (
+      booking.status !==
+      BOOKING_STATUS.COMPLETED
+    ) {
+      throw new BadRequestException(
+        'Booking is not completed yet',
+      );
+    }
+
+    if (
+      booking.paymentStatus !==
+      BOOKING_PAYMENT_STATUS.PAID
+    ) {
+      throw new BadRequestException(
+        'Customer payment is not completed yet',
+      );
+    }
+
+    const technician =
+      await this.userRepository.findOne({
+        where: {
+          id: dto.technicianId,
+          role: USER_ROLE.TECHNICIAN,
+        },
+      });
+
+    if (!technician) {
+      throw new NotFoundException(
+        'Technician not found',
+      );
+    }
+
+    const existingPayout =
+      await this.technicianPayoutRepository.findExistingPayout(
+        dto.bookingId,
+        dto.technicianId,
+      );
+
+    if (existingPayout) {
+      throw new BadRequestException(
+        'Payout already exists',
+      );
+    }
+
+    const paymentLink =
+      await this.paymentService.createPaymentLink(
+        dto.totalAmount,
+        dto.bookingId,
+        {
+          name:
+            technician.firstName ||
+            technician.username,
+          email: technician.email,
+          phone: technician.phone,
+        },
+      );
+
+    const payment =
+      await this.paymentRepository.createPayment(
+        {
+          bookingId: dto.bookingId,
+          customerId: adminId,
+          technicianId:
+            dto.technicianId,
+          amount: dto.totalAmount,
+          currency: 'INR',
+          paymentLinkId:
+            paymentLink.paymentLinkId,
+          status:
+            PAYMENT_STATUS.PENDING,
+        },
+      );
+
+
+
+    const payout =
+      await this.technicianPayoutRepository.createPayout(
+        {
+          bookingId: dto.bookingId,
+          serviceId: dto.serviceId,
+          technicianId:
+            dto.technicianId,
+          payoutBy: adminId,
+          amount: dto.totalAmount,
+          paymentRecordId:
+            payment.id,
+          status:
+            PAYMENT_STATUS.PENDING,
+        },
+      );
+
+    return {
+      success: true,
+      message:
+        'Payout link generated successfully',
+      data: {
+        payoutId: payout.id,
+        paymentRecordId:
+          payment.id,
+        paymentUrl:
+          paymentLink.url,
+      },
+    };
+  }
 
   //payment
   async getAllPayments(

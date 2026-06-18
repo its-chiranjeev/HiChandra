@@ -253,6 +253,23 @@ export class UserService {
     };
   }
 
+  // async deleteService(id: number) {
+  //   const service = await this.serviceRepository.findOne({
+  //     where: { id },
+  //   });
+
+  //   if (!service) {
+  //     throw new NotFoundException('Service not found');
+  //   }
+
+  //   await this.serviceRepository.softDeleteService(id);
+
+  //   return {
+  //     success: true,
+  //     message: 'Service deleted successfully',
+  //   };
+  // }
+
   async getAllPlatformSettingsService(
     page: number,
     limit: number,

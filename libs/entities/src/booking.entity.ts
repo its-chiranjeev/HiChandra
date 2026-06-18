@@ -35,6 +35,12 @@ export enum BOOKING_STATUS {
   CANCELLED = 'CANCELLED', // cancelled by technician
 }
 
+export enum BOOKING_PAYMENT_STATUS {
+  PENDING = 'PENDING',
+  PAID = 'PAID',
+  FAILED = 'FAILED',
+}
+
 @Entity('bookings')
 export class Booking {
   @PrimaryGeneratedColumn()
@@ -83,6 +89,13 @@ export class Booking {
     default: BOOKING_STATUS.PENDING,
   })
   status!: BOOKING_STATUS;
+
+  @Column({
+    type: 'enum',
+    enum: BOOKING_PAYMENT_STATUS,
+    default: BOOKING_PAYMENT_STATUS.PENDING,
+  })
+  paymentStatus!: BOOKING_PAYMENT_STATUS;
 
   @Column({ type: 'boolean', default: false })
   isEmergency!: boolean;

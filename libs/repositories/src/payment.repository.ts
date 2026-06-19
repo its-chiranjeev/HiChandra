@@ -69,4 +69,14 @@ export class PaymentRepository {
   ) {
     return this.repo.save(payment);
   }
+
+  async findPaymentById(id: number) {
+  return this.repo.findOne({
+    where: { id },
+    relations: {
+      booking: true,
+      customer: true,
+    },
+  });
+}
 }

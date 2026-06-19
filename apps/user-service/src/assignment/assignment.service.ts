@@ -23,7 +23,6 @@ export class AssignmentService {
     this.logger.log(
       `Filtering matching technicians for booking ID ${booking.id}...`,
     );
-
     const matchedTechnicians = technicians.filter((user) => {
       const locationsVal = user.technicianProfile?.locations;
       if (!locationsVal) {
@@ -45,7 +44,7 @@ export class AssignmentService {
     this.logger.log(
       `Found ${matchedTechnicians.length} technicians within radius.`,
     );
-
+    console.log(matchedTechnicians);
     // Send notifications to filtered technicians
     await this.sendNotificationsToTechnicians(
       booking,

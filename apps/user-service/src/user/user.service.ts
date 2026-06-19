@@ -253,22 +253,22 @@ export class UserService {
     };
   }
 
-  // async deleteService(id: number) {
-  //   const service = await this.serviceRepository.findOne({
-  //     where: { id },
-  //   });
+  async deleteService(id: number) {
+    const service = await this.serviceRepository.findOne({
+      where: { id },
+    });
 
-  //   if (!service) {
-  //     throw new NotFoundException('Service not found');
-  //   }
+    if (!service) {
+      throw new NotFoundException('Service not found');
+    }
 
-  //   await this.serviceRepository.softDeleteService(id);
+    await this.serviceRepository.softDeleteService(id);
 
-  //   return {
-  //     success: true,
-  //     message: 'Service deleted successfully',
-  //   };
-  // }
+    return {
+      success: true,
+      message: 'Service deleted successfully',
+    };
+  }
 
   async getAllPlatformSettingsService(
     page: number,

@@ -52,6 +52,8 @@ export class BookingService {
         .find({
           where: { serviceId: dto.serviceId },
         });
+      
+      // console.log(technicianServices);
       const allTechnicianWithService = await Promise.all(
         technicianServices.map(async (ts) => {
           const technicianProfileId = ts.technicianProfileId;
@@ -66,7 +68,7 @@ export class BookingService {
           return user;
         }),
       );
-
+      // console.log(allTechnicianWithService);
       const service = await serviceRepo.findOne({
         where: { id: dto.serviceId, isActive: true },
         relations: ['specifications', 'pricingRule'],
@@ -327,20 +329,50 @@ export class BookingService {
         priceBreakdown,
       });
 
-      const savedBooking = await bookingRepo.save(booking);
+      // const savedBooking = await bookingRepo.save(booking);
 
-      // Filter technician list based on availability and send notifications
-      const activeTechnicians = allTechnicianWithService.filter(
-        (u): u is User => !!u,
-      );
-      await this.assignmentService.assignTechnician(
-        savedBooking,
-        activeTechnicians,
-        address,
-        service,
-      );
+      // // Filter technician list based on availability and send notifications
+      // const activeTechnicians = allTechnicianWithService.filter(
+      //   (u): u is User => !!u,
+      // );
+      // await this.assignmentService.assignTechnician(
+      //   savedBooking,
+      //   activeTechnicians,
+      //   address,
+      //   service,
+      // );
       // throw new Error("hell");
-      return savedBooking;
+      // return savedBooking;
+
+      let savedBooking = await bookingRepo.save(booking);
+
+const bookingWithRelations = await bookingRepo.findOne({
+  where: { id: savedBooking.id },
+  relations: ['customer', 'service', 'address'],
+});
+
+if (!bookingWithRelations) {
+  throw new NotFoundException('Booking not found after creation');
+}
+
+const activeTechnicians = allTechnicianWithService.filter(
+  (u): u is User => !!u,
+);
+
+const matchedTechnicians =
+  await this.assignmentService.assignTechnician(
+    bookingWithRelations,
+    activeTechnicians,
+    address,
+    service,
+  );
+
+bookingWithRelations.filteredTechnicians =
+  matchedTechnicians.map((tech) => tech.id);
+
+savedBooking = await bookingRepo.save(bookingWithRelations);
+
+return savedBooking;
     });
   }
 

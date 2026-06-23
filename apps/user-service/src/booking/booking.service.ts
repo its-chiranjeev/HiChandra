@@ -366,6 +366,9 @@ const matchedTechnicians =
     address,
     service,
   );
+  //  throw new Error("hell");
+  //     return savedBooking;
+
 
 bookingWithRelations.filteredTechnicians =
   matchedTechnicians.map((tech) => tech.id);
@@ -1077,11 +1080,27 @@ return savedBooking;
     }
 
     if (payment.status === PAYMENT_STATUS.SUCCESS) {
-      return {
-        success: true,
-        message: 'Payment already processed',
-      };
+    const payout =
+      await this.technicianPayoutRepository.findByPaymentRecordId(
+        payment.id,
+      );
+
+    if (
+      payout &&
+      payout.status !== PAYMENT_STATUS.SUCCESS
+    ) {
+      payout.status = PAYMENT_STATUS.SUCCESS;
+
+      await this.technicianPayoutRepository.updatePayout(
+        payout,
+      );
     }
+
+    return {
+      success: true,
+      message: 'Payment already processed',
+    };
+  }
 
     payment.status =
       PAYMENT_STATUS.SUCCESS;

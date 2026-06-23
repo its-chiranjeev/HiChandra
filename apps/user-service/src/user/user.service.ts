@@ -18,6 +18,8 @@ import {
   ServiceRepository,
   PlatformSettingRepository,
 } from '@hichandra/repositories';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import {
   USER_ROLE,
   USER_STATUS,
@@ -45,6 +47,7 @@ import {
   CustomerAddressDto,
   UpdateCustomerAddressDto,
   UpdateProfileDto,
+  UpdateServiceDto,
 } from '@hichandra/dtos';
 
 @Injectable()
@@ -58,6 +61,8 @@ export class UserService {
     private readonly dataSource: DataSource,
     private readonly authModuleService: AuthModuleService,
     private readonly s3Service: S3Service,
+    @InjectRepository(PricingRule)
+    private readonly pricingRuleRepository: Repository<PricingRule>,
   ) {}
 
   async findById(id: number) {
@@ -104,6 +109,7 @@ export class UserService {
         technicianProfile,
         addresses,
         ...safeUser
+
       } = user;
 
       if (user.role === USER_ROLE.CUSTOMER) {
@@ -1084,4 +1090,146 @@ export class UserService {
       };
     });
   }
+
+async updateService(
+  id: number,
+  dto: UpdateServiceDto,
+  files?: {
+    icon?: Express.Multer.File[];
+  },
+) {
+  return this.dataSource.transaction(async (manager) => {
+    const serviceRepo = manager.getRepository(Service);
+    const pricingRuleRepo = manager.getRepository(PricingRule);
+    const specRepo = manager.getRepository(ServiceSpecification);
+
+    // Get Service
+    const service = await serviceRepo.findOne({
+      where: { id },
+      relations: ['pricingRule', 'specifications'],
+    });
+
+    if (!service) {
+      throw new NotFoundException('Service not found');
+    }
+
+    // Update Service table
+    if (dto.name !== undefined) {
+      service.name = dto.name;
+    }
+
+    if (dto.description !== undefined) {
+      service.description = dto.description;
+    }
+
+    if (dto.isActive !== undefined) {
+      service.isActive = dto.isActive;
+    }
+
+    if (files?.icon?.[0]) {
+      const uploadedUrl = await this.s3Service.uploadFileHelper(
+        service.id,
+        'service-icon',
+        files.icon,
+      );
+
+      service.iconUrl = uploadedUrl;
+    }
+
+    await serviceRepo.save(service);
+
+    // Get Pricing Rule
+    const pricingRule = await pricingRuleRepo.findOne({
+      where: { serviceId: id },
+    });
+
+    if (!pricingRule) {
+      throw new NotFoundException('Pricing rule not found');
+    }
+
+    // Update PricingRule table
+    if (dto.serviceBasePrice !== undefined) {
+      pricingRule.serviceBasePrice = dto.serviceBasePrice;
+    }
+
+    if (dto.perHourRate !== undefined) {
+      pricingRule.perHourRate = dto.perHourRate;
+    }
+
+    if (dto.perKmRate !== undefined) {
+      pricingRule.perKmRate = dto.perKmRate;
+    }
+
+    if (dto.weekendMultiplier !== undefined) {
+      pricingRule.weekendMultiplier = dto.weekendMultiplier;
+    }
+
+    if (dto.peakHourMultiplier !== undefined) {
+      pricingRule.peakHourMultiplier = dto.peakHourMultiplier;
+    }
+
+    if (dto.peakHours !== undefined) {
+      pricingRule.peakHours = dto.peakHours;
+    }
+
+    if (dto.emergencyCharge !== undefined) {
+      pricingRule.emergencyCharge = dto.emergencyCharge;
+    }
+
+    if (dto.freeDistanceKm !== undefined) {
+      pricingRule.freeDistanceKm = dto.freeDistanceKm;
+    }
+
+    if (dto.distanceChargePerKm !== undefined) {
+      pricingRule.distanceChargePerKm = dto.distanceChargePerKm;
+    }
+
+    if (dto.surgeFactor !== undefined) {
+      pricingRule.surgeFactor = dto.surgeFactor;
+    }
+
+    if (dto.isSurgeEnabled !== undefined) {
+      pricingRule.isSurgeEnabled = dto.isSurgeEnabled;
+    }
+
+    if (dto.platformFee !== undefined) {
+      pricingRule.platformFee = dto.platformFee;
+    }
+
+    if (dto.gst !== undefined) {
+      pricingRule.gst = dto.gst;
+    }
+
+    await pricingRuleRepo.save(pricingRule);
+
+    // Update Specifications
+    if (dto.specifications) {
+      await specRepo.delete({ serviceId: id });
+
+      const specs = dto.specifications.map((spec) =>
+        specRepo.create({
+          serviceId: id,
+          name: spec.name,
+          type: spec.type,
+          values: spec.values,
+          isRequired: spec.isRequired ?? false,
+          isActive: spec.isActive ?? true,
+        }),
+      );
+
+      await specRepo.save(specs);
+    }
+
+    const updatedService = await serviceRepo.findOne({
+      where: { id },
+      relations: ['pricingRule', 'specifications'],
+    });
+
+    return {
+      success: true,
+      message: 'Service updated successfully',
+      data: updatedService,
+    };
+  });
+}
 }

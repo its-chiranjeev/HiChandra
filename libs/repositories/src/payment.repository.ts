@@ -76,4 +76,13 @@ export class PaymentRepository {
     const payment = this.repo.create(data);
     return this.repo.save(payment);
   }
+  async findPaymentById(id: number) {
+  return this.repo.findOne({
+    where: { id },
+    relations: {
+      booking: true,
+      customer: true,
+    },
+  });
+}
 }

@@ -1,10 +1,21 @@
-import { FileFieldsInterceptor } from "@nestjs/platform-express";
-import { Body, Controller, Query, Get, Put, Patch, Delete, Param, ParseIntPipe, HttpCode, HttpStatus, Post, Req, UnauthorizedException, UseGuards, UseInterceptors, ValidationPipe, UploadedFiles, UnprocessableEntityException } from "@nestjs/common";
-import { UserService } from "./user.service";
-import { AuthGuard } from "@nestjs/passport";
-import { JwtAuthGuard, Roles, RolesGuard } from "@hichandra/common";
-import { RegisterDto, UpdateUserDto, CreateServiceDto, CreatePlatformSettingDto, CustomerAddressDto, UpdateCustomerAddressDto, UpdateProfileDto, AssignBookingDto } from "@hichandra/dtos";
+import { FileFieldsInterceptor } from '@nestjs/platform-express';
+import { Body,  Controller,  Query,  Get, Put,Patch,Delete,Param,ParseIntPipe,HttpCode,HttpStatus,Post,Req,UnauthorizedException,UseGuards, UseInterceptors, ValidationPipe,UploadedFiles, UnprocessableEntityException,
+} from '@nestjs/common';
+import { UserService } from './user.service';
+import { AuthGuard } from '@nestjs/passport';
+import { JwtAuthGuard, Roles, RolesGuard } from '@hichandra/common';
+import {
+  RegisterDto,
+  UpdateUserDto,
+  CreateServiceDto,
+  CreatePlatformSettingDto,
+  CustomerAddressDto,
+  UpdateCustomerAddressDto,
+  UpdateProfileDto,
+  AssignBookingDto,
+} from '@hichandra/dtos';
 import { USER_ROLE, USER_STATUS } from '@hichandra/entities';
+import { UpdateServiceDto } from '@hichandra/dtos';
 import { filter } from 'rxjs';
 
 @Controller('users')
@@ -103,19 +114,20 @@ export class UserController {
     return this.userService.getServiceById(Number(id));
   }
 
-  @Get('platform-settings/all')
+  @Patch('update/service/:id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(USER_ROLE.ADMIN)
-  async getAllPlatformSettings(
-    @Query('page') page = 1,
-    @Query('limit') limit = 10,
-    @Query('filter') filter?: string,
+  @UseInterceptors(FileFieldsInterceptor([{ name: 'icon', maxCount: 1 }]))
+  async updateService(
+    @Param('id', ParseIntPipe) id: number,
+    @UploadedFiles()
+    files: {
+      icon?: Express.Multer.File[];
+    },
+    @Body(new ValidationPipe({ whitelist: true, transform: true }))
+    dto: UpdateServiceDto,
   ) {
-    return this.userService.getAllPlatformSettingsService(
-      Number(page),
-      Number(limit),
-      filter,
-    );
+    return this.userService.updateService(id, dto, files);
   }
 
   @Get('platform-settings/:id')
@@ -221,4 +233,3 @@ export class UserController {
     return this.userService.updateProfileService(req.user.id, dto, files);
   }
 }
-

@@ -442,6 +442,26 @@ return savedBooking;
     };
   }
 
+  // Complaint By ID
+  async getComplaintById(id: number) {
+  const complaint =
+    await this.complaintRepository.findComplaintById(
+      id,
+    );
+
+  if (!complaint) {
+    throw new NotFoundException(
+      'Complaint not found',
+    );
+  }
+
+  return {
+    success: true,
+    message: 'Complaint fetched successfully',
+    data: complaint,
+  };
+}
+
   async getBookingById(id: number) {
     const booking =
       await this.bookingRepository.findBookingById(id);
@@ -1141,11 +1161,32 @@ return savedBooking;
           id: dto.technicianId,
           role: USER_ROLE.TECHNICIAN,
         },
+        relations: ['technicianProfile'], //added
       });
 
     if (!technician) {
       throw new NotFoundException(
         'Technician not found',
+      );
+    }
+
+    //added
+    const profile = technician.technicianProfile;
+
+    if (!profile) {
+      throw new BadRequestException(
+        'Technician profile not found',
+      );
+    }
+
+    if (
+      !profile.accountHolderName ||
+      !profile.accountNumber ||
+      !profile.ifscCode ||
+      !profile.bankName
+    ) {
+      throw new BadRequestException(
+        'Technician bank details are incomplete',
       );
     }
 
@@ -1161,6 +1202,21 @@ return savedBooking;
       );
     }
 
+    const payoutDescription = `
+    Technician Payout
+
+    Technician: ${technician.firstName || technician.username}
+
+    Bank Name: ${profile.bankName}
+    Account Holder: ${profile.accountHolderName}
+    Account Number: ${profile.accountNumber}
+    IFSC Code: ${profile.ifscCode}
+
+    Booking ID: ${dto.bookingId}
+    Service ID: ${dto.serviceId}
+    Amount: ₹${dto.totalAmount}
+    `;
+
     const paymentLink =
       await this.paymentService.createPaymentLink(
         dto.totalAmount,
@@ -1172,6 +1228,7 @@ return savedBooking;
           email: technician.email,
           phone: technician.phone,
         },
+        payoutDescription,
       );
 
     const payment =
@@ -1186,7 +1243,7 @@ return savedBooking;
           paymentLinkId:
             paymentLink.paymentLinkId,
           status:
-            PAYMENT_STATUS.PENDING,
+            PAYMENT_STATUS.PENDING,           
         },
       );
 
@@ -1218,6 +1275,12 @@ return savedBooking;
           payment.id,
         paymentUrl:
           paymentLink.url,
+        bankDetails: {
+          bankName: profile.bankName,
+          accountHolderName: profile.accountHolderName,
+          accountNumber: profile.accountNumber,
+          ifscCode: profile.ifscCode,
+        },
       },
     };
   }
@@ -1235,4 +1298,21 @@ return savedBooking;
     );
   }
 
+  //Get Paymwents By ID 
+async getPaymentById(id: number) {
+  const payment =
+    await this.paymentRepository.findPaymentById(id);
+
+  if (!payment) {
+    throw new NotFoundException(
+      'Payment not found',
+    );
+  }
+
+  return {
+    success: true,
+    message: 'Payment fetched successfully',
+    data: payment,
+  };
+}
 }

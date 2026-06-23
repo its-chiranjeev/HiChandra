@@ -41,6 +41,7 @@ console.log('KEY SECRET:', process.env.RAZORPAY_KEY_SECRET);
     amount: number,
     bookingId: number,
     customer: { name: string; email?: string; phone?: string },
+    description?: string,
   ) {
     const customerData: CustomerData = {
       name: customer.name,
@@ -62,7 +63,8 @@ console.log('KEY SECRET:', process.env.RAZORPAY_KEY_SECRET);
     const payload: PaymentLinkPayload = {
       amount: amount * 100,
       currency: 'INR',
-      description: `Payment for Booking #${bookingId}`,
+      //description: `Payment for Booking #${bookingId}`,
+      description: description || `Payment for Booking #${bookingId}`,
       customer: customerData,
       reminder_enable: true,
       reference_id: referenceId,

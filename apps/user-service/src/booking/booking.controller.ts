@@ -110,6 +110,18 @@ export class BookingController {
       status,
     );
   }
+  
+  //Complaint By ID
+  @Get('admin/complaints/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLE.ADMIN)
+  @HttpCode(HttpStatus.OK)
+  async getComplaintById(
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.bookingService.getComplaintById(id);
+  }
+
   //get payment
   @Get('admin/payments')
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -126,6 +138,17 @@ export class BookingController {
       status,
     );
   }
+
+  //Get Payments by ID
+  @Get('admin/payments/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLE.ADMIN)
+  @HttpCode(HttpStatus.OK)
+  async getPaymentById(
+      @Param('id', ParseIntPipe) id: number,
+    ) {
+      return this.bookingService.getPaymentById(id);
+    }
 
   @Get(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)

@@ -17,3 +17,4 @@ export * from './booking/cancel-booking.dto';
 export * from './booking/complaint.dto';
 export * from './booking/update-complaint.dto';
 export * from './user/technician-payout.dto';
+export * from './user/update-service.dto';

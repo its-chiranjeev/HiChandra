@@ -442,6 +442,26 @@ return savedBooking;
     };
   }
 
+  // Complaint By ID
+  async getComplaintById(id: number) {
+  const complaint =
+    await this.complaintRepository.findComplaintById(
+      id,
+    );
+
+  if (!complaint) {
+    throw new NotFoundException(
+      'Complaint not found',
+    );
+  }
+
+  return {
+    success: true,
+    message: 'Complaint fetched successfully',
+    data: complaint,
+  };
+}
+
   async getBookingById(id: number) {
     const booking =
       await this.bookingRepository.findBookingById(id);
@@ -1235,4 +1255,21 @@ return savedBooking;
     );
   }
 
+  //Get Paymwents By ID 
+async getPaymentById(id: number) {
+  const payment =
+    await this.paymentRepository.findPaymentById(id);
+
+  if (!payment) {
+    throw new NotFoundException(
+      'Payment not found',
+    );
+  }
+
+  return {
+    success: true,
+    message: 'Payment fetched successfully',
+    data: payment,
+  };
+}
 }

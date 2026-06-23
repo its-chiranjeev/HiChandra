@@ -7,15 +7,20 @@ import { RepositoriesModule } from '@hichandra/repositories';
 import { CommonAuthModule } from '@hichandra/common';
 import { AuthModuleModule } from 'apps/auth-service/src/auth/auth-module.module';
 import { S3Module } from '@hichandra/s3';
-
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { Service, PricingRule } from '@hichandra/entities';
 @Module({
-  imports: [
-    EntitiesModule,
-    RepositoriesModule,
-    CommonAuthModule,
-    AuthModuleModule,
-    S3Module,
-  ],
+imports: [
+  TypeOrmModule.forFeature([
+    Service,
+    PricingRule,
+  ]),
+  EntitiesModule,
+  RepositoriesModule,
+  CommonAuthModule,
+  AuthModuleModule,
+  S3Module,
+],
   controllers: [UserController],
   providers: [UserService],
 })

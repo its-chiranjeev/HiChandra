@@ -1228,7 +1228,7 @@ return savedBooking;
           email: technician.email,
           phone: technician.phone,
         },
-       // payoutDescription,
+        payoutDescription,
       );
 
     const payment =
@@ -1275,6 +1275,12 @@ return savedBooking;
           payment.id,
         paymentUrl:
           paymentLink.url,
+        bankDetails: {
+          bankName: profile.bankName,
+          accountHolderName: profile.accountHolderName,
+          accountNumber: profile.accountNumber,
+          ifscCode: profile.ifscCode,
+        },
       },
     };
   }

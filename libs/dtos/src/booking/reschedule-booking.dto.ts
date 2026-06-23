@@ -9,8 +9,4 @@ export class RescheduleBookingDto {
   @IsNotEmpty()
   @IsDateString()
   scheduledAt!: string;
-
-  @IsOptional()
-  @IsString()
-  reason?: string;
 }

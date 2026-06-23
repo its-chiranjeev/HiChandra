@@ -1349,7 +1349,6 @@ async rescheduleBooking(
   }
 
   booking.scheduledAt = new Date(dto.scheduledAt);
-  booking.rescheduleReason = dto.reason;
 
   const updated =
     await this.bookingRepository.saveBooking(booking);

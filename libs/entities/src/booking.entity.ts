@@ -121,9 +121,6 @@ export class Booking {
   @Column({ type: 'text', nullable: true })
   cancellationReason?: string;
 
-  @Column({ type: 'text', nullable: true })
-  rescheduleReason?: string;
-
   @Column({ type: 'jsonb', nullable: true })
   filteredTechnicians!: number[];
 

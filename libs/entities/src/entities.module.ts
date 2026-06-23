@@ -16,6 +16,8 @@ import { Booking } from './booking.entity';
 import { Payment } from './payment.entity';
 import { EntitiesService } from './entities.service';
 import { Complaint } from './complaint.entity';
+import { TechnicianPayout } from './technician-payout.entity';
+
 
 @Module({
   imports: [
@@ -34,6 +36,7 @@ import { Complaint } from './complaint.entity';
       Booking,
       Payment,
       Complaint,
+      TechnicianPayout,
     ]),
   ],
   providers: [EntitiesService],

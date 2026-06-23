@@ -6,6 +6,7 @@ import {
   UpdateDateColumn,
   OneToOne,
   OneToMany,
+  DeleteDateColumn
 } from 'typeorm';
 import { PricingRule } from './pricing-rule.entity';
 import { ServiceSpecification } from './service-specification.entity';
@@ -38,4 +39,7 @@ export class Service {
 
   @UpdateDateColumn()
   updatedAt!: Date;
+
+  @DeleteDateColumn()
+  deletedAt?: Date;
 }

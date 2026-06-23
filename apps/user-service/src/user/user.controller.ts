@@ -27,6 +27,16 @@ export class UserController {
     return this.userService.createServiceWithPricing(dto, files);
   }
 
+  @Delete('delete/service/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLE.ADMIN)
+  @HttpCode(HttpStatus.OK)
+  async deleteService(
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.userService.deleteService(id);
+  }
+
   @Post('admin/platform-setting')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(USER_ROLE.ADMIN)
@@ -70,8 +80,9 @@ export class UserController {
     return this.userService.updateUserService(id, updateUserDto);
   }
 
-  @Delete('delete/:id')
-  @UseGuards(JwtAuthGuard)
+  @Delete('delete/user/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLE.ADMIN)
   async deleteUser(@Param('id', ParseIntPipe) id: number) {
     return this.userService.deleteUserService(id);
   }

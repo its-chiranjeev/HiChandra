@@ -1161,11 +1161,32 @@ return savedBooking;
           id: dto.technicianId,
           role: USER_ROLE.TECHNICIAN,
         },
+        relations: ['technicianProfile'], //added
       });
 
     if (!technician) {
       throw new NotFoundException(
         'Technician not found',
+      );
+    }
+
+    //added
+    const profile = technician.technicianProfile;
+
+    if (!profile) {
+      throw new BadRequestException(
+        'Technician profile not found',
+      );
+    }
+
+    if (
+      !profile.accountHolderName ||
+      !profile.accountNumber ||
+      !profile.ifscCode ||
+      !profile.bankName
+    ) {
+      throw new BadRequestException(
+        'Technician bank details are incomplete',
       );
     }
 
@@ -1181,6 +1202,21 @@ return savedBooking;
       );
     }
 
+    const payoutDescription = `
+    Technician Payout
+
+    Technician: ${technician.firstName || technician.username}
+
+    Bank Name: ${profile.bankName}
+    Account Holder: ${profile.accountHolderName}
+    Account Number: ${profile.accountNumber}
+    IFSC Code: ${profile.ifscCode}
+
+    Booking ID: ${dto.bookingId}
+    Service ID: ${dto.serviceId}
+    Amount: ₹${dto.totalAmount}
+    `;
+
     const paymentLink =
       await this.paymentService.createPaymentLink(
         dto.totalAmount,
@@ -1192,6 +1228,7 @@ return savedBooking;
           email: technician.email,
           phone: technician.phone,
         },
+       // payoutDescription,
       );
 
     const payment =
@@ -1206,7 +1243,7 @@ return savedBooking;
           paymentLinkId:
             paymentLink.paymentLinkId,
           status:
-            PAYMENT_STATUS.PENDING,
+            PAYMENT_STATUS.PENDING,           
         },
       );
 

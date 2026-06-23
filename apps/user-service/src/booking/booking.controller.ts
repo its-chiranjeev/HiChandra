@@ -150,6 +150,7 @@ export class BookingController {
     return this.bookingService.getBookingById(id);
   }
 
+  
   @Post(':id/accept')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(USER_ROLE.TECHNICIAN)

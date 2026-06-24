@@ -1,29 +1,12 @@
-import {
-  Booking,
-  BOOKING_STATUS,
-  BOOKING_PAYMENT_STATUS,
-  Service,
-  CustomerAddress,
-  User,
-  USER_ROLE,
-  USER_STATUS,
-  TECHNICIAN_STATUS,
-  TechnicianService,
-  TechnicianLocation,
-  Otp,
-  PriceBreakdown,
-  Payment,
-  PAYMENT_STATUS,
-  COMPLAINT_STATUS,
-} from '@hichandra/entities';
+import {Booking, BOOKING_STATUS, BOOKING_PAYMENT_STATUS, Service, CustomerAddress, User, USER_ROLE, USER_STATUS, TECHNICIAN_STATUS, TechnicianService, TechnicianLocation, Otp, PriceBreakdown, Payment, PAYMENT_STATUS, COMPLAINT_STATUS} from '@hichandra/entities';
 import { EmailService } from '@hichandra/email-services';
 import { PaymentService } from '@hichandra/payment';
-import { Injectable, NotFoundException, BadRequestException, UnprocessableEntityException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, UnprocessableEntityException , ForbiddenException, UnauthorizedException} from '@nestjs/common';
 import { DataSource } from 'typeorm';
-import { CreateBookingDto, UpdateBookingStatusDto, StartBookingDto, AssignBookingDto, CancelBookingDto, CreateComplaintDto, UpdateComplaintDto, CreateTechnicianPayoutDto , RescheduleBookingDto} from '@hichandra/dtos';
+import { CreateBookingDto, UpdateBookingStatusDto, StartBookingDto, AssignBookingDto, CancelBookingDto, CreateComplaintDto, UpdateComplaintDto, CreateTechnicianPayoutDto, RescheduleBookingDto, RepeatBookingDto} from '@hichandra/dtos';
 import { AssignmentService } from '../assignment/assignment.service';
 import { BookingRepository, UserRepository, ComplaintRepository, PaymentRepository, TechnicianPayoutRepository } from '@hichandra/repositories';
-import { UnauthorizedException } from '@nestjs/common';
+
 @Injectable()
 export class BookingService {
   constructor(
@@ -1358,4 +1341,50 @@ async rescheduleBooking(
     data: updated,
   };
 }
+
+async repeatBooking(
+  id: number,
+  dto: RepeatBookingDto,
+  user: any,
+) {
+  const oldBooking =
+    await this.bookingRepository.findBookingById(id);
+
+  if (!oldBooking) {
+    throw new NotFoundException('Booking not found');
+  }
+
+  if (oldBooking.customerId !== user.id) {
+    throw new ForbiddenException(
+      'You can repeat only your own booking',
+    );
+  }
+
+  const newBooking: Partial<Booking> = {
+    customerId: oldBooking.customerId,
+    serviceId: oldBooking.serviceId,
+    addressId: oldBooking.addressId,
+
+    serviceSpecifications:
+      oldBooking.serviceSpecifications,
+
+    isEmergency: oldBooking.isEmergency ?? false,
+    scheduledAt: new Date(dto.scheduledAt),
+
+    status: BOOKING_STATUS.PENDING,
+
+    totalAmount: oldBooking.totalAmount,
+    priceBreakdown: oldBooking.priceBreakdown,
+  };
+
+  const savedBooking =
+    await this.bookingRepository.createBooking(newBooking);
+
+  return {
+    success: true,
+    message: 'Booking repeated successfully',
+    data: savedBooking,
+  };
+}
+
 }

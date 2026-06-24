@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Param, ParseIntPipe, HttpCode, Patch, HttpStatus, Query, Post, Req, Headers, UseGuards, ValidationPipe } from '@nestjs/common';
 import { BookingService } from './booking.service';
 import { JwtAuthGuard, Roles, RolesGuard } from '@hichandra/common';
-import { StartBookingDto, CreateBookingDto, AssignBookingDto, CancelBookingDto, CreateComplaintDto, UpdateComplaintDto, UpdateBookingStatusDto, CreateTechnicianPayoutDto , RescheduleBookingDto } from '@hichandra/dtos';
+import { StartBookingDto, CreateBookingDto, AssignBookingDto, CancelBookingDto, CreateComplaintDto, UpdateComplaintDto, UpdateBookingStatusDto, CreateTechnicianPayoutDto , RescheduleBookingDto , RepeatBookingDto} from '@hichandra/dtos';
 import { USER_ROLE, BOOKING_STATUS, COMPLAINT_STATUS, PAYMENT_STATUS } from '@hichandra/entities';
 
 @Controller('bookings')
@@ -259,6 +259,17 @@ export class BookingController {
     return this.bookingService.assignBookingManually(
       dto,
     );
+  }
+  
+  @Post('repeat/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLE.CUSTOMER)
+  async repeatBooking(
+    @Param('id', ParseIntPipe) id: number,
+    @Body(new ValidationPipe()) dto: RepeatBookingDto,
+    @Req() req: any,
+  ) {
+    return this.bookingService.repeatBooking(id, dto, req.user);
   }
 
   @Patch('customer/cancel')

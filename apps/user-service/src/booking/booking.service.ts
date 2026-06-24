@@ -347,38 +347,39 @@ export class BookingService {
 
       let savedBooking = await bookingRepo.save(booking);
 
-const bookingWithRelations = await bookingRepo.findOne({
-  where: { id: savedBooking.id },
-  relations: ['customer', 'service', 'address'],
-});
+      const bookingWithRelations = await bookingRepo.findOne({
+        where: { id: savedBooking.id },
+        relations: ['customer', 'service', 'address'],
+      });
 
-if (!bookingWithRelations) {
-  throw new NotFoundException('Booking not found after creation');
-}
+      if (!bookingWithRelations) {
+        throw new NotFoundException('Booking not found after creation');
+      }
 
-const activeTechnicians = allTechnicianWithService.filter(
-  (u): u is User => !!u,
-);
+      // Filter technician list based on availability and send notifications
+      const activeTechnicians = allTechnicianWithService.filter(
+        (u): u is User => !!u,
+      );
 
-const matchedTechnicians =
-  await this.assignmentService.assignTechnician(
-    bookingWithRelations,
-    activeTechnicians,
-    address,
-    service,
-  );
-  //  throw new Error("hell");
-  //     return savedBooking;
+      const matchedTechnicians =
+      await this.assignmentService.assignTechnician(
+        bookingWithRelations,
+        activeTechnicians,
+        address,
+        service,
+      );
+      
 
+    bookingWithRelations.filteredTechnicians =
+      matchedTechnicians.map((tech) => tech.id);
 
-bookingWithRelations.filteredTechnicians =
-  matchedTechnicians.map((tech) => tech.id);
+    savedBooking = await bookingRepo.save(bookingWithRelations);
+      //  throw new Error("hell");
+      //     return savedBooking;
 
-savedBooking = await bookingRepo.save(bookingWithRelations);
-
-return savedBooking;
+    return savedBooking;
     });
-  }
+ }
 
   async getBooking(customerId: number, bookingId: number): Promise<Booking> {
     const bookingRepo = this.dataSource.getRepository(Booking);

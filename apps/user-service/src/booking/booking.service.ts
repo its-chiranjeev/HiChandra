@@ -20,7 +20,7 @@ import { EmailService } from '@hichandra/email-services';
 import { PaymentService } from '@hichandra/payment';
 import { Injectable, NotFoundException, BadRequestException, UnprocessableEntityException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
-import { CreateBookingDto, UpdateBookingStatusDto, StartBookingDto, AssignBookingDto, CancelBookingDto, CreateComplaintDto, UpdateComplaintDto, CreateTechnicianPayoutDto} from '@hichandra/dtos';
+import { CreateBookingDto, UpdateBookingStatusDto, StartBookingDto, AssignBookingDto, CancelBookingDto, CreateComplaintDto, UpdateComplaintDto, CreateTechnicianPayoutDto , RescheduleBookingDto} from '@hichandra/dtos';
 import { AssignmentService } from '../assignment/assignment.service';
 import { BookingRepository, UserRepository, ComplaintRepository, PaymentRepository, TechnicianPayoutRepository } from '@hichandra/repositories';
 import { UnauthorizedException } from '@nestjs/common';
@@ -1333,6 +1333,49 @@ async getPaymentById(id: number) {
     success: true,
     message: 'Payment fetched successfully',
     data: payment,
+  };
+}
+
+async rescheduleBooking(
+  bookingId: number,
+  dto: RescheduleBookingDto,
+  user: any,
+) {
+  const booking =
+    await this.bookingRepository.findBookingById(bookingId);
+
+  if (!booking) {
+    throw new NotFoundException('Booking not found');
+  }
+
+  if (
+    user.role === USER_ROLE.CUSTOMER &&
+    booking.customerId !== user.id
+  ) {
+    throw new UnauthorizedException(
+      'You cannot reschedule this booking',
+    );
+  }
+
+  const allowedStatuses = [
+    BOOKING_STATUS.PENDING,
+    BOOKING_STATUS.ACCEPTED,
+  ];
+
+  if (!allowedStatuses.includes(booking.status)) {
+    throw new BadRequestException(
+      `Booking cannot be rescheduled when status is ${booking.status}`,
+    );
+  }
+
+  booking.scheduledAt = new Date(dto.scheduledAt);
+
+  const updated =
+    await this.bookingRepository.saveBooking(booking);
+
+  return {
+    message: 'Booking rescheduled successfully',
+    data: updated,
   };
 }
 }

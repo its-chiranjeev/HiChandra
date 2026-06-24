@@ -1,8 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, IsNull } from 'typeorm';
 
-import { Service } from '@hichandra/entities';
+import { Service, ServiceSpecification } from '@hichandra/entities';
 import { BaseRepository } from './baseDb.repository';
 
 @Injectable()
@@ -18,9 +18,11 @@ export class ServiceRepository extends BaseRepository<Service> {
     const queryOptions: any = {
       where: {
         isActive: true,
+        deletedAt: IsNull()
       },
       relations: {
         pricingRule: true,
+        specifications: true
       },
       order: {
         createdAt: 'DESC',

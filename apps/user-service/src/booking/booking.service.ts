@@ -53,6 +53,7 @@ export class BookingService {
           where: { serviceId: dto.serviceId },
         });
       
+        
       // console.log(technicianServices);
       const allTechnicianWithService = await Promise.all(
         technicianServices.map(async (ts) => {

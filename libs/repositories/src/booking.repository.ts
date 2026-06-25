@@ -89,4 +89,8 @@ export class BookingRepository {
     });
   }
 
+async createBooking(data: Partial<Booking>) {
+  const booking = this.repo.create(data);
+  return this.repo.save(booking);
+}
 }

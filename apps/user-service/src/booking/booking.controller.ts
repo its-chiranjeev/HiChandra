@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Param, ParseIntPipe, HttpCode, Patch, HttpStatus, Query, Post, Req, Headers, UseGuards, ValidationPipe } from '@nestjs/common';
 import { BookingService } from './booking.service';
 import { JwtAuthGuard, Roles, RolesGuard } from '@hichandra/common';
-import { StartBookingDto, CreateBookingDto, AssignBookingDto, CancelBookingDto, CreateComplaintDto, UpdateComplaintDto, UpdateBookingStatusDto, CreateTechnicianPayoutDto , RescheduleBookingDto } from '@hichandra/dtos';
+import { StartBookingDto, CreateBookingDto, AssignBookingDto, CancelBookingDto, CreateComplaintDto, UpdateComplaintDto, UpdateBookingStatusDto, CreateTechnicianPayoutDto , RescheduleBookingDto , RepeatBookingDto , TechnicianCancelBookingDto } from '@hichandra/dtos';
 import { USER_ROLE, BOOKING_STATUS, COMPLAINT_STATUS, PAYMENT_STATUS } from '@hichandra/entities';
 
 @Controller('bookings')
@@ -110,7 +110,8 @@ export class BookingController {
       status,
     );
   }
-
+  
+  // Reschedule Booking 
   @Patch('reschedule/:id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(USER_ROLE.CUSTOMER, USER_ROLE.ADMIN)
@@ -261,6 +262,18 @@ export class BookingController {
     );
   }
 
+  // Repeat booking
+  @Post('repeat/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLE.CUSTOMER)
+  async repeatBooking(
+    @Param('id', ParseIntPipe) id: number,
+    @Body(new ValidationPipe()) dto: RepeatBookingDto,
+    @Req() req: any,
+  ) {
+    return this.bookingService.repeatBooking(id, dto, req.user);
+  }
+
   @Patch('customer/cancel')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(USER_ROLE.CUSTOMER)
@@ -280,6 +293,18 @@ export class BookingController {
       dto,
     );
   }
+
+  // cancel booking--Technician 
+  @Patch('technician/cancel')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLE.TECHNICIAN)
+  async technicianCancelBooking(
+    @Body() dto: TechnicianCancelBookingDto,
+    @Req() req: any,
+  ) {
+    return this.bookingService.technicianCancelBooking(dto, req.user);
+  }
+
   //create complaint
   @Post('complaint')
   @UseGuards(JwtAuthGuard)

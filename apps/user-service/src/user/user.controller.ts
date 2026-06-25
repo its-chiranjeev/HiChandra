@@ -13,6 +13,7 @@ import {
   UpdateCustomerAddressDto,
   UpdateProfileDto,
   AssignBookingDto,
+  UpdateTechnicianStatusDto
 } from '@hichandra/dtos';
 import { USER_ROLE, USER_STATUS } from '@hichandra/entities';
 import { UpdateServiceDto } from '@hichandra/dtos';
@@ -129,6 +130,17 @@ export class UserController {
   ) {
     return this.userService.updateService(id, dto, files);
   }
+
+  @Patch('admin/technician/status/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLE.ADMIN)
+  @HttpCode(HttpStatus.OK)
+  async updateTechnicianStatus(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateTechnicianStatusDto,
+  ) {
+      return this.userService.updateTechnicianStatusService(id, dto);  
+    }
 
   @Get('platform-settings/:id')
   @UseGuards(JwtAuthGuard, RolesGuard)

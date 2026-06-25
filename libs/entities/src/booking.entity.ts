@@ -124,6 +124,18 @@ export class Booking {
   @Column({ type: 'jsonb', nullable: true })
   filteredTechnicians!: number[];
 
+  @Column({ type: 'int', nullable: true })
+  customerRating?: number;
+
+  @Column({ type: 'text', nullable: true })
+  customerReview?: string;
+
+  @Column({ type: 'int', nullable: true })
+  technicianRating?: number;
+
+  @Column({ type: 'text', nullable: true })
+  technicianReview?: string;
+
   @CreateDateColumn()
   createdAt!: Date;
 

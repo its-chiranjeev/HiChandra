@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Param, ParseIntPipe, HttpCode, Patch, HttpStatus, Query, Post, Req, Headers, UseGuards, ValidationPipe } from '@nestjs/common';
 import { BookingService } from './booking.service';
 import { JwtAuthGuard, Roles, RolesGuard } from '@hichandra/common';
-import { StartBookingDto, CreateBookingDto, AssignBookingDto, CancelBookingDto, CreateComplaintDto, UpdateComplaintDto, UpdateBookingStatusDto, CreateTechnicianPayoutDto , RescheduleBookingDto , RepeatBookingDto , TechnicianCancelBookingDto } from '@hichandra/dtos';
+import { StartBookingDto, CreateBookingDto, AssignBookingDto, CancelBookingDto, CreateComplaintDto, UpdateComplaintDto, UpdateBookingStatusDto, CreateTechnicianPayoutDto , RescheduleBookingDto , RepeatBookingDto , TechnicianCancelBookingDto, CreateBookingReviewDto } from '@hichandra/dtos';
 import { USER_ROLE, BOOKING_STATUS, COMPLAINT_STATUS, PAYMENT_STATUS } from '@hichandra/entities';
 
 @Controller('bookings')
@@ -342,6 +342,25 @@ export class BookingController {
     return this.bookingService.updateComplaint(
       req.user,
       complaintId,
+      dto,
+    );
+  }
+
+  @Post('review')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.CREATED)
+  async createBookingReview(
+    @Req() req: any,
+    @Body(
+      new ValidationPipe({
+        whitelist: true,
+        transform: true,
+      }),
+    )
+    dto: CreateBookingReviewDto,
+  ) {
+    return this.bookingService.createBookingReview(
+      req.user,
       dto,
     );
   }

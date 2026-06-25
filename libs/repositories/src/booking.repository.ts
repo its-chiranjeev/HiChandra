@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Booking, BOOKING_STATUS } from '@hichandra/entities';
+import { Booking, BOOKING_STATUS, BOOKING_PAYMENT_STATUS } from '@hichandra/entities';
 import { Repository } from 'typeorm';
 
 @Injectable()
@@ -89,8 +89,46 @@ export class BookingRepository {
     });
   }
 
-async createBooking(data: Partial<Booking>) {
-  const booking = this.repo.create(data);
-  return this.repo.save(booking);
-}
+  async createBooking(data: Partial<Booking>) {
+    const booking = this.repo.create(data);
+    return this.repo.save(booking);
+  }
+
+  async updateReviewFields(
+  bookingId: number,
+  data: Partial<Booking>,
+  ) {
+    await this.repo.update(
+      { id: bookingId },
+      data,
+    );
+
+    return this.findBookingById(bookingId);
+  }
+
+  async findTechnicianRatedBookings(
+  technicianId: number,
+  ) {
+    return this.repo.find({
+      where: {
+        technicianId,
+        status:
+          BOOKING_STATUS.COMPLETED,
+        paymentStatus:
+          BOOKING_PAYMENT_STATUS.PAID,
+      },
+    });
+  }
+
+  async findCustomerRatedBookings(
+  customerId: number,
+  ) {
+    return this.repo.find({
+      where: {
+        customerId,
+        status: BOOKING_STATUS.COMPLETED,
+        paymentStatus: BOOKING_PAYMENT_STATUS.PAID,
+      },
+    });
+  }
 }

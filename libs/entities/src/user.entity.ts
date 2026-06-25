@@ -105,12 +105,12 @@ export class User {
   @OneToMany(() => CustomerAddress, (address) => address.user)
   addresses?: CustomerAddress[];
 
-  // @Column({
-  // type: 'decimal',
-  // precision: 3,
-  // scale: 2,
-  // nullable: true,
-  // })
-  // overallRating?: number;
+  @Column({
+  type: 'decimal',
+  precision: 3,
+  scale: 2,
+  nullable: true,
+  })
+  overallRating?: number | null;
 
 }

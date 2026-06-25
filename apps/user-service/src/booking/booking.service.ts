@@ -1404,7 +1404,7 @@ async technicianCancelBooking(dto: TechnicianCancelBookingDto, user: any) {
     );
   }
 
-  booking.status = BOOKING_STATUS.CANCELLED;
+  booking.status = BOOKING_STATUS.PENDING;
 
   await this.bookingRepository.saveBooking(booking);
 

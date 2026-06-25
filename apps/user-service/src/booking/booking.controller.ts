@@ -110,7 +110,8 @@ export class BookingController {
       status,
     );
   }
-
+  
+  // Reschedule Booking 
   @Patch('reschedule/:id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(USER_ROLE.CUSTOMER, USER_ROLE.ADMIN)
@@ -260,7 +261,8 @@ export class BookingController {
       dto,
     );
   }
-  
+
+  // Repeat booking
   @Post('repeat/:id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(USER_ROLE.CUSTOMER)

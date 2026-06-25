@@ -3,7 +3,7 @@ import { EmailService } from '@hichandra/email-services';
 import { PaymentService } from '@hichandra/payment';
 import { Injectable, NotFoundException, BadRequestException, UnprocessableEntityException , ForbiddenException, UnauthorizedException} from '@nestjs/common';
 import { DataSource } from 'typeorm';
-import { CreateBookingDto, UpdateBookingStatusDto, StartBookingDto, AssignBookingDto, CancelBookingDto, CreateComplaintDto, UpdateComplaintDto, CreateTechnicianPayoutDto, RescheduleBookingDto, RepeatBookingDto} from '@hichandra/dtos';
+import { CreateBookingDto, UpdateBookingStatusDto, StartBookingDto, AssignBookingDto, CancelBookingDto, CreateComplaintDto, UpdateComplaintDto, CreateTechnicianPayoutDto, RescheduleBookingDto, RepeatBookingDto , TechnicianCancelBookingDto } from '@hichandra/dtos';
 import { AssignmentService } from '../assignment/assignment.service';
 import { BookingRepository, UserRepository, ComplaintRepository, PaymentRepository, TechnicianPayoutRepository } from '@hichandra/repositories';
 
@@ -1387,4 +1387,31 @@ async repeatBooking(
   };
 }
 
+async technicianCancelBooking(dto: TechnicianCancelBookingDto, user: any) {
+  const booking = await this.bookingRepository.findBookingById(dto.bookingId);
+
+  if (!booking) {
+    throw new NotFoundException('Booking not found');
+  }
+
+  if (!booking.technician || booking.technician.id !== user.id) {
+    throw new ForbiddenException('You are not assigned to this booking');
+  }
+
+  if (booking.status !== BOOKING_STATUS.ACCEPTED) {
+    throw new BadRequestException(
+      'Only accepted booking can be cancelled by technician',
+    );
+  }
+
+  booking.status = BOOKING_STATUS.CANCELLED;
+
+  await this.bookingRepository.saveBooking(booking);
+
+  return {
+    success: true,
+    message: 'Booking cancelled successfully',
+    data: booking,
+  };
+}
 }

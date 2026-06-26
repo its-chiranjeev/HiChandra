@@ -62,8 +62,6 @@ export class UserService {
     private readonly dataSource: DataSource,
     private readonly authModuleService: AuthModuleService,
     private readonly s3Service: S3Service,
-    @InjectRepository(PricingRule)
-    private readonly pricingRuleRepository: Repository<PricingRule>,
   ) {}
 
   async findById(id: number) {

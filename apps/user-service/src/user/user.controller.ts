@@ -138,7 +138,7 @@ export class UserController {
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateTechnicianStatusDto,
   ) {
-      return this.userService.updateTechnicianStatusService(id, dto);  
+      return this.userService.updateTechnicianStatusService(id,dto);  
     }
 
   @Get('platform-settings/:id')

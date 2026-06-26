@@ -1617,4 +1617,156 @@ export class BookingService {
 
     await this.userRepository.save(customer);
   }
+
+  async getTechnicianReviews(
+    technicianId: number,
+    page = 1,
+    limit = 10,
+  ) {
+    const { reviews, total } =
+      await this.bookingRepository.findTechnicianReviews(
+        technicianId,
+        page,
+        limit,
+      );
+
+    const technician = reviews[0]?.technician;
+
+    return {
+      message: 'Technician reviews fetched successfully',
+      data: {
+        technician: technician
+          ? {
+              id: technician.id,
+              name: `${technician.firstName} ${technician.lastName}`,
+              profileImage: technician.profileImage,
+              overallRating: technician.overallRating,
+            }
+          : null,
+
+        reviews: reviews.map((booking) => ({
+          bookingId: booking.id,
+          rating: booking.customerRating,
+          review: booking.customerReview,
+          customer: {
+            id: booking.customer?.id,
+            name: `${booking.customer?.firstName} ${booking.customer?.lastName}`,
+            profileImage: booking.customer?.profileImage,
+          },
+          service: {
+            id: booking.service?.id,
+            name: booking.service?.name,
+          },
+          createdAt: booking.updatedAt,
+        })),
+
+        pagination: {
+          total,
+          page,
+          limit,
+          totalPages: Math.ceil(total / limit),
+        },
+      },
+    };
+  }
+
+  async getMyBookings(
+    user: any,
+    page = 1,
+    limit = 10,
+    status?: BOOKING_STATUS,
+  ) {
+    const { bookings, total } =
+      await this.bookingRepository.findMyBookings(
+        user.id,
+        user.role,
+        page,
+        limit,
+        status,
+      );
+
+    const data = bookings.map((booking) => {
+      const commonData = {
+        bookingId: booking.id,
+        status: booking.status,
+        paymentStatus: booking.paymentStatus,
+        scheduledAt: booking.scheduledAt,
+        totalAmount: booking.totalAmount,
+        isEmergency: booking.isEmergency,
+        cancellationReason: booking.cancellationReason,
+
+        service: booking.service
+          ? {
+              id: booking.service.id,
+              name: booking.service.name,
+              description: booking.service.description,
+              iconUrl: booking.service.iconUrl,
+            }
+          : null,
+
+        address: booking.address
+          ? {
+              fullAddress: booking.address.fullAddress,
+              city: booking.address.city,
+              state: booking.address.state,
+              pincode: booking.address.pincode,
+              label: booking.address.label,
+            }
+          : null,
+
+        createdAt: booking.createdAt,
+        updatedAt: booking.updatedAt,
+      };
+
+      if (user.role === USER_ROLE.CUSTOMER) {
+        return {
+          ...commonData,
+
+          technician: booking.technician
+            ? {
+                id: booking.technician.id,
+                name: `${booking.technician.firstName} ${booking.technician.lastName}`,
+                profileImage: booking.technician.profileImage,
+                overallRating: booking.technician.overallRating,
+              }
+            : null,
+
+          customerRating: booking.customerRating,
+          customerReview: booking.customerReview,
+        };
+      }
+
+      if (user.role === USER_ROLE.TECHNICIAN) {
+        return {
+          ...commonData,
+
+          customer: booking.customer
+            ? {
+                id: booking.customer.id,
+                name: `${booking.customer.firstName} ${booking.customer.lastName}`,
+                profileImage: booking.customer.profileImage,
+                phone: booking.customer.phone,
+              }
+            : null,
+
+          technicianRating: booking.technicianRating,
+          technicianReview: booking.technicianReview,
+        };
+      }
+
+      return commonData;
+    });
+
+    return {
+      success: true,
+      message: 'My bookings fetched successfully',
+      data,
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
 }

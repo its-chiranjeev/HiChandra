@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Booking, BOOKING_STATUS, BOOKING_PAYMENT_STATUS } from '@hichandra/entities';
-import { Repository } from 'typeorm';
+import { Booking, BOOKING_STATUS, BOOKING_PAYMENT_STATUS, USER_ROLE } from '@hichandra/entities';
+import { Repository, Not, IsNull } from 'typeorm';
 
 @Injectable()
 export class BookingRepository {
@@ -130,5 +130,76 @@ export class BookingRepository {
         paymentStatus: BOOKING_PAYMENT_STATUS.PAID,
       },
     });
+  }
+  async findTechnicianReviews(
+    technicianId: number,
+    page = 1,
+    limit = 10,
+  ) {
+    const [reviews, total] = await this.repo.findAndCount({
+      where: {
+        technicianId,
+        status: BOOKING_STATUS.COMPLETED,
+        paymentStatus: BOOKING_PAYMENT_STATUS.PAID,
+        customerRating: Not(IsNull()),
+      },
+      relations: {
+        customer: true,
+        technician: true,
+        service: true,
+      },
+      order: {
+        updatedAt: 'DESC',
+      },
+      skip: (page - 1) * limit,
+      take: limit,
+    });
+
+    return {
+      reviews,
+      total,
+    };
+  }
+
+  async findMyBookings(
+    userId: number,
+    role: USER_ROLE,
+    page = 1,
+    limit = 10,
+    status?: BOOKING_STATUS,
+  ) {
+    const where: any = {};
+
+    if (role === USER_ROLE.CUSTOMER) {
+      where.customerId = userId;
+    }
+
+    if (role === USER_ROLE.TECHNICIAN) {
+      where.technicianId = userId;
+    }
+
+    if (status) {
+      where.status = status;
+    }
+
+    const [bookings, total] = await this.repo.findAndCount({
+      where,
+      relations: {
+        customer: true,
+        technician: true,
+        service: true,
+        address: true,
+      },
+      order: {
+        createdAt: 'DESC',
+      },
+      skip: (page - 1) * limit,
+      take: limit,
+    });
+
+    return {
+      bookings,
+      total,
+    };
   }
 }

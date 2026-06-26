@@ -111,6 +111,23 @@ export class BookingController {
     );
   }
   
+  @Get('my-bookings')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLE.CUSTOMER, USER_ROLE.TECHNICIAN)
+  async getMyBookings(
+    @Req() req: any,
+    @Query('page') page = 1,
+    @Query('limit') limit = 10,
+    @Query('status') status?: BOOKING_STATUS,
+  ) {
+    return this.bookingService.getMyBookings(
+      req.user,
+      Number(page),
+      Number(limit),
+      status,
+    );
+  }
+
   // Reschedule Booking 
   @Patch('reschedule/:id')
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -365,4 +382,17 @@ export class BookingController {
     );
   }
 
+  @Get('technician/reviews/:technicianId')
+  @UseGuards(JwtAuthGuard)
+  async getTechnicianReviews(
+    @Param('technicianId', ParseIntPipe) technicianId: number,
+    @Query('page') page = 1,
+    @Query('limit') limit = 10,
+  ) {
+    return this.bookingService.getTechnicianReviews(
+      technicianId,
+      Number(page),
+      Number(limit),
+    );
+  }
 }

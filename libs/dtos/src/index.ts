@@ -22,3 +22,4 @@ export * from './booking/reschedule-booking.dto';
 export * from './booking/repeat-booking.dto';
 export * from './booking/technician-cancel-booking.dto';
 export * from './user/create-review.dto';
+export * from './user/update-technician-status.dto';

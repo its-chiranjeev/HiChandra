@@ -346,7 +346,11 @@ export class AuthModuleService {
   async getProfileService(userId: number) {
     const user = await this.userRepository.findOne({
       where: { id: userId },
-      relations: ['addresses', 'technicianProfile'],
+      relations: ['addresses',
+      'technicianProfile', 
+      'technicianProfile.services',
+      'technicianProfile.brandExpertise',
+      'technicianProfile.locations'],
     });
 
     if (!user) {

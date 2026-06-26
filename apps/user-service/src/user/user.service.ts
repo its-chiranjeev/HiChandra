@@ -48,6 +48,7 @@ import {
   UpdateCustomerAddressDto,
   UpdateProfileDto,
   UpdateServiceDto,
+  UpdateTechnicianStatusDto
 } from '@hichandra/dtos';
 
 @Injectable()
@@ -61,8 +62,6 @@ export class UserService {
     private readonly dataSource: DataSource,
     private readonly authModuleService: AuthModuleService,
     private readonly s3Service: S3Service,
-    @InjectRepository(PricingRule)
-    private readonly pricingRuleRepository: Repository<PricingRule>,
   ) {}
 
   async findById(id: number) {
@@ -1231,5 +1230,45 @@ export class UserService {
         data: updatedService,
       };
     });
+  }
+
+  async updateTechnicianStatusService(
+    technicianId: number,
+    dto: UpdateTechnicianStatusDto,
+  ) {
+    const technician = await this.userRepository.findOne({
+      where: {
+        id: technicianId,
+        role: USER_ROLE.TECHNICIAN,
+      },
+      relations: ['technicianProfile'],
+    });
+
+    if (!technician) {
+      throw new NotFoundException('Technician not found');
+    }
+
+    if (!technician.technicianProfile) {
+      throw new BadRequestException('Technician profile not found');
+    }
+
+    if (technician.technicianProfile.status === dto.status) {
+      throw new BadRequestException(
+        `Technician is already ${dto.status.toLowerCase()}`,
+      );
+    }
+
+    // Update status only if it's different
+    technician.technicianProfile.status = dto.status;
+
+    await this.technicianProfileRepository.save(
+      technician.technicianProfile,
+    );
+
+    return {
+      success: true,
+      message: 'Technician status updated successfully',
+      data: technician.technicianProfile,
+    };
   }
 }

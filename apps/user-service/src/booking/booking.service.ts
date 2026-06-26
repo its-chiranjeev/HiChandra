@@ -1440,84 +1440,109 @@ export class BookingService {
   async createBookingReview(
   user: any,
   dto: CreateBookingReviewDto,
-) {
-  const booking =
-    await this.bookingRepository.findBookingById(dto.bookingId);
+  ) {
+    const booking =
+      await this.bookingRepository.findBookingById(dto.bookingId);
 
-  if (!booking) {
-    throw new NotFoundException('Booking not found');
-  }
+    if (!booking) {
+      throw new NotFoundException('Booking not found');
+    }
 
-  if (booking.status !== BOOKING_STATUS.COMPLETED) {
-    throw new BadRequestException('Booking is not completed');
-  }
+    if (booking.status !== BOOKING_STATUS.COMPLETED) {
+      throw new BadRequestException('Booking is not completed');
+    }
 
-  if (booking.paymentStatus !== BOOKING_PAYMENT_STATUS.PAID) {
-    throw new BadRequestException('Payment is not completed');
-  }
-
-  let updatedBooking: Booking | null = null;
-
-  if (user.role === USER_ROLE.CUSTOMER) {
-    if (booking.customerId !== user.id) {
-      throw new BadRequestException('You are not allowed to review this booking');
+    if (booking.paymentStatus !== BOOKING_PAYMENT_STATUS.PAID) {
+      throw new BadRequestException('Payment is not completed');
     }
 
     if (
-      booking.customerRating !== null &&
-      booking.customerRating !== undefined
+      dto.rating === undefined &&
+      (!dto.review || dto.review.trim() === '')
     ) {
-      throw new BadRequestException('Review already submitted');
+      throw new BadRequestException(
+        'Please provide rating or review',
+      );
     }
 
-    if (!dto.rating) {
-      throw new BadRequestException('Rating is required');
+    let updatedBooking: Booking | null = null;
+
+    if (user.role === USER_ROLE.CUSTOMER) {
+      if (booking.customerId !== user.id) {
+        throw new BadRequestException(
+          'You are not allowed to review this booking',
+        );
+      }
+
+      if (
+        booking.customerRating !== null ||
+        booking.customerReview
+      ) {
+        throw new BadRequestException(
+          'Customer feedback already submitted',
+        );
+      }
+
+      if (!booking.technicianId) {
+        throw new BadRequestException(
+          'Technician not assigned to this booking',
+        );
+      }
+
+      updatedBooking =
+        await this.bookingRepository.updateReviewFields(
+          booking.id,
+          {
+            customerRating: dto.rating,
+            customerReview: dto.review,
+          },
+        );
+
+      if (dto.rating !== undefined) {
+        await this.updateTechnicianOverallRating(
+          booking.technicianId,
+        );
+      }
+    } else if (user.role === USER_ROLE.TECHNICIAN) {
+      if (booking.technicianId !== user.id) {
+        throw new BadRequestException(
+          'You are not assigned to this booking',
+        );
+      }
+
+      if (
+        booking.technicianRating !== null ||
+        booking.technicianReview
+      ) {
+        throw new BadRequestException(
+          'Technician feedback already submitted',
+        );
+      }
+
+      updatedBooking =
+        await this.bookingRepository.updateReviewFields(
+          booking.id,
+          {
+            technicianRating: dto.rating,
+            technicianReview: dto.review,
+          },
+        );
+
+      if (dto.rating !== undefined) {
+        await this.updateCustomerOverallRating(
+          booking.customerId,
+        );
+      }
+    } else {
+      throw new ForbiddenException('Invalid user role');
     }
 
-    if (!booking.technicianId) {
-      throw new BadRequestException('Technician not assigned to this booking');
-    }
-
-    updatedBooking =
-      await this.bookingRepository.updateReviewFields(booking.id, {
-        customerRating: dto.rating,
-        customerReview: dto.review,
-      });
-
-    await this.updateTechnicianOverallRating(booking.technicianId);
-  } else if (user.role === USER_ROLE.TECHNICIAN) {
-    if (booking.technicianId !== user.id) {
-      throw new BadRequestException('You are not assigned to this booking');
-    }
-
-    if (
-      booking.technicianRating !== null &&
-      booking.technicianRating !== undefined
-    ) {
-      throw new BadRequestException('Review already submitted');
-    }
-
-    if (!dto.rating) {
-      throw new BadRequestException('Rating is required');
-    }
-
-    updatedBooking =
-      await this.bookingRepository.updateReviewFields(booking.id, {
-        technicianRating: dto.rating,
-        technicianReview: dto.review,
-      });
-
-    await this.updateCustomerOverallRating(booking.customerId);
-  } else {
-    throw new ForbiddenException('Invalid user role');
+    return {
+      success: true,
+      message: 'Review submitted successfully',
+      data: updatedBooking,
+    };
   }
-
-  return {
-    success: true,
-    message: 'Review submitted successfully',
-    data: updatedBooking,
-  };
-}
 
  async updateTechnicianOverallRating(
   technicianId: number,

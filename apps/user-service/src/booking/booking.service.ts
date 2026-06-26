@@ -1472,7 +1472,7 @@ export class BookingService {
         throw new BadRequestException(
           'You are not allowed to review this booking',
         );
-      }
+      } 
 
       if (
         booking.customerRating !== null ||

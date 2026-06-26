@@ -605,7 +605,7 @@
       setStatus('disconnected');
     });
 
-    function addBookingCard(booking) {
+   /* function addBookingCard(booking) {
       if (activeBookings.has(booking.bookingId)) {
         return; // Already added
       }
@@ -640,7 +640,173 @@
 
       bookingFeed.appendChild(card);
       badgeCount.innerText = `${activeBookings.size} Job(s)`;
+    }*/
+
+    function addBookingCard(booking) {
+    if (activeBookings.has(booking.bookingId)) {
+      return;
     }
+
+    activeBookings.set(booking.bookingId, booking);
+    updateEmptyState();
+
+    const card = document.createElement('div');
+    card.id = `booking-card-${booking.bookingId}`;
+    card.className = 'booking-card';
+
+    const customerName = booking.customerInfo
+      ? `${booking.customerInfo.firstName || ''} ${booking.customerInfo.lastName || ''}`.trim()
+      : 'N/A';
+
+    const scheduledTime = booking.bookingInfo?.scheduledAt
+      ? new Date(booking.bookingInfo.scheduledAt).toLocaleString()
+      : 'N/A';
+
+    const createdAt = booking.bookingInfo?.createdAt
+      ? new Date(booking.bookingInfo.createdAt).toLocaleString()
+      : 'N/A';
+
+    const price = booking.bookingInfo?.priceBreakdown || {};
+    const pricingRule = booking.serviceInfo?.pricingRule || {};
+    const specifications = booking.serviceInfo?.specifications || [];
+    const selectedSpecs = booking.bookingInfo?.serviceSpecifications || [];
+
+    card.innerHTML = `
+      <div class="booking-header">
+        <div class="booking-title">Booking ID: #${booking.bookingId}</div>
+        ${
+          booking.bookingInfo?.isEmergency
+            ? '<span class="badge badge-emergency">Emergency</span>'
+            : ''
+        }
+      </div>
+
+      <div class="booking-meta">
+        <div class="meta-item"><strong>Service:</strong> <span>${booking.serviceInfo?.name || 'N/A'}</span></div>
+        <div class="meta-item"><strong>Customer:</strong> <span>${customerName || 'N/A'}</span></div>
+        <div class="meta-item"><strong>Phone:</strong> <span>${booking.customerInfo?.phone || 'N/A'}</span></div>
+        <div class="meta-item"><strong>Email:</strong> <span>${booking.customerInfo?.email || 'N/A'}</span></div>
+        <div class="meta-item"><strong>Address:</strong> <span>${booking.addressInfo?.fullAddress || 'N/A'}</span></div>
+        <div class="meta-item"><strong>Scheduled:</strong> <span>${scheduledTime}</span></div>
+        <div class="meta-item"><strong>Status:</strong> <span>${booking.bookingInfo?.status || 'N/A'}</span></div>
+        <div class="meta-item"><strong>Payment:</strong> <span>${booking.bookingInfo?.paymentStatus || 'N/A'}</span></div>
+        <div class="meta-item"><strong>Amount:</strong> <span>₹${booking.bookingInfo?.totalAmount || '0'}</span></div>
+      </div>
+
+      <details style="margin-top:15px;">
+        <summary style="cursor:pointer;font-weight:bold;color:#60a5fa;">View Details</summary>
+
+        <div style="margin-top:15px;display:flex;flex-direction:column;gap:15px;">
+
+          <div>
+            <h4 style="color:#60a5fa;margin-bottom:8px;">Booking Info</h4>
+            <div class="booking-meta">
+              <div class="meta-item"><strong>Customer ID:</strong> <span>${booking.bookingInfo?.customerId ?? 'N/A'}</span></div>
+              <div class="meta-item"><strong>Service ID:</strong> <span>${booking.bookingInfo?.serviceId ?? 'N/A'}</span></div>
+              <div class="meta-item"><strong>Address ID:</strong> <span>${booking.bookingInfo?.addressId ?? 'N/A'}</span></div>
+              <div class="meta-item"><strong>Technician ID:</strong> <span>${booking.bookingInfo?.technicianId ?? 'Not Assigned'}</span></div>
+              <div class="meta-item"><strong>Manual Assign:</strong> <span>${booking.bookingInfo?.isManualAssign}</span></div>
+              <div class="meta-item"><strong>Created At:</strong> <span>${createdAt}</span></div>
+            </div>
+          </div>
+
+          <div>
+            <h4 style="color:#60a5fa;margin-bottom:8px;">Service Info</h4>
+            <div class="booking-meta">
+              <div class="meta-item"><strong>Name:</strong> <span>${booking.serviceInfo?.name || 'N/A'}</span></div>
+              <div class="meta-item"><strong>Description:</strong> <span>${booking.serviceInfo?.description || 'N/A'}</span></div>
+              <div class="meta-item"><strong>Active:</strong> <span>${booking.serviceInfo?.isActive}</span></div>
+            </div>
+          </div>
+
+          <div>
+            <h4 style="color:#60a5fa;margin-bottom:8px;">Customer Info</h4>
+            <div class="booking-meta">
+              <div class="meta-item"><strong>User ID:</strong> <span>${booking.customerInfo?.id || 'N/A'}</span></div>
+              <div class="meta-item"><strong>Username:</strong> <span>${booking.customerInfo?.username || 'N/A'}</span></div>
+              <div class="meta-item"><strong>Role:</strong> <span>${booking.customerInfo?.role || 'N/A'}</span></div>
+              <div class="meta-item"><strong>Status:</strong> <span>${booking.customerInfo?.status || 'N/A'}</span></div>
+            </div>
+          </div>
+
+          <div>
+            <h4 style="color:#60a5fa;margin-bottom:8px;">Address Info</h4>
+            <div class="booking-meta">
+              <div class="meta-item"><strong>City:</strong> <span>${booking.addressInfo?.city || 'N/A'}</span></div>
+              <div class="meta-item"><strong>State:</strong> <span>${booking.addressInfo?.state || 'N/A'}</span></div>
+              <div class="meta-item"><strong>Pincode:</strong> <span>${booking.addressInfo?.pincode || 'N/A'}</span></div>
+              <div class="meta-item"><strong>Latitude:</strong> <span>${booking.addressInfo?.latitude || 'N/A'}</span></div>
+              <div class="meta-item"><strong>Longitude:</strong> <span>${booking.addressInfo?.longitude || 'N/A'}</span></div>
+            </div>
+          </div>
+
+          <div>
+            <h4 style="color:#60a5fa;margin-bottom:8px;">Price Breakdown</h4>
+            <div class="booking-meta">
+              <div class="meta-item"><strong>Base Price:</strong> <span>₹${price.serviceBasePrice ?? 0}</span></div>
+              <div class="meta-item"><strong>Distance Charge:</strong> <span>₹${price.distanceCharge ?? 0}</span></div>
+              <div class="meta-item"><strong>Emergency Charge:</strong> <span>₹${price.emergencyCharge ?? 0}</span></div>
+              <div class="meta-item"><strong>Peak Hour Charge:</strong> <span>₹${price.peakHourCharge ?? 0}</span></div>
+              <div class="meta-item"><strong>Weekend Charge:</strong> <span>₹${price.weekendCharge ?? 0}</span></div>
+              <div class="meta-item"><strong>Surge Charge:</strong> <span>₹${price.surgeCharge ?? 0}</span></div>
+              <div class="meta-item"><strong>GST:</strong> <span>₹${price.gst ?? 0}</span></div>
+              <div class="meta-item"><strong>Platform Fee:</strong> <span>₹${price.platformFee ?? 0}</span></div>
+              <div class="meta-item"><strong>Technician Earning:</strong> <span>₹${price.technicianEarning ?? 0}</span></div>
+              <div class="meta-item"><strong>Platform Earning:</strong> <span>₹${price.platformEarning ?? 0}</span></div>
+            </div>
+          </div>
+
+          <div>
+            <h4 style="color:#60a5fa;margin-bottom:8px;">Selected Specifications</h4>
+            <div class="booking-meta">
+              ${
+                selectedSpecs.length
+                  ? selectedSpecs.map(spec => {
+                      const specInfo = specifications.find(s => s.id === spec.specificationId);
+                      return `
+                        <div class="meta-item">
+                          <strong>${specInfo?.name || 'Specification'}:</strong>
+                          <span>${Array.isArray(spec.value) ? spec.value.join(', ') : spec.value}</span>
+                        </div>
+                      `;
+                    }).join('')
+                  : '<div class="meta-item"><span>No specifications</span></div>'
+              }
+            </div>
+          </div>
+
+          <div>
+            <h4 style="color:#60a5fa;margin-bottom:8px;">Pricing Rule</h4>
+            <div class="booking-meta">
+              <div class="meta-item"><strong>Base Price:</strong> <span>₹${pricingRule.serviceBasePrice || '0'}</span></div>
+              <div class="meta-item"><strong>Per Hour:</strong> <span>₹${pricingRule.perHourRate || '0'}</span></div>
+              <div class="meta-item"><strong>Per KM:</strong> <span>₹${pricingRule.perKmRate || '0'}</span></div>
+              <div class="meta-item"><strong>GST:</strong> <span>${pricingRule.gst || '0'}%</span></div>
+              <div class="meta-item"><strong>Surge Enabled:</strong> <span>${pricingRule.isSurgeEnabled}</span></div>
+            </div>
+          </div>
+
+        </div>
+      </details>
+
+      <div style="display:flex;gap:1rem;justify-content:flex-end;margin-top:0.5rem;">
+        <button onclick="dismissCard(${booking.bookingId})"
+          class="btn"
+          style="background:rgba(255,255,255,0.05);color:var(--text-muted);padding:0.5rem 1rem;font-size:0.9rem;">
+          Dismiss
+        </button>
+
+        <button onclick="acceptBooking(${booking.bookingId}, this)"
+          class="btn btn-primary"
+          style="padding:0.5rem 1.2rem;font-size:0.9rem;">
+          Accept Job
+        </button>
+      </div>
+    `;
+
+    bookingFeed.appendChild(card);
+    badgeCount.innerText = `${activeBookings.size} Job(s)`;
+  }
 
     window.dismissCard = function(bookingId) {
       const card = document.getElementById(`booking-card-${bookingId}`);

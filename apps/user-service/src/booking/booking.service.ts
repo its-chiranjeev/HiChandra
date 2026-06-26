@@ -1,29 +1,12 @@
-import {
-  Booking,
-  BOOKING_STATUS,
-  BOOKING_PAYMENT_STATUS,
-  Service,
-  CustomerAddress,
-  User,
-  USER_ROLE,
-  USER_STATUS,
-  TECHNICIAN_STATUS,
-  TechnicianService,
-  TechnicianLocation,
-  Otp,
-  PriceBreakdown,
-  Payment,
-  PAYMENT_STATUS,
-  COMPLAINT_STATUS,
-} from '@hichandra/entities';
+import {Booking, BOOKING_STATUS, BOOKING_PAYMENT_STATUS, Service, CustomerAddress, User, USER_ROLE, USER_STATUS, TECHNICIAN_STATUS, TechnicianService, TechnicianLocation, Otp, PriceBreakdown, Payment, PAYMENT_STATUS, COMPLAINT_STATUS} from '@hichandra/entities';
 import { EmailService } from '@hichandra/email-services';
 import { PaymentService } from '@hichandra/payment';
-import { Injectable, NotFoundException, BadRequestException, UnprocessableEntityException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, UnprocessableEntityException , ForbiddenException, UnauthorizedException} from '@nestjs/common';
 import { DataSource } from 'typeorm';
-import { CreateBookingDto, UpdateBookingStatusDto, StartBookingDto, AssignBookingDto, CancelBookingDto, CreateComplaintDto, UpdateComplaintDto, CreateTechnicianPayoutDto} from '@hichandra/dtos';
+import { CreateBookingDto, UpdateBookingStatusDto,CreateBookingReviewDto, StartBookingDto, AssignBookingDto, CancelBookingDto, CreateComplaintDto, UpdateComplaintDto, CreateTechnicianPayoutDto, RescheduleBookingDto, RepeatBookingDto , TechnicianCancelBookingDto } from '@hichandra/dtos';
 import { AssignmentService } from '../assignment/assignment.service';
 import { BookingRepository, UserRepository, ComplaintRepository, PaymentRepository, TechnicianPayoutRepository } from '@hichandra/repositories';
-import { UnauthorizedException } from '@nestjs/common';
+
 @Injectable()
 export class BookingService {
   constructor(
@@ -53,6 +36,7 @@ export class BookingService {
           where: { serviceId: dto.serviceId },
         });
       
+        
       // console.log(technicianServices);
       const allTechnicianWithService = await Promise.all(
         technicianServices.map(async (ts) => {
@@ -346,35 +330,39 @@ export class BookingService {
 
       let savedBooking = await bookingRepo.save(booking);
 
-const bookingWithRelations = await bookingRepo.findOne({
-  where: { id: savedBooking.id },
-  relations: ['customer', 'service', 'address'],
-});
+      const bookingWithRelations = await bookingRepo.findOne({
+        where: { id: savedBooking.id },
+        relations: ['customer', 'service', 'address'],
+      });
 
-if (!bookingWithRelations) {
-  throw new NotFoundException('Booking not found after creation');
-}
+      if (!bookingWithRelations) {
+        throw new NotFoundException('Booking not found after creation');
+      }
 
-const activeTechnicians = allTechnicianWithService.filter(
-  (u): u is User => !!u,
-);
+      // Filter technician list based on availability and send notifications
+      const activeTechnicians = allTechnicianWithService.filter(
+        (u): u is User => !!u,
+      );
 
-const matchedTechnicians =
-  await this.assignmentService.assignTechnician(
-    bookingWithRelations,
-    activeTechnicians,
-    address,
-    service,
-  );
+      const matchedTechnicians =
+      await this.assignmentService.assignTechnician(
+        bookingWithRelations,
+        activeTechnicians,
+        address,
+        service,
+      );
+      
 
-bookingWithRelations.filteredTechnicians =
-  matchedTechnicians.map((tech) => tech.id);
+    bookingWithRelations.filteredTechnicians =
+      matchedTechnicians.map((tech) => tech.id);
 
-savedBooking = await bookingRepo.save(bookingWithRelations);
+    savedBooking = await bookingRepo.save(bookingWithRelations);
+      //  throw new Error("hell");
+      //     return savedBooking;
 
-return savedBooking;
+    return savedBooking;
     });
-  }
+ }
 
   async getBooking(customerId: number, bookingId: number): Promise<Booking> {
     const bookingRepo = this.dataSource.getRepository(Booking);
@@ -444,23 +432,23 @@ return savedBooking;
 
   // Complaint By ID
   async getComplaintById(id: number) {
-  const complaint =
-    await this.complaintRepository.findComplaintById(
-      id,
-    );
+    const complaint =
+      await this.complaintRepository.findComplaintById(
+        id,
+      );
 
-  if (!complaint) {
-    throw new NotFoundException(
-      'Complaint not found',
-    );
+    if (!complaint) {
+      throw new NotFoundException(
+        'Complaint not found',
+      );
+    }
+
+    return {
+      success: true,
+      message: 'Complaint fetched successfully',
+      data: complaint,
+    };
   }
-
-  return {
-    success: true,
-    message: 'Complaint fetched successfully',
-    data: complaint,
-  };
-}
 
   async getBookingById(id: number) {
     const booking =
@@ -525,8 +513,8 @@ return savedBooking;
   }
 
   async assignBookingManually(
-    dto: AssignBookingDto,
-  ) {
+    dto: AssignBookingDto,)
+   {
     const { bookingId, technicianId } = dto;
 
     // Validate booking
@@ -580,8 +568,8 @@ return savedBooking;
 
   async cancelBooking(
     customerId: number,
-    dto: CancelBookingDto,
-  ) {
+    dto: CancelBookingDto,)
+   {
     const { bookingId, cancellationReason } = dto;
 
     const booking =
@@ -764,6 +752,7 @@ return savedBooking;
       data: complaint,
     };
   }
+
   async updateBookingStatus(
     technicianId: number,
     bookingId: number,
@@ -1077,11 +1066,27 @@ return savedBooking;
     }
 
     if (payment.status === PAYMENT_STATUS.SUCCESS) {
-      return {
-        success: true,
-        message: 'Payment already processed',
-      };
+    const payout =
+      await this.technicianPayoutRepository.findByPaymentRecordId(
+        payment.id,
+      );
+
+    if (
+      payout &&
+      payout.status !== PAYMENT_STATUS.SUCCESS
+    ) {
+      payout.status = PAYMENT_STATUS.SUCCESS;
+
+      await this.technicianPayoutRepository.updatePayout(
+        payout,
+      );
     }
+
+    return {
+      success: true,
+      message: 'Payment already processed',
+    };
+  }
 
     payment.status =
       PAYMENT_STATUS.SUCCESS;
@@ -1299,20 +1304,317 @@ return savedBooking;
   }
 
   //Get Paymwents By ID 
-async getPaymentById(id: number) {
-  const payment =
-    await this.paymentRepository.findPaymentById(id);
+  async getPaymentById(id: number) {
+    const payment =
+      await this.paymentRepository.findPaymentById(id);
 
-  if (!payment) {
-    throw new NotFoundException(
-      'Payment not found',
-    );
+    if (!payment) {
+      throw new NotFoundException(
+        'Payment not found',
+      );
+    }
+
+    return {
+      success: true,
+      message: 'Payment fetched successfully',
+      data: payment,
+    };
   }
 
-  return {
-    success: true,
-    message: 'Payment fetched successfully',
-    data: payment,
-  };
-}
+  async rescheduleBooking(
+    bookingId: number,
+    dto: RescheduleBookingDto,
+    user: any,
+  ) {
+    const booking =
+      await this.bookingRepository.findBookingById(bookingId);
+
+    if (!booking) {
+      throw new NotFoundException('Booking not found');
+    }
+
+    if (
+      user.role === USER_ROLE.CUSTOMER &&
+      booking.customerId !== user.id
+    ) {
+      throw new UnauthorizedException(
+        'You cannot reschedule this booking',
+      );
+    }
+
+    const allowedStatuses = [
+      BOOKING_STATUS.PENDING,
+      BOOKING_STATUS.ACCEPTED,
+    ];
+
+    if (!allowedStatuses.includes(booking.status)) {
+      throw new BadRequestException(
+        `Booking cannot be rescheduled when status is ${booking.status}`,
+      );
+    }
+
+    booking.scheduledAt = new Date(dto.scheduledAt);
+
+    const updated =
+      await this.bookingRepository.saveBooking(booking);
+
+    return {
+      message: 'Booking rescheduled successfully',
+      data: updated,
+    };
+  }
+
+  async repeatBooking(
+    id: number,
+    dto: RepeatBookingDto,
+    user: any,
+  ) {
+    const oldBooking =
+      await this.bookingRepository.findBookingById(id);
+
+    if (!oldBooking) {
+      throw new NotFoundException('Booking not found');
+    }
+
+    if (oldBooking.customerId !== user.id) {
+      throw new ForbiddenException(
+        'You can repeat only your own booking',
+      );
+    }
+
+    const newBooking: Partial<Booking> = {
+      customerId: oldBooking.customerId,
+      serviceId: oldBooking.serviceId,
+      addressId: oldBooking.addressId,
+
+      serviceSpecifications:
+        oldBooking.serviceSpecifications,
+
+      isEmergency: oldBooking.isEmergency ?? false,
+      scheduledAt: new Date(dto.scheduledAt),
+
+      status: BOOKING_STATUS.PENDING,
+
+      totalAmount: oldBooking.totalAmount,
+      priceBreakdown: oldBooking.priceBreakdown,
+    };
+
+    const savedBooking =
+      await this.bookingRepository.createBooking(newBooking);
+
+    return {
+      success: true,
+      message: 'Booking repeated successfully',
+      data: savedBooking,
+    };
+  }
+
+  async technicianCancelBooking(dto: TechnicianCancelBookingDto, user: any) {
+    const booking = await this.bookingRepository.findBookingById(dto.bookingId);
+
+    if (!booking) {
+      throw new NotFoundException('Booking not found');
+    }
+
+    if (!booking.technician || booking.technician.id !== user.id) {
+      throw new ForbiddenException('You are not assigned to this booking');
+    }
+
+    if (booking.status !== BOOKING_STATUS.ACCEPTED) {
+      throw new BadRequestException(
+        'Only accepted booking can be cancelled by technician',
+      );
+    }
+
+    booking.status = BOOKING_STATUS.PENDING;
+
+    await this.bookingRepository.saveBooking(booking);
+
+    return {
+      success: true,
+      message: 'Booking cancelled successfully',
+      data: booking,
+    };
+  }
+
+  async createBookingReview(
+  user: any,
+  dto: CreateBookingReviewDto,
+  ) {
+    const booking =
+      await this.bookingRepository.findBookingById(dto.bookingId);
+
+    if (!booking) {
+      throw new NotFoundException('Booking not found');
+    }
+
+    if (booking.status !== BOOKING_STATUS.COMPLETED) {
+      throw new BadRequestException('Booking is not completed');
+    }
+
+    if (booking.paymentStatus !== BOOKING_PAYMENT_STATUS.PAID) {
+      throw new BadRequestException('Payment is not completed');
+    }
+
+    if (
+      dto.rating === undefined &&
+      (!dto.review || dto.review.trim() === '')
+    ) {
+      throw new BadRequestException(
+        'Please provide rating or review',
+      );
+    }
+
+    let updatedBooking: Booking | null = null;
+
+    if (user.role === USER_ROLE.CUSTOMER) {
+      if (booking.customerId !== user.id) {
+        throw new BadRequestException(
+          'You are not allowed to review this booking',
+        );
+      } 
+
+      if (
+        booking.customerRating !== null ||
+        booking.customerReview
+      ) {
+        throw new BadRequestException(
+          'Customer feedback already submitted',
+        );
+      }
+
+      if (!booking.technicianId) {
+        throw new BadRequestException(
+          'Technician not assigned to this booking',
+        );
+      }
+
+      updatedBooking =
+        await this.bookingRepository.updateReviewFields(
+          booking.id,
+          {
+            customerRating: dto.rating,
+            customerReview: dto.review,
+          },
+        );
+
+      if (dto.rating !== undefined) {
+        await this.updateTechnicianOverallRating(
+          booking.technicianId,
+        );
+      }
+    } else if (user.role === USER_ROLE.TECHNICIAN) {
+      if (booking.technicianId !== user.id) {
+        throw new BadRequestException(
+          'You are not assigned to this booking',
+        );
+      }
+
+      if (
+        booking.technicianRating !== null ||
+        booking.technicianReview
+      ) {
+        throw new BadRequestException(
+          'Technician feedback already submitted',
+        );
+      }
+
+      updatedBooking =
+        await this.bookingRepository.updateReviewFields(
+          booking.id,
+          {
+            technicianRating: dto.rating,
+            technicianReview: dto.review,
+          },
+        );
+
+      if (dto.rating !== undefined) {
+        await this.updateCustomerOverallRating(
+          booking.customerId,
+        );
+      }
+    } else {
+      throw new ForbiddenException('Invalid user role');
+    }
+
+    return {
+      success: true,
+      message: 'Review submitted successfully',
+      data: updatedBooking,
+    };
+  }
+
+ async updateTechnicianOverallRating(
+  technicianId: number,
+  ) {
+    const bookings =
+      await this.bookingRepository.findTechnicianRatedBookings(
+        technicianId,
+      );
+
+    const ratings = bookings
+      .map((booking) => booking.customerRating)
+      .filter(
+        (rating): rating is number =>
+          rating !== null && rating !== undefined,
+      );
+
+    const technician =
+      await this.userRepository.findOne({
+        where: { id: technicianId },
+      });
+
+    if (!technician) {
+      return;
+    }
+
+    if (!ratings.length) {
+      technician.overallRating = null;
+    } else {
+      const average =
+        ratings.reduce((sum, rating) => sum + rating, 0) /
+        ratings.length;
+
+      technician.overallRating = Number(average.toFixed(2));
+    }
+
+    await this.userRepository.save(technician);
+  }
+
+  async updateCustomerOverallRating(
+    customerId: number,
+  ) {
+    const bookings =
+      await this.bookingRepository.findCustomerRatedBookings(
+        customerId,
+      );
+
+    const ratings = bookings
+      .map((booking) => booking.technicianRating)
+      .filter(
+        (rating): rating is number =>
+          rating !== null && rating !== undefined,
+      );
+
+    const customer =
+      await this.userRepository.findOne({
+        where: { id: customerId },
+      });
+
+    if (!customer) {
+      return;
+    }
+
+    if (!ratings.length) {
+      customer.overallRating = null;
+    } else {
+      const average =
+        ratings.reduce((sum, rating) => sum + rating, 0) /
+        ratings.length;
+
+      customer.overallRating = Number(average.toFixed(2));
+    }
+
+    await this.userRepository.save(customer);
+  }
 }

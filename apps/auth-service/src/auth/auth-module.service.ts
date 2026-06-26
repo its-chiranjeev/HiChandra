@@ -346,7 +346,7 @@ export class AuthModuleService {
   async getProfileService(userId: number) {
     const user = await this.userRepository.findOne({
       where: { id: userId },
-      relations: ['addresses'],
+      relations: ['addresses', 'technicianProfile'],
     });
 
     if (!user) {
@@ -368,6 +368,11 @@ export class AuthModuleService {
         status: user.status,
         createdAt: user.createdAt,
         lastLoginAt: user.lastLoginAt,
+
+        addresses: user.role === USER_ROLE.CUSTOMER ? user.addresses : undefined,
+
+        technicianProfile:
+          user.role === USER_ROLE.TECHNICIAN ? user.technicianProfile : undefined,
       },
     };
   }

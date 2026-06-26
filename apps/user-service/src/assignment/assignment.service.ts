@@ -50,6 +50,7 @@ export class AssignmentService {
       booking,
       matchedTechnicians,
       service,
+      customerAddress, //added
     );
     return matchedTechnicians;
   }
@@ -87,23 +88,75 @@ export class AssignmentService {
     return distance <= Number(technicianLocation.serviceRadiusKm);
   }
 
-  private async sendNotificationsToTechnicians(
-    booking: Booking,
-    technicians: User[],
-    service: Service,
-  ): Promise<void> {
-    for (const tech of technicians) {
-      this.logger.log(
-        `Sending booking notification to technician ID ${tech.id} (${tech.email}) for Booking ID ${booking.id} (Service: ${service.name})`,
-      );
+//   private async sendNotificationsToTechnicians(
+//     booking: Booking,
+//     technicians: User[],
+//     service: Service,
+//     customerAddress: CustomerAddress, //added
+//   ): Promise<void> {
+//     for (const tech of technicians) {
+//       this.logger.log(
+//         `Sending booking notification to technician ID ${tech.id} (${tech.email}) for Booking ID ${booking.id} (Service: ${service.name})`,
+//       );
 
-      const isOnline = this.bookingGateway.notifyUser(tech.id, {
-        bookingId: booking.id,
-        service: service.name,
-        scheduledAt: booking.scheduledAt,
-        isEmergency: booking.isEmergency,
-      });
+//       // const isOnline = this.bookingGateway.notifyUser(tech.id, {
+//       //   bookingId: booking.id,
+//       //   //added
+//       //    bookingInfo: {
+//       //     id: booking.id,
+//       //     status: booking.status,
+//       //     scheduledAt: booking.scheduledAt,
+//       //     isEmergency: booking.isEmergency,
+//       //     totalAmount: booking.totalAmount,
+//       //   },
 
+//       //   service: service.name,
+//       //   scheduledAt: booking.scheduledAt,
+//       //   isEmergency: booking.isEmergency,
+//       // });
+
+    private async sendNotificationsToTechnicians(
+      booking: Booking,
+      technicians: User[],
+      service: Service,
+      customerAddress: CustomerAddress,
+    ): Promise<void> {
+      for (const tech of technicians) {
+        this.logger.log(
+          `Sending booking notification to technician ID ${tech.id} (${tech.email}) for Booking ID ${booking.id} (Service: ${service.name})`,
+        );
+
+        const {
+          password,
+          hashedRefreshToken,
+          ...safeCustomer
+        } = booking.customer || {};
+
+        const isOnline = this.bookingGateway.notifyUser(tech.id, {
+          bookingId: booking.id,
+
+          bookingInfo: {
+            ...booking,
+            customer: undefined,
+            service: undefined,
+            address: undefined,
+            technician: undefined,
+          },
+
+          serviceInfo: {
+            ...service,
+          },
+
+          customerInfo: {
+            ...safeCustomer,
+            name: `${safeCustomer.firstName || ''} ${safeCustomer.lastName || ''}`.trim(),
+          },
+
+          addressInfo: {
+            ...customerAddress,
+          },
+        });
+  
       this.logger.log(
         `Technician notification status for ID ${tech.id}: ${isOnline ? 'Online/Delivered' : 'Offline'}`,
       );

@@ -18,3 +18,7 @@ export * from './booking/complaint.dto';
 export * from './booking/update-complaint.dto';
 export * from './user/technician-payout.dto';
 export * from './user/update-service.dto';
+export * from './booking/reschedule-booking.dto';
+export * from './booking/repeat-booking.dto';
+export * from './booking/technician-cancel-booking.dto';
+export * from './user/create-review.dto';

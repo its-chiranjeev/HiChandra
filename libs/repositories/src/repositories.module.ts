@@ -10,6 +10,7 @@ import { BookingRepository } from './booking.repository';
 import { ComplaintRepository } from './complaint.repository';
 import { PaymentRepository } from './payment.repository';
 import { TechnicianPayoutRepository } from './technician-payout.repository';
+import { FavoriteTechnicianRepository } from './favorite-technician.repository';
 
 @Module({
   imports: [EntitiesModule],
@@ -24,6 +25,7 @@ import { TechnicianPayoutRepository } from './technician-payout.repository';
      ComplaintRepository,
     PaymentRepository,
     TechnicianPayoutRepository,
+    FavoriteTechnicianRepository,
   ],
   exports: [
     RepositoriesService,
@@ -35,7 +37,8 @@ import { TechnicianPayoutRepository } from './technician-payout.repository';
     BookingRepository,
     ComplaintRepository,
     PaymentRepository,
-    TechnicianPayoutRepository
+    TechnicianPayoutRepository,
+    FavoriteTechnicianRepository,
   ],
 })
 export class RepositoriesModule {}

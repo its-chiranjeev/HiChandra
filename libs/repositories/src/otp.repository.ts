@@ -18,7 +18,7 @@ export class OtpRepository extends BaseRepository<Otp> {
     phone?: string,
   ): Promise<Otp | null> {
     const query: any = {
-      isUsed: false,
+      isVerified: false,
     };
     if (email) {
       query.email = email;

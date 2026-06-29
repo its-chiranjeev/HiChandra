@@ -17,6 +17,7 @@ import {
   TechnicianProfileRepository,
   ServiceRepository,
   PlatformSettingRepository,
+  FavoriteTechnicianRepository
 } from '@hichandra/repositories';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -62,6 +63,7 @@ export class UserService {
     private readonly dataSource: DataSource,
     private readonly authModuleService: AuthModuleService,
     private readonly s3Service: S3Service,
+    private readonly favoriteTechnicianRepository: FavoriteTechnicianRepository,
   ) {}
 
   async findById(id: number) {
@@ -1271,4 +1273,47 @@ export class UserService {
       data: technician.technicianProfile,
     };
   }
+
+  async favoriteTechnician(
+  user: any,
+  technicianId: number,
+) {
+  const technician = await this.userRepository.findOne({
+    where: {
+      id: technicianId,
+      role: USER_ROLE.TECHNICIAN,
+    },
+  });
+
+  if (!technician) {
+    throw new NotFoundException('Technician not found');
+  }
+
+  const existing =
+    await this.favoriteTechnicianRepository.findFavoriteTechnician(
+      user.id,
+      technicianId,
+    );
+
+  if (existing) {
+    await this.favoriteTechnicianRepository.removeFavoriteTechnician(
+      existing,
+    );
+
+    return {
+      isFavorite: false,
+      message: 'Technician removed from favorites successfully',
+    };
+  }
+
+  await this.favoriteTechnicianRepository.createFavoriteTechnician({
+    customerId: user.id,
+    technicianId,
+  });
+
+  return {
+    isFavorite: true,
+    message: 'Technician added to favorites successfully',
+  };
+}
 }

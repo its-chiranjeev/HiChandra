@@ -13,7 +13,7 @@ import {
 } from '@nestjs/common';
 import { AuthModuleService } from './auth-module.service';
 import { JwtAuthGuard } from '@hichandra/common';
-import { LoginDto, RegisterUserDto, VerifyOtpDto } from '@hichandra/dtos';
+import { LoginDto, RegisterUserDto, VerifyOtpDto, ResetPasswordDto, ForgotPasswordDto} from '@hichandra/dtos';
 
 @Controller('auth')
 export class AuthModuleController {
@@ -73,21 +73,21 @@ export class AuthModuleController {
     );
   }
 
-  // @Post('forgot-password')
-  // @HttpCode(HttpStatus.OK)
-  // async forgotPassword(
-  //   @Body(new ValidationPipe({ whitelist: true, transform: true })) dto: ForgotPasswordDto,
-  // ) {
-  //   return this.authModuleService.forgotPasswordService(dto);
-  // }
+  @Post('forgot-password')
+  @HttpCode(HttpStatus.OK)
+  async forgotPassword(
+    @Body(new ValidationPipe({ whitelist: true, transform: true })) dto: ForgotPasswordDto,
+  ) {
+    return this.authModuleService.forgotPasswordService(dto);
+  }
 
-  // @Patch('reset-password')
-  // @HttpCode(HttpStatus.OK)
-  // async resetPassword(
-  //   @Body(new ValidationPipe({ whitelist: true, transform: true })) dto: ResetPasswordDto,
-  // ) {
-  //   return this.authModuleService.resetPasswordService(dto);
-  // }
+  @Patch('reset-password')
+  @HttpCode(HttpStatus.OK)
+  async resetPassword(
+    @Body(new ValidationPipe({ whitelist: true, transform: true })) dto: ResetPasswordDto,
+  ) {
+    return this.authModuleService.resetPasswordService(dto);
+  }
 
   // @Get('profile')
   // @UseGuards(JwtAuthGuard)

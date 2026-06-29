@@ -9,7 +9,7 @@ import {
 } from '@nestjs/common';
 import { UserRepository, OtpRepository } from '@hichandra/repositories';
 import * as bcrypt from 'bcryptjs';
-import { User, USER_STATUS, USER_ROLE } from '@hichandra/entities';
+import { User, USER_STATUS, USER_ROLE, TechnicianService } from '@hichandra/entities';
 import { ConfigService } from '@nestjs/config';
 import { createHmac } from 'crypto';
 import {
@@ -17,6 +17,8 @@ import {
   RegisterDto,
   RegisterUserDto,
   VerifyOtpDto,
+  ResetPasswordDto,
+  ForgotPasswordDto
 } from '@hichandra/dtos';
 import { DataSource } from 'typeorm';
 import { EmailService } from '@hichandra/email-services';
@@ -378,6 +380,83 @@ export class AuthModuleService {
         technicianProfile:
           user.role === USER_ROLE.TECHNICIAN ? user.technicianProfile : undefined,
       },
+    };
+  }
+
+  async forgotPasswordService(dto: ForgotPasswordDto) {
+    const user = await this.userRepository.findByEmail(dto.email);
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const oldOtp = await this.otpRepository.findLatestValidOtp(dto.email);
+
+    if (oldOtp) {
+      await this.otpRepository.update(oldOtp.id, {
+        isVerified: true,
+      });
+    }
+
+    const otpCode = Math.floor(
+      100000 + Math.random() * 900000,
+    ).toString();
+
+    await this.emailService.sendOtpEmail(dto.email, otpCode);
+
+    const expiresAt = new Date();
+    expiresAt.setMinutes(expiresAt.getMinutes() + 10);
+
+    const otp = this.otpRepository.create({
+      email: dto.email,
+      otp: otpCode,
+      expiresAt,
+      role: user.role,
+      isVerified: false,
+    });
+
+    await this.otpRepository.save(otp);
+
+    return {
+      message: 'OTP sent successfully',
+    };
+  }
+
+  async resetPasswordService(dto: ResetPasswordDto) {
+    const user = await this.userRepository.findByEmail(dto.email);
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const otpRecord = await this.otpRepository.findLatestValidOtp(dto.email);
+
+    if (!otpRecord) {
+      throw new BadRequestException('OTP not found');
+    }
+
+    if (otpRecord.otp !== dto.otp) {
+      throw new BadRequestException('Invalid OTP');
+    }
+
+    if (otpRecord.expiresAt < new Date()) {
+      throw new BadRequestException('OTP has expired');
+    }
+
+    const hashedPassword = await bcrypt.hash(dto.newPassword, 10);
+
+    await this.userRepository.update(user.id, {
+      password: hashedPassword,
+      tokenVersion: user.tokenVersion + 1,
+      hashedRefreshToken: null,
+    });
+
+    await this.otpRepository.update(otpRecord.id, {
+      isVerified: true,
+    });
+
+    return {
+      message: 'Password reset successfully',
     };
   }
 

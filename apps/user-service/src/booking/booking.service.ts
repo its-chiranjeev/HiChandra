@@ -1537,10 +1537,26 @@ export class BookingService {
       throw new ForbiddenException('Invalid user role');
     }
 
+    if (user.role === USER_ROLE.CUSTOMER) {
+      return {
+        success: true,
+        message: 'Review submitted successfully',
+        data: {
+          bookingId: updatedBooking?.id,
+          customerRating: updatedBooking?.customerRating,
+          customerReview: updatedBooking?.customerReview,
+        },
+      };
+    }
+
     return {
       success: true,
       message: 'Review submitted successfully',
-      data: updatedBooking,
+      data: {
+        bookingId: updatedBooking?.id,
+        technicianRating: updatedBooking?.technicianRating,
+        technicianReview: updatedBooking?.technicianReview,
+      },
     };
   }
 

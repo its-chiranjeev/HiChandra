@@ -243,4 +243,19 @@ export class UserController {
   ) {
     return this.userService.updateProfileService(req.user.id, dto, files);
   }
+
+  @Post('favorite-technicians/:technicianId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLE.CUSTOMER)
+  favoriteTechnician(
+    @Req() req,
+    @Param('technicianId', ParseIntPipe)
+    technicianId: number,
+  ) {
+    return this.userService.favoriteTechnician(
+      req.user,
+      technicianId,
+    );
+  }
+
 }

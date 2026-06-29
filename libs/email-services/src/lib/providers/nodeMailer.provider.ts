@@ -22,6 +22,7 @@ export class EmailService {
       maxMessages: 100,
     });
   }
+  
 
   // Fixed: public async + NO export keyword inside class
   public async sendMail(to: string, subject: string, html: string) {

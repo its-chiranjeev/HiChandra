@@ -55,6 +55,9 @@
       "@hichandra/email-services": [
         "libs/email-services/src/index.ts"
       ],
+      "@hichandra/sms-services": [
+        "libs/sms-services/src/index.ts"
+      ],
       "@hichandra/s3": [
         "libs/s3/src"
       ],

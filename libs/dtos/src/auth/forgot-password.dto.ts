@@ -1,13 +1,21 @@
-import { IsEmail, IsNotEmpty, IsString, MinLength } from 'class-validator';
+import { IsEmail, IsPhoneNumber, IsNotEmpty, IsString, MinLength, IsOptional } from 'class-validator';
 
 export class ForgotPasswordDto {
+  @IsOptional()
   @IsEmail()
-  email!: string;
+  email?: string;
+
+  @IsPhoneNumber('IN')
+  phone?: string;
 }
 
 export class ResetPasswordDto {
+  @IsOptional()
   @IsEmail()
-  email!: string;
+  email?: string;
+
+  @IsPhoneNumber('IN')
+  phone?: string;;
 
   @IsString()
   @IsNotEmpty()

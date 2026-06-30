@@ -343,41 +343,59 @@ export class AuthModuleService {
     }
   }
 
-  async getProfileService(userId: number) {
+  async getProfileService(userId: number, page = 1, limit = 10) {
     const user = await this.userRepository.findOne({
       where: { id: userId },
-      relations: ['addresses',
-      'technicianProfile', 
-      'technicianProfile.services',
-      'technicianProfile.brandExpertise',
-      'technicianProfile.locations'],
+      relations: [
+        'addresses',
+        'technicianProfile',
+        'technicianProfile.services',
+        'technicianProfile.services.service',
+        'technicianProfile.services.service.specifications',
+        'technicianProfile.services.service.pricingRule',
+        'technicianProfile.brandExpertise',
+        'technicianProfile.locations',
+      ],
     });
 
     if (!user) {
       throw new NotFoundException('User not found');
     }
+
+    const allServices = user.technicianProfile?.services || [];
+    const startIndex = (page - 1) * limit;
+    const paginatedServices = allServices.slice(startIndex, startIndex + limit);
+
     return {
-      success: true,
-      message: 'Profile fetched successfully',
-      data: {
-        id: user.id,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        email: user.email,
-        username: user.username,
-        phone: user.phone,
-        emergencyContact: user.emergencyContact,
-        profileImage: user.profileImage,
-        role: user.role,
-        status: user.status,
-        createdAt: user.createdAt,
-        lastLoginAt: user.lastLoginAt,
+      id: user.id,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      email: user.email,
+      username: user.username,
+      phone: user.phone,
+      emergencyContact: user.emergencyContact,
+      profileImage: user.profileImage,
+      role: user.role,
+      status: user.status,
+      createdAt: user.createdAt,
+      lastLoginAt: user.lastLoginAt,
 
-        addresses: user.role === USER_ROLE.CUSTOMER ? user.addresses : undefined,
+      addresses:
+        user.role === USER_ROLE.CUSTOMER ? user.addresses : undefined,
 
-        technicianProfile:
-          user.role === USER_ROLE.TECHNICIAN ? user.technicianProfile : undefined,
-      },
+      technicianProfile:
+        user.role === USER_ROLE.TECHNICIAN
+          ? {
+              ...user.technicianProfile,
+              services: paginatedServices,
+              servicesPagination: {
+                total: allServices.length,
+                page,
+                limit,
+                totalPages: Math.ceil(allServices.length / limit),
+              },
+            }
+          : undefined,
     };
   }
 

@@ -161,6 +161,48 @@ export class BookingRepository {
     };
   }
 
+  async findMyReviews(
+    userId: number,
+    role: USER_ROLE,
+    page = 1,
+    limit = 10,
+  ) {
+    const where: any = {
+      status: BOOKING_STATUS.COMPLETED,
+      paymentStatus: BOOKING_PAYMENT_STATUS.PAID,
+    };
+
+    if (role === USER_ROLE.CUSTOMER) {
+      where.customerId = userId;
+      where.technicianRating = Not(IsNull());
+    }
+
+    if (role === USER_ROLE.TECHNICIAN) {
+      where.technicianId = userId;
+      where.customerRating = Not(IsNull());
+    }
+
+    const [reviews, total] = await this.repo.findAndCount({
+      where,
+      relations: {
+        customer: true,
+        technician: true,
+        service: true,
+        address: true,
+      },
+      order: {
+        updatedAt: 'DESC',
+      },
+      skip: (page - 1) * limit,
+      take: limit,
+    });
+
+    return {
+      reviews,
+      total,
+    };
+  }
+
   async findMyBookings(
     userId: number,
     role: USER_ROLE,

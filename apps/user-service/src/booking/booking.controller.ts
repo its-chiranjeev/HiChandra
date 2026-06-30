@@ -181,6 +181,22 @@ export class BookingController {
       return this.bookingService.getPaymentById(id);
     }
 
+  //My-Reviews For Users
+  @Get('my-reviews')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async getMyReviews(
+    @Req() req: any,
+    @Query('page') page: string = '1',
+    @Query('limit') limit: string = '10',
+  ) {
+    return this.bookingService.getMyReviews(
+      req.user,
+      Number(page),
+      Number(limit),
+    );
+  }
+  
   @Get(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(USER_ROLE.CUSTOMER)
@@ -382,6 +398,7 @@ export class BookingController {
     );
   }
 
+  //Customer get Technician all Reviews That Other Customer gave to them 
   @Get('technician/reviews/:technicianId')
   @UseGuards(JwtAuthGuard)
   async getTechnicianReviews(

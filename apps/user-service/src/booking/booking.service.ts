@@ -1769,4 +1769,60 @@ export class BookingService {
       },
     };
   }
+
+  async getMyReviews(user: any, page = 1, limit = 10) {
+    const { reviews, total } =
+      await this.bookingRepository.findMyReviews(
+        user.id,
+        user.role,
+        page,
+        limit,
+      );
+
+    const formattedReviews = reviews.map((booking) => {
+      const isCustomer = user.role === USER_ROLE.CUSTOMER;
+
+      return {
+        bookingId: booking.id,
+        service: booking.service
+          ? {
+              id: booking.service.id,
+              name: booking.service.name,
+            }
+          : null,
+
+        reviewer: isCustomer
+          ? {
+              id: booking.technician?.id,
+              name: `${booking.technician?.firstName} ${booking.technician?.lastName}`,
+              profileImage: booking.technician?.profileImage,
+            }
+          : {
+              id: booking.customer?.id,
+              name: `${booking.customer?.firstName} ${booking.customer?.lastName}`,
+              profileImage: booking.customer?.profileImage,
+            },
+
+        rating: isCustomer
+          ? booking.technicianRating
+          : booking.customerRating,
+
+        review: isCustomer
+          ? booking.technicianReview
+          : booking.customerReview,
+
+        reviewedAt: booking.updatedAt,
+      };
+    });
+
+    return {
+      reviews: formattedReviews,
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
 }

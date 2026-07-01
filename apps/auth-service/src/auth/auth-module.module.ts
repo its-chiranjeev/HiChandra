@@ -5,6 +5,7 @@ import { EntitiesModule } from '@hichandra/entities';
 import { RepositoriesModule } from '@hichandra/repositories';
 import { CommonAuthModule } from '@hichandra/common';
 import { EmailServicesModule } from '@hichandra/email-services';
+import { SmsServicesModule } from '@hichandra/sms-services';
 
 @Module({
   imports: [
@@ -12,6 +13,7 @@ import { EmailServicesModule } from '@hichandra/email-services';
     RepositoriesModule,
     CommonAuthModule,
     EmailServicesModule,
+    SmsServicesModule
   ],
   controllers: [AuthModuleController],
   providers: [AuthModuleService],

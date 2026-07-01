@@ -1,4 +1,4 @@
-import { Transform, Type } from 'class-transformer';
+import { Transform, Type, plainToInstance } from 'class-transformer';
 import {
   IsArray,
   IsBoolean,
@@ -12,6 +12,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 export class TechnicianServiceDto {
+  @Type(() => Number)
   @IsNumber()
   @IsNotEmpty()
   serviceId!: number;
@@ -23,16 +24,24 @@ export class TechnicianBrandExpertiseDto {
   brandName!: string;
 }
 
+const toBoolean = ({ value }: { value: any }) => {
+  if (value === true || value === 'true') return true;
+  if (value === false || value === 'false') return false;
+  return value;
+};
+
 export class TechnicianProfileDto {
   @IsOptional()
   @IsString()
   address?: string;
 
   @IsOptional()
+  @Type(() => Number)
   @IsNumber()
   latitude?: number;
 
   @IsOptional()
+  @Type(() => Number)
   @IsNumber()
   longitude?: number;
 
@@ -49,6 +58,7 @@ export class TechnicianProfileDto {
   pincode?: string;
 
   @IsOptional()
+  @Type(() => Number)
   @IsNumber()
   yearsOfExperience?: number;
 
@@ -58,6 +68,7 @@ export class TechnicianProfileDto {
   languages?: string[];
 
   @IsOptional()
+  @Type(() => Number)
   @IsNumber()
   serviceRadiusKm?: number;
 
@@ -78,18 +89,22 @@ export class TechnicianProfileDto {
   bankName?: string;
 
   @IsOptional()
+  @Transform(toBoolean)
   @IsBoolean()
   hasLadder?: boolean;
 
   @IsOptional()
+  @Transform(toBoolean)
   @IsBoolean()
   hasACGauges?: boolean;
 
   @IsOptional()
+  @Transform(toBoolean)
   @IsBoolean()
   hasSafetyEquipment?: boolean;
 
   @IsOptional()
+  @Transform(toBoolean)
   @IsBoolean()
   hasVehicle?: boolean;
 
@@ -107,10 +122,12 @@ export class TechnicianProfileDto {
 }
 
 export class CustomerAddressDto {
+  @Type(() => Number)
   @IsNumber()
   @IsNotEmpty()
   latitude!: number;
 
+  @Type(() => Number)
   @IsNumber()
   @IsNotEmpty()
   longitude!: number;
@@ -136,25 +153,24 @@ export class CustomerAddressDto {
   label?: string;
 
   @IsOptional()
+  @Transform(toBoolean)
   @IsBoolean()
   isDefault?: boolean;
 }
 
 export class RegisterDto {
   @IsString()
-  @IsNotEmpty()
+  @IsOptional()
   @Transform(({ value }) => value?.trim())
-  email!: string; // email
+  email?: string; // email
 
   @IsString()
   @IsNotEmpty()
   @Transform(({ value }) => value?.trim())
   username!: string;
 
-  @IsOptional()
   @IsString()
-  @Transform(({ value }) => value?.trim())
-  @MaxLength(15)
+  @IsNotEmpty()
   phone?: string;
 
   @IsString()
@@ -172,33 +188,54 @@ export class RegisterDto {
   @Transform(({ value }) => value?.trim())
   password!: string;
 
-  @IsOptional()
-  @Transform(({ value }) => {
-    if (typeof value === 'string') {
-      try {
-        return JSON.parse(value);
-      } catch {
-        return value;
-      }
-    }
-    return value;
-  })
+  // @IsOptional()
+  // @Transform(({ value }) => {
+  //   if (typeof value === 'string') {
+  //     try {
+  //       return JSON.parse(value);
+  //     } catch {
+  //       return value;
+  //     }
+  //   }
+  //   return value;
+  // })
   // @ValidateNested()
-  @Type(() => TechnicianProfileDto)
-  technicianProfile?: TechnicianProfileDto;
+  // @Type(() => TechnicianProfileDto)
+  // technicianProfile?: TechnicianProfileDto;
 
   @IsOptional()
   @Transform(({ value }) => {
     if (typeof value === 'string') {
-      try {
-        return JSON.parse(value);
-      } catch {
-        return value;
-      }
+      return plainToInstance(TechnicianProfileDto, JSON.parse(value));
     }
-    return value;
+    return plainToInstance(TechnicianProfileDto, value);
   })
-  @Type(() => CustomerAddressDto)
+  @ValidateNested()
+  technicianProfile?: TechnicianProfileDto;
+
+  // @IsOptional()
+  // @Transform(({ value }) => {
+  //   if (typeof value === 'string') {
+  //     try {
+  //       return JSON.parse(value);
+  //     } catch {
+  //       return value;
+  //     }
+  //   }
+  //   return value;
+  // })
+  // @ValidateNested()
+  // @Type(() => CustomerAddressDto)
+  // customerAddress?: CustomerAddressDto;
+
+  @IsOptional() 
+  @Transform(({ value }) => {
+    if (typeof value === 'string') {
+      return plainToInstance(CustomerAddressDto, JSON.parse(value));
+    }
+    return plainToInstance(CustomerAddressDto, value);
+  })
+  @ValidateNested()
   customerAddress?: CustomerAddressDto;
 }
 

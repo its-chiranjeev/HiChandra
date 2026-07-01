@@ -56,14 +56,23 @@ async function bootstrap() {
     new ValidationPipe({
       whitelist: true,
       transform: true,
-      forbidNonWhitelisted: true,
+       forbidNonWhitelisted: true,
       transformOptions: {
         enableImplicitConversion: true,
       },
+      // exceptionFactory: (errors) => {
+      //   const errorMessages = errors.flatMap((err) =>
+      //     Object.values(err.constraints || {}),
+      //   );
+
+      //   return new UnprocessableEntityException({
+      //     success: false,
+      //     message: 'Validation failed',
+      //     error: errorMessages,
+      //   });
+      // },
       exceptionFactory: (errors) => {
-        const errorMessages = errors.flatMap((err) =>
-          Object.values(err.constraints || {}),
-        );
+        const errorMessages = formatValidationErrors(errors);
 
         return new UnprocessableEntityException({
           success: false,
@@ -80,6 +89,22 @@ async function bootstrap() {
   Logger.log(
     `🚀 User Management Server running on http://localhost:${port}/api`,
   );
+}
+
+function formatValidationErrors(errors: any[], parent = ''): string[] {
+  return errors.flatMap((err) => {
+    const property = parent ? `${parent}.${err.property}` : err.property;
+
+    const currentErrors = err.constraints
+      ? Object.values(err.constraints).map((msg) => `${property}: ${msg}`)
+      : [];
+
+    const childErrors = err.children?.length
+      ? formatValidationErrors(err.children, property)
+      : [];
+
+    return [...currentErrors, ...childErrors];
+  });
 }
 
 bootstrap();

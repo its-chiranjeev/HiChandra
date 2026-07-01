@@ -317,9 +317,16 @@ export class UserService {
   }
 
   async adminRegisterService(dto: RegisterDto) {
-    const existingUser = await this.userRepository.findByEmail(dto.email);
-    if (existingUser) {
-      throw new ConflictException('Email already in use');
+    // const existingUser = await this.userRepository.findByEmail(dto.email);
+    // if (existingUser) {
+    //   throw new ConflictException('Email already in use');
+    // }
+    const existingUserByPhone = await this.userRepository.findOne({
+      where: { phone: dto.phone },
+    });
+
+    if (existingUserByPhone) {
+      throw new ConflictException('Phone number already in use');
     }
 
     if (dto.username) {
@@ -372,8 +379,11 @@ export class UserService {
       selfieUrl?: Express.Multer.File[];
     },
   ) {
-    if (!dto.email) {
-      throw new BadRequestException('Email is required');
+    // if (!dto.email) {
+    //   throw new BadRequestException('Email is required');
+    // }
+    if (!dto.phone) {
+      throw new BadRequestException('Phone number is required');
     }
 
     return this.dataSource.transaction(async (manager) => {
@@ -389,11 +399,17 @@ export class UserService {
       );
       const customerAddressRepository = manager.getRepository(CustomerAddress);
 
-      const existingUser = await userRepository.findOne({
+      const existingUserByEmail = await userRepository.findOne({
         where: { email: dto.email },
       });
-      if (existingUser) {
+      if (existingUserByEmail) {
         throw new ConflictException('Email already in use');
+      }
+      const existingUserByPhone = await userRepository.findOne({
+        where: { phone: dto.phone },
+      });
+      if (existingUserByPhone) {
+        throw new ConflictException('Phone number already in use');
       }
 
       if (dto.username) {
@@ -405,20 +421,16 @@ export class UserService {
         }
       }
 
-      const existingUserByPhone = await userRepository.findOne({
-        where: { phone: dto.phone },
-      });
-      if (existingUserByPhone) {
-        throw new ConflictException('Phone number already in use');
-      }
-
+      // const otpRecord = await otpRepository.findOne({
+      //   where: { email: dto.email, phone: dto.phone },
+      // });
       const otpRecord = await otpRepository.findOne({
-        where: { email: dto.email, phone: dto.phone },
+        where: { phone: dto.phone },
       });
 
       if (!otpRecord) {
         throw new BadRequestException(
-          'OTP record not found for this email and phone',
+          'OTP record not found for this phone number',
         );
       }
 

@@ -10,13 +10,14 @@ import {
 import { USER_ROLE } from '@hichandra/entities';
 
 export class VerifyOtpDto {
-  @IsEmail()
-  @IsNotEmpty()
-  @Transform(({ value }) => value?.trim().toLowerCase())
-  email!: string;
 
   @IsOptional()
+  @IsEmail()  
+  @Transform(({ value }) => value?.trim().toLowerCase())
+  email?: string;
+
   @IsString()
+  @IsNotEmpty()
   @Transform(({ value }) => value?.trim())
   @MaxLength(15)
   phone?: string;

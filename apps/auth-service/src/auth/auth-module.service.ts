@@ -55,7 +55,7 @@ export class AuthModuleService {
       tokenVersion: user.tokenVersion,
     };
 
-    const accessToken = this.signJwt(payload, accessSecret, 2 * 24 * 60 * 60);
+    const accessToken = this.signJwt(payload, accessSecret, 15 * 60);
     const refreshToken = this.signJwt(payload, refreshSecret, 7 * 24 * 60 * 60);
     const hashedRefreshToken = await bcrypt.hash(refreshToken, 10);
 

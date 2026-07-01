@@ -6,7 +6,6 @@ import {
   IsString,
   MinLength,
   ValidateIf,
-  IsPhoneNumber,
 } from 'class-validator';
 
 export class LoginDto {
@@ -22,7 +21,6 @@ export class LoginDto {
   email?: string;
 
   @ValidateIf((o) => !o.email)
-  @IsPhoneNumber('IN')
   @IsNotEmpty()
   phone?: string;
 

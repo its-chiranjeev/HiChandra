@@ -86,4 +86,18 @@ export class ComplaintRepository {
       total,
     };
   }
+
+  async updateComplaintStatus(
+    complaint: Complaint,
+    status: COMPLAINT_STATUS,
+  ): Promise<Complaint> {
+    complaint.status = status;
+    return this.repo.save(complaint);
+  }
+
+  async deleteComplaintById(
+    complaintId: number,
+  ) {
+    return this.repo.delete(complaintId);
+  }
 }

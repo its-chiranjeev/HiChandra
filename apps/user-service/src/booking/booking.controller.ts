@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseIntPipe, HttpCode, Patch, HttpStatus, Query, Post, Req, Headers, UseGuards, ValidationPipe } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseIntPipe, HttpCode, Patch, HttpStatus, Query, Post, Req, Headers, UseGuards, ValidationPipe, Delete } from '@nestjs/common';
 import { BookingService } from './booking.service';
 import { JwtAuthGuard, Roles, RolesGuard } from '@hichandra/common';
 import { StartBookingDto, CreateBookingDto, AssignBookingDto, CancelBookingDto, CreateComplaintDto, UpdateComplaintDto, UpdateBookingStatusDto, CreateTechnicianPayoutDto , RescheduleBookingDto , RepeatBookingDto , TechnicianCancelBookingDto, CreateBookingReviewDto } from '@hichandra/dtos';
@@ -377,6 +377,26 @@ export class BookingController {
       complaintId,
       dto,
     );
+  }
+
+  //Update Complaint Status By Admin   
+  @Patch('admin/complaints/resolve/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLE.ADMIN)
+  async resolveComplaint(
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.bookingService.resolveComplaintService(id);
+  }
+
+  // Delete Complaint by admin 
+  @Delete('admin/complaints/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLE.ADMIN)
+  async deleteComplaint(
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.bookingService.deleteComplaintService(id);
   }
 
   @Post('review')

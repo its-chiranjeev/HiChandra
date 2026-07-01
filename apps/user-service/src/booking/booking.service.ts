@@ -708,6 +708,15 @@ export class BookingService {
       );
     }
 
+    const createdAtTime = new Date(complaint.createdAt).getTime();
+    const currentTime = new Date().getTime();
+
+    if (currentTime - createdAtTime > 10 * 60 * 1000) {
+      throw new BadRequestException(
+        'Complaint can only be edited within 10 minutes of creation',
+      );
+    }
+
     if (
       complaint.status !==
       COMPLAINT_STATUS.PENDING
@@ -1823,6 +1832,47 @@ export class BookingService {
         limit,
         totalPages: Math.ceil(total / limit),
       },
+    };
+  }
+
+  async resolveComplaintService(complaintId: number) {
+    const complaint =
+      await this.complaintRepository.findComplaintById(complaintId);
+
+    if (!complaint) {
+      throw new NotFoundException('Complaint not found');
+    }
+
+    if (complaint.status === COMPLAINT_STATUS.RESOLVED) {
+      throw new BadRequestException('Complaint is already resolved');
+    }
+
+    const updatedComplaint =
+      await this.complaintRepository.updateComplaintStatus(
+        complaint,
+        COMPLAINT_STATUS.RESOLVED,
+      );
+
+    return {
+      success: true,
+      message: 'Complaint resolved successfully',
+      data: updatedComplaint,
+    };
+  }
+
+  async deleteComplaintService(complaintId: number) {
+    const complaint =
+      await this.complaintRepository.findComplaintById(complaintId);
+
+    if (!complaint) {
+      throw new NotFoundException('Complaint not found');
+    }
+
+    await this.complaintRepository.deleteComplaintById(complaintId);
+
+    return {
+      success: true,
+      message: 'Complaint deleted successfully',
     };
   }
 }

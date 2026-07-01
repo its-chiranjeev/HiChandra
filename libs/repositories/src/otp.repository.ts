@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, LessThan  } from 'typeorm';
 import { Otp } from '@hichandra/entities';
 import { BaseRepository } from './baseDb.repository';
 
@@ -32,5 +32,13 @@ export class OtpRepository extends BaseRepository<Otp> {
       where: query,
       order: { createdAt: 'DESC' },
     });
+  }
+
+    async deleteExpiredOtps(): Promise<number> {
+    const result = await this.repo.delete({
+      expiresAt: LessThan(new Date()),
+    });
+
+    return result.affected ?? 0;
   }
 }

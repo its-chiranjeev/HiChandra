@@ -3,32 +3,37 @@ import {
   BadRequestException,
   InternalServerErrorException,
   Injectable,
+  Logger,
   NotFoundException,
   UnauthorizedException,
   ForbiddenException,
 } from '@nestjs/common';
 import { UserRepository, OtpRepository } from '@hichandra/repositories';
 import * as bcrypt from 'bcryptjs';
-import { User, USER_STATUS, USER_ROLE } from '@hichandra/entities';
+import { User, USER_STATUS, USER_ROLE} from '@hichandra/entities';
 import { ConfigService } from '@nestjs/config';
 import { createHmac } from 'crypto';
+import { Cron } from '@nestjs/schedule';
 import {
   LoginDto,
   RegisterDto,
   RegisterUserDto,
   VerifyOtpDto,
 } from '@hichandra/dtos';
-import { DataSource } from 'typeorm';
+import { DataSource, Repository, LessThan  } from 'typeorm';
+import { InjectRepository } from '@nestjs/typeorm';
 import { EmailService } from '@hichandra/email-services';
 
 @Injectable()
 export class AuthModuleService {
+  private readonly logger = new Logger(AuthModuleService.name);
+
   constructor(
     private readonly userRepository: UserRepository,
     private readonly otpRepository: OtpRepository,
     private readonly dataSource: DataSource,
     private readonly configService: ConfigService,
-    private readonly emailService: EmailService,
+    private readonly emailService: EmailService, 
   ) {}
 
   async issueAuthTokens(user: User) {
@@ -206,7 +211,14 @@ export class AuthModuleService {
     };
   }
 
+@Cron('0 */6 * * *')
+async deleteExpiredOtpsCron() {
+  this.logger.log('Starting OTP cleanup...');
 
+  const deletedCount = await this.otpRepository.deleteExpiredOtps();
+
+  this.logger.log(`Deleted ${deletedCount} expired OTP(s).`);
+}
 
   // async registerService(dto: RegisterDto) {
   //   const existingUser = await this.userRepository.findByEmail(dto.email);

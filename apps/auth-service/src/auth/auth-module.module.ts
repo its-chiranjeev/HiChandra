@@ -5,13 +5,14 @@ import { EntitiesModule } from '@hichandra/entities';
 import { RepositoriesModule } from '@hichandra/repositories';
 import { CommonAuthModule } from '@hichandra/common';
 import { EmailServicesModule } from '@hichandra/email-services';
-
+import { ScheduleModule } from '@nestjs/schedule';
 @Module({
   imports: [
     EntitiesModule,
     RepositoriesModule,
     CommonAuthModule,
     EmailServicesModule,
+    ScheduleModule.forRoot(),
   ],
   controllers: [AuthModuleController],
   providers: [AuthModuleService],

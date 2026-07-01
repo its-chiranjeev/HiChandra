@@ -317,9 +317,16 @@ export class UserService {
   }
 
   async adminRegisterService(dto: RegisterDto) {
-    const existingUser = await this.userRepository.findByEmail(dto.email);
-    if (existingUser) {
-      throw new ConflictException('Email already in use');
+    // const existingUser = await this.userRepository.findByEmail(dto.email);
+    // if (existingUser) {
+    //   throw new ConflictException('Email already in use');
+    // }
+    const existingUserByPhone = await this.userRepository.findOne({
+      where: { phone: dto.phone },
+    });
+
+    if (existingUserByPhone) {
+      throw new ConflictException('Phone number already in use');
     }
 
     if (dto.username) {
@@ -392,13 +399,16 @@ export class UserService {
       );
       const customerAddressRepository = manager.getRepository(CustomerAddress);
 
-      // const existingUser = await userRepository.findOne({
-      //   where: { email: dto.email },
-      // });
-      const existingUser = await userRepository.findOne({
+      const existingUserByEmail = await userRepository.findOne({
+        where: { email: dto.email },
+      });
+      if (existingUserByEmail) {
+        throw new ConflictException('Email already in use');
+      }
+      const existingUserByPhone = await userRepository.findOne({
         where: { phone: dto.phone },
       });
-      if (existingUser) {
+      if (existingUserByPhone) {
         throw new ConflictException('Phone number already in use');
       }
 
@@ -410,13 +420,6 @@ export class UserService {
           throw new ConflictException('Username already in use');
         }
       }
-//need to remove
-      // const existingUserByPhone = await userRepository.findOne({
-      //   where: { phone: dto.phone },
-      // });
-      // if (existingUserByPhone) {
-      //   throw new ConflictException('Phone number already in use');
-      // }//
 
       // const otpRecord = await otpRepository.findOne({
       //   where: { email: dto.email, phone: dto.phone },

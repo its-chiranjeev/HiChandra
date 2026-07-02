@@ -379,21 +379,32 @@ export class BookingService {
   }
 
   async getAllBookings(
+    user: any,
     page: number,
     limit: number,
     status?: BOOKING_STATUS,
   ) {
     const { bookings, total } =
       await this.bookingRepository.findAllBookings(
+        user,
         page,
         limit,
         status,
       );
 
+    const formattedBookings = bookings.map((booking: Booking) =>
+      this.formatBookingByRole(booking, user.role),
+    );
+
     return {
       success: true,
-      message: 'Bookings fetched successfully',
-      data: bookings,
+      message:
+        user.role === USER_ROLE.ADMIN
+          ? 'Bookings fetched successfully'
+          : user.role === USER_ROLE.CUSTOMER
+            ? 'My bookings fetched successfully'
+            : 'Assigned bookings fetched successfully',
+      data: formattedBookings,
       pagination: {
         total,
         page,
@@ -401,6 +412,94 @@ export class BookingService {
         totalPages: Math.ceil(total / limit),
       },
     };
+  }
+
+  private formatBookingByRole(
+    booking: Booking,
+    role: USER_ROLE,
+  ) {
+    const commonData = {
+      bookingId: booking.id,
+      status: booking.status,
+      paymentStatus: booking.paymentStatus,
+      service: booking.service
+        ? {
+            id: booking.service.id,
+            name: booking.service.name,
+          }
+        : null,
+      address: booking.address
+        ? {
+            fullAddress: booking.address.fullAddress,
+            city: booking.address.city,
+            state: booking.address.state,
+            pincode: booking.address.pincode,
+          }
+        : null,
+      scheduledAt: booking.scheduledAt,
+      totalAmount: booking.totalAmount,
+      isEmergency: booking.isEmergency,
+      createdAt: booking.createdAt,
+    };
+
+    if (role === USER_ROLE.ADMIN) {
+      return {
+        ...commonData,
+        customer: booking.customer
+          ? {
+              id: booking.customer.id,
+              name: `${booking.customer.firstName} ${booking.customer.lastName}`,
+              phone: booking.customer.phone,
+            }
+          : null,
+        technician: booking.technician
+          ? {
+              id: booking.technician.id,
+              name: `${booking.technician.firstName} ${booking.technician.lastName}`,
+              phone: booking.technician.phone,
+            }
+          : null,
+      };
+    }
+
+    if (role === USER_ROLE.CUSTOMER) {
+      return {
+        ...commonData,
+        technician: booking.technician
+          ? {
+              id: booking.technician.id,
+              name: `${booking.technician.firstName} ${booking.technician.lastName}`,
+              phone: booking.technician.phone,
+              rating: booking.technician.overallRating,
+            }
+          : null,
+        myRating: booking.customerRating,
+        myReview: booking.customerReview,
+        technicianRating: booking.technicianRating,
+        technicianReview: booking.technicianReview,
+      };
+    }
+
+    if (role === USER_ROLE.TECHNICIAN) {
+      return {
+        ...commonData,
+        customer: booking.customer
+          ? {
+              id: booking.customer.id,
+              name: `${booking.customer.firstName} ${booking.customer.lastName}`,
+              phone: booking.customer.phone,
+            }
+          : null,
+        technicianEarning:
+          booking.priceBreakdown?.technicianEarning ?? null,
+        customerRating: booking.customerRating,
+        customerReview: booking.customerReview,
+        myRating: booking.technicianRating,
+        myReview: booking.technicianReview,
+      };
+    }
+
+    return commonData;
   }
   //complaint 
   async getAllComplaints(
@@ -1781,18 +1880,67 @@ export class BookingService {
 
   async getMyReviews(user: any, page = 1, limit = 10) {
     const { reviews, total } =
-      await this.bookingRepository.findMyReviews(
-        user.id,
-        user.role,
-        page,
-        limit,
-      );
+      user.role === USER_ROLE.ADMIN
+        ? await this.bookingRepository.findAllReviews(page, limit)
+        : await this.bookingRepository.findMyReviews(
+            user.id,
+            user.role,
+            page,
+            limit,
+          );
 
-    const formattedReviews = reviews.map((booking) => {
+      const formattedReviews = reviews.map((booking) => {
       const isCustomer = user.role === USER_ROLE.CUSTOMER;
+      const isAdmin = user.role === USER_ROLE.ADMIN;
+
+      if (isAdmin) {
+        return {
+          bookingId: booking.id,
+
+          service: booking.service
+            ? {
+                id: booking.service.id,
+                name: booking.service.name,
+              }
+            : null,
+
+          customerReview: {
+            reviewFor: {
+              id: booking.customer?.id,
+              name: `${booking.customer?.firstName} ${booking.customer?.lastName}`,
+              profileImage: booking.customer?.profileImage,
+            },
+            reviewer: {
+              id: booking.technician?.id,
+              name: `${booking.technician?.firstName} ${booking.technician?.lastName}`,
+              profileImage: booking.technician?.profileImage,
+            },
+            rating: booking.customerRating,
+            review: booking.customerReview,
+          },
+
+          technicianReview: {
+            reviewFor: {
+              id: booking.technician?.id,
+              name: `${booking.technician?.firstName} ${booking.technician?.lastName}`,
+              profileImage: booking.technician?.profileImage,
+            },
+            reviewer: {
+              id: booking.customer?.id,
+              name: `${booking.customer?.firstName} ${booking.customer?.lastName}`,
+              profileImage: booking.customer?.profileImage,
+            },
+            rating: booking.technicianRating,
+            review: booking.technicianReview,
+          },
+
+          reviewedAt: booking.updatedAt,
+        };
+      }
 
       return {
         bookingId: booking.id,
+
         service: booking.service
           ? {
               id: booking.service.id,

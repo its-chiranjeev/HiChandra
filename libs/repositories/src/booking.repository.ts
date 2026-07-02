@@ -11,6 +11,7 @@ export class BookingRepository {
   ) { }
 
   async findAllBookings(
+    user: any,
     page = 1,
     limit = 10,
     status?: BOOKING_STATUS,
@@ -21,21 +22,32 @@ export class BookingRepository {
       where.status = status;
     }
 
-    const [bookings, total] =
-      await this.repo.findAndCount({
-        where,
-        relations: {
-          customer: true,
-          technician: true,
-          service: true,
-          address: true,
-        },
-        skip: (page - 1) * limit,
-        take: limit,
-        order: {
-          createdAt: 'DESC',
-        },
-      });
+    if (user.role === USER_ROLE.CUSTOMER) {
+      where.customer = {
+        id: user.id,
+      };
+    }
+
+    if (user.role === USER_ROLE.TECHNICIAN) {
+      where.technician = {
+        id: user.id,
+      };
+    }
+
+    const [bookings, total] = await this.repo.findAndCount({
+      where,
+      relations: {
+        customer: true,
+        technician: true,
+        service: true,
+        address: true,
+      },
+      skip: (page - 1) * limit,
+      take: limit,
+      order: {
+        createdAt: 'DESC',
+      },
+    });
 
     return {
       bookings,
@@ -190,6 +202,26 @@ export class BookingRepository {
         service: true,
         address: true,
       },
+      order: {
+        updatedAt: 'DESC',
+      },
+      skip: (page - 1) * limit,
+      take: limit,
+    });
+
+    return {
+      reviews,
+      total,
+    };
+  }
+
+  async findAllReviews(page = 1, limit = 10) {
+    const [reviews, total] = await this.repo.findAndCount({
+      where: [
+        { customerRating: Not(IsNull()) },
+        { technicianRating: Not(IsNull()) },
+      ],
+      relations: ['customer', 'technician', 'service'],
       order: {
         updatedAt: 'DESC',
       },

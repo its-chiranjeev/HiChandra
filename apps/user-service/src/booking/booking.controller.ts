@@ -77,23 +77,25 @@ export class BookingController {
     );
   }
 
+  //Get All booking For Admin And My Booking For User 
   @Get('all')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(USER_ROLE.ADMIN)
+  @Roles(USER_ROLE.ADMIN, USER_ROLE.CUSTOMER, USER_ROLE.TECHNICIAN)
   @HttpCode(HttpStatus.OK)
   async getAllBookings(
     @Req() req: any,
-    @Query('page') page = 1,
-    @Query('limit') limit = 10,
+    @Query('page') page = '1',
+    @Query('limit') limit = '10',
     @Query('status') status?: BOOKING_STATUS,
   ) {
-    console.log(req.user);
     return this.bookingService.getAllBookings(
+      req.user,
       Number(page),
       Number(limit),
       status,
     );
   }
+  
   //complaint api
   @Get('admin/complaints')
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -111,22 +113,22 @@ export class BookingController {
     );
   }
   
-  @Get('my-bookings')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(USER_ROLE.CUSTOMER, USER_ROLE.TECHNICIAN)
-  async getMyBookings(
-    @Req() req: any,
-    @Query('page') page = 1,
-    @Query('limit') limit = 10,
-    @Query('status') status?: BOOKING_STATUS,
-  ) {
-    return this.bookingService.getMyBookings(
-      req.user,
-      Number(page),
-      Number(limit),
-      status,
-    );
-  }
+  // @Get('my-bookings')
+  // @UseGuards(JwtAuthGuard, RolesGuard)
+  // @Roles(USER_ROLE.CUSTOMER, USER_ROLE.TECHNICIAN)
+  // async getMyBookings(
+  //   @Req() req: any,
+  //   @Query('page') page = 1,
+  //   @Query('limit') limit = 10,
+  //   @Query('status') status?: BOOKING_STATUS,
+  // ) {
+  //   return this.bookingService.getMyBookings(
+  //     req.user,
+  //     Number(page),
+  //     Number(limit),
+  //     status,
+  //   );
+  // }
 
   // Reschedule Booking 
   @Patch('reschedule/:id')

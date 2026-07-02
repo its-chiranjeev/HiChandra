@@ -1,6 +1,11 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, StreamableFile, NotFoundException , ForbiddenException} from '@nestjs/common';
 import Razorpay from 'razorpay';
 import * as crypto from 'crypto';
+import puppeteer from 'puppeteer';
+import { paymentInvoiceTemplate } from './templates/invoice.template';
+import { User } from '@hichandra/entities';
+import { BookingRepository, PaymentRepository } from '@hichandra/repositories';
+
 
 interface CustomerData {
   name: string;
@@ -27,14 +32,17 @@ interface PaymentLinkPayload {
 export class PaymentService {
   private razorpay: Razorpay;
 
-  constructor() {
+  constructor(
+      private readonly bookingRepository: BookingRepository,
+      private readonly paymentRepository: PaymentRepository,
+  ) {
     this.razorpay = new Razorpay({
       key_id: process.env.RAZORPAY_KEY_ID || '',
       key_secret: process.env.RAZORPAY_KEY_SECRET || '',
     });
 
     console.log('KEY ID:', process.env.RAZORPAY_KEY_ID);
-console.log('KEY SECRET:', process.env.RAZORPAY_KEY_SECRET);
+    console.log('KEY SECRET:', process.env.RAZORPAY_KEY_SECRET);
   }
 
   async createPaymentLink(
@@ -106,5 +114,108 @@ console.log('KEY SECRET:', process.env.RAZORPAY_KEY_SECRET);
       .update(rawBody)
       .digest('hex');
     return expectedSignature === signature;
+  }
+
+  async generateInvoicePdf(
+    user: User,
+    bookingId: number,
+  ): Promise<StreamableFile> {
+    const booking =
+      await this.bookingRepository.findBookingById(bookingId);
+
+    if (!booking) {
+      throw new NotFoundException('Booking not found');
+    }
+
+    if (booking.customerId !== user.id) {
+      throw new ForbiddenException(
+        'You are not allowed to download this invoice',
+      );
+    }
+
+    const payment =
+      await this.paymentRepository.findLatestByBookingId(booking.id);
+
+    if (!payment) {
+      throw new NotFoundException('Payment record not found');
+    }
+
+    let razorpayPayment: Record<string, unknown> | null = null;
+
+    if (payment.paymentId) {
+      razorpayPayment =
+        (await this.razorpay.payments.fetch(payment.paymentId)) as unknown as Record<
+          string,
+          unknown
+        >;
+    } else if (payment.orderId) {
+      const payments =
+        await this.razorpay.orders.fetchPayments(payment.orderId);
+
+      razorpayPayment =
+        (payments.items?.[0] as unknown as Record<string, unknown>) ?? null;
+    }
+
+    if (!razorpayPayment) {
+      throw new NotFoundException('Razorpay payment not found');
+    }
+
+    const razorpayStatus = String(razorpayPayment.status ?? 'pending');
+
+    const statusClass =
+      razorpayStatus === 'captured'
+        ? 'success'
+        : razorpayStatus === 'failed'
+          ? 'failed'
+          : 'pending';
+
+    const razorpayAmount = Number(razorpayPayment.amount ?? 0) / 100;
+
+    const html = paymentInvoiceTemplate({
+      invoiceId: `INV-${booking.id}`,
+      bookingId: booking.id,
+      customerName: `${booking.customer.firstName} ${booking.customer.lastName}`,
+      customerEmail: booking.customer.email ?? '-',
+      customerPhone: booking.customer.phone ?? '-',
+      serviceName: booking.service.name,
+      bookingStatus: booking.status,
+      paymentId: String(razorpayPayment.id ?? payment.paymentId ?? '-'),
+      orderId: String(razorpayPayment.order_id ?? payment.orderId ?? '-'),
+      paymentMethod: String(razorpayPayment.method ?? '-'),
+      paymentStatus: razorpayStatus,
+      statusClass,
+      currency: String(razorpayPayment.currency ?? payment.currency ?? 'INR'),
+      amount: razorpayAmount.toFixed(2),
+      date: new Date().toLocaleString(),
+      errorMessage: String(
+        razorpayPayment.error_description ??
+          payment.errorMessage ??
+          '-',
+      ),
+    });
+
+    const browser = await puppeteer.launch({
+      headless: true,
+    });
+
+    try {
+      const page = await browser.newPage();
+
+      await page.setContent(html, {
+        waitUntil: 'load',
+      });
+
+      const pdfBuffer = await page.pdf({
+        format: 'A4',
+        printBackground: true,
+      });
+
+      return new StreamableFile(pdfBuffer, {
+        type: 'application/pdf',
+        disposition: `attachment; filename=invoice-${booking.id}.pdf`,
+      });
+    } finally {
+      await browser.close();
+    }
   }
 }

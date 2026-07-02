@@ -1,12 +1,21 @@
-import { Body, Controller, Get, Param, ParseIntPipe, HttpCode, Patch, HttpStatus, Query, Post, Req, Headers, UseGuards, ValidationPipe, Delete } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseIntPipe, HttpCode, Patch, HttpStatus, Query, Post, Req, Headers, UseGuards, ValidationPipe, Delete, StreamableFile} from '@nestjs/common';
 import { BookingService } from './booking.service';
 import { JwtAuthGuard, Roles, RolesGuard } from '@hichandra/common';
 import { StartBookingDto, CreateBookingDto, AssignBookingDto, CancelBookingDto, CreateComplaintDto, UpdateComplaintDto, UpdateBookingStatusDto, CreateTechnicianPayoutDto , RescheduleBookingDto , RepeatBookingDto , TechnicianCancelBookingDto, CreateBookingReviewDto } from '@hichandra/dtos';
-import { USER_ROLE, BOOKING_STATUS, COMPLAINT_STATUS, PAYMENT_STATUS } from '@hichandra/entities';
+import { USER_ROLE, BOOKING_STATUS, COMPLAINT_STATUS, PAYMENT_STATUS, User} from '@hichandra/entities';
+import type { Request } from 'express';
+import { PaymentService } from '../libs/payment/payment.service';
+
+interface AuthenticatedRequest extends Request {
+  user: User;
+}
 
 @Controller('bookings')
 export class BookingController {
-  constructor(private readonly bookingService: BookingService) { }
+  constructor( 
+  private readonly bookingService: BookingService,
+  private readonly paymentService: PaymentService,
+  ) { }
 
   @Post()
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -74,6 +83,19 @@ export class BookingController {
     return this.bookingService.createTechnicianPayout(
       req.user.id,
       dto,
+    );
+  }
+
+  @Get(':bookingId/invoice')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLE.CUSTOMER)
+  async downloadInvoice(
+    @Req() req: AuthenticatedRequest,
+    @Param('bookingId', ParseIntPipe) bookingId: number,
+  ): Promise<StreamableFile> {
+    return this.paymentService.generateInvoicePdf(
+      req.user,
+      bookingId,
     );
   }
 

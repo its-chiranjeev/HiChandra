@@ -85,4 +85,15 @@ export class PaymentRepository {
       },
     });
   }
+
+  async findLatestByBookingId(
+    bookingId: number,
+  ): Promise<Payment | null> {
+    return this.repo.findOne({
+      where: { bookingId },
+      order: {
+        createdAt: 'DESC',
+      },
+    });
+  }
 }

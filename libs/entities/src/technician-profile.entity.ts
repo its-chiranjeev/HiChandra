@@ -111,6 +111,12 @@ export class TechnicianProfile {
   @Column({ type: 'varchar', length: 100, nullable: true })
   bankName?: string;
 
+  @Column({ nullable: true, unique: true })
+  razorpayContactId?: string;
+
+  @Column({ nullable: true, unique: true })
+  razorpayFundAccountId?: string;
+
   // Timestamps
   @CreateDateColumn()
   createdAt!: Date;

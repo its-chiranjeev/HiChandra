@@ -9,6 +9,8 @@ import { AuthModuleModule } from 'apps/auth-service/src/auth/auth-module.module'
 import { S3Module } from '@hichandra/s3';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Service, PricingRule } from '@hichandra/entities';
+import { PaymentModule } from '@hichandra/payment';
+
 @Module({
 imports: [
   TypeOrmModule.forFeature([
@@ -20,6 +22,7 @@ imports: [
   CommonAuthModule,
   AuthModuleModule,
   S3Module,
+  PaymentModule,
 ],
   controllers: [UserController],
   providers: [UserService],

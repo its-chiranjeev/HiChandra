@@ -39,6 +39,16 @@ export class TechnicianPayoutRepository {
     });
   }
 
+  async findByRazorpayPayoutId(
+    razorpayPayoutId: string,
+  ): Promise<TechnicianPayout | null> {
+    return this.repo.findOne({
+      where: {
+        razorpayPayoutId,
+      },
+    });
+  }
+
   async updatePayout(
     payout: TechnicianPayout,
   ) {

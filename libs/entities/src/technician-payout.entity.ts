@@ -13,6 +13,14 @@ import { Service } from './service.entity';
 import { Payment } from './payment.entity';
 import { PAYMENT_STATUS } from './payment.entity';
 
+export enum TECHNICIAN_PAYOUT_STATUS {
+  PENDING = 'PENDING',
+  PROCESSING = 'PROCESSING',
+  SUCCESS = 'SUCCESS',
+  FAILED = 'FAILED',
+  REVERSED = 'REVERSED',
+}
+
 @Entity('technician_payouts')
 export class TechnicianPayout {
   @PrimaryGeneratedColumn()
@@ -55,17 +63,29 @@ export class TechnicianPayout {
 
   @Column({
     type: 'enum',
-    enum: PAYMENT_STATUS,
-    default: PAYMENT_STATUS.PENDING,
+    enum: TECHNICIAN_PAYOUT_STATUS,
+    default: TECHNICIAN_PAYOUT_STATUS.PENDING,
   })
-  status!: PAYMENT_STATUS;
+  status!: TECHNICIAN_PAYOUT_STATUS;
 
-  @Column()
+  @Column({ nullable: true })
   paymentRecordId!: number;
 
   @ManyToOne(() => Payment)
   @JoinColumn({ name: 'paymentRecordId' })
   payment!: Payment;
+
+  @Column({ nullable: true, unique: true })
+  razorpayPayoutId?: string;
+
+  @Column({ nullable: true, unique: true })
+  idempotencyKey?: string;
+
+  @Column({ nullable: true })
+  utr?: string;
+
+  @Column({ nullable: true })
+  failureReason?: string;
 
   @CreateDateColumn()
   createdAt!: Date;

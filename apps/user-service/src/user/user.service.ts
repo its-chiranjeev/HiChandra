@@ -51,6 +51,7 @@ import {
   UpdateServiceDto,
   UpdateTechnicianStatusDto
 } from '@hichandra/dtos';
+import { RazorpayXService } from '@hichandra/payment';
 
 @Injectable()
 export class UserService {
@@ -64,6 +65,7 @@ export class UserService {
     private readonly authModuleService: AuthModuleService,
     private readonly s3Service: S3Service,
     private readonly favoriteTechnicianRepository: FavoriteTechnicianRepository,
+     private readonly razorpayXService: RazorpayXService,
   ) {}
 
   async findById(id: number) {
@@ -1245,46 +1247,162 @@ export class UserService {
       };
     });
   }
+//temporarily commented
+  // async updateTechnicianStatusService(
+  //   technicianId: number,
+  //   dto: UpdateTechnicianStatusDto,
+  // ) {
+  //   const technician = await this.userRepository.findOne({
+  //     where: {
+  //       id: technicianId,
+  //       role: USER_ROLE.TECHNICIAN,
+  //     },
+  //     relations: ['technicianProfile'],
+  //   });
 
+  //   if (!technician) {
+  //     throw new NotFoundException('Technician not found');
+  //   }
+
+  //   if (!technician.technicianProfile) {
+  //     throw new BadRequestException('Technician profile not found');
+  //   }
+
+  //   if (technician.technicianProfile.status === dto.status) {
+  //     throw new BadRequestException(
+  //       `Technician is already ${dto.status.toLowerCase()}`,
+  //     );
+  //   }
+
+  //   // Update status only if it's different
+  //   technician.technicianProfile.status = dto.status;
+
+  //   await this.technicianProfileRepository.save(
+  //     technician.technicianProfile,
+  //   );
+
+  //   return {
+  //     success: true,
+  //     message: 'Technician status updated successfully',
+  //     data: technician.technicianProfile,
+  //   };
+  // }
+//added
   async updateTechnicianStatusService(
-    technicianId: number,
-    dto: UpdateTechnicianStatusDto,
+  technicianId: number,
+  dto: UpdateTechnicianStatusDto,
+) {
+  const technician = await this.userRepository.findOne({
+    where: {
+      id: technicianId,
+      role: USER_ROLE.TECHNICIAN,
+    },
+    relations: ['technicianProfile'],
+  });
+
+  if (!technician) {
+    throw new NotFoundException('Technician not found');
+  }
+
+  const profile = technician.technicianProfile;
+
+  if (!profile) {
+    throw new BadRequestException('Technician profile not found');
+  }
+
+  if (profile.status === dto.status) {
+    throw new BadRequestException(
+      `Technician is already ${dto.status.toLowerCase()}`,
+    );
+  }
+
+  /*
+   * Create Razorpay Contact and Fund Account only when:
+   * 1. Admin is approving the technician
+   * 2. Fund account has not already been created
+   */
+  if (
+    dto.status === TECHNICIAN_STATUS.APPROVED &&
+    !profile.razorpayFundAccountId
   ) {
-    const technician = await this.userRepository.findOne({
-      where: {
-        id: technicianId,
-        role: USER_ROLE.TECHNICIAN,
-      },
-      relations: ['technicianProfile'],
-    });
-
-    if (!technician) {
-      throw new NotFoundException('Technician not found');
-    }
-
-    if (!technician.technicianProfile) {
-      throw new BadRequestException('Technician profile not found');
-    }
-
-    if (technician.technicianProfile.status === dto.status) {
+    if (
+      !profile.accountHolderName ||
+      !profile.accountNumber ||
+      !profile.ifscCode ||
+      !profile.bankName
+    ) {
       throw new BadRequestException(
-        `Technician is already ${dto.status.toLowerCase()}`,
+        'Technician bank details are required before approval',
       );
     }
 
-    // Update status only if it's different
-    technician.technicianProfile.status = dto.status;
+    let contactId = profile.razorpayContactId;
 
-    await this.technicianProfileRepository.save(
-      technician.technicianProfile,
-    );
+    /*
+     * Create Contact only when it was not created earlier.
+     * This avoids duplicate Razorpay contacts if approval is retried.
+     */
+    if (!contactId) {
+      const fullName =
+        `${technician.firstName || ''} ${
+          technician.lastName || ''
+        }`.trim() || technician.username;
 
-    return {
-      success: true,
-      message: 'Technician status updated successfully',
-      data: technician.technicianProfile,
-    };
+      if (!fullName) {
+        throw new BadRequestException(
+          'Technician name is required to create Razorpay contact',
+        );
+      }
+
+      const contact = await this.razorpayXService.createContact({
+        technicianId: technician.id,
+        name: fullName,
+        email: technician.email || undefined,
+        phone: technician.phone || undefined,
+      });
+
+      contactId = contact.id;
+      profile.razorpayContactId = contact.id;
+    }
+
+    if (!contactId) {
+      throw new BadRequestException(
+        'Failed to create Razorpay contact',
+      );
+    }
+
+    /*
+     * Create the beneficiary bank account in RazorpayX.
+     * This fundAccountId will be used later during direct payout.
+     */
+    const fundAccount =
+      await this.razorpayXService.createFundAccount({
+        contactId,
+        accountHolderName: profile.accountHolderName,
+        accountNumber: profile.accountNumber,
+        ifscCode: profile.ifscCode,
+      });
+
+    profile.razorpayFundAccountId = fundAccount.id;
   }
+
+  // Change approval/rejection status after external setup succeeds.
+  profile.status = dto.status;
+
+  await this.technicianProfileRepository.save(profile);
+
+  return {
+    success: true,
+    message: 'Technician status updated successfully',
+    data: {
+      id: profile.id,
+      userId: profile.userId,
+      status: profile.status,
+      razorpayContactId: profile.razorpayContactId,
+      razorpayFundAccountId: profile.razorpayFundAccountId,
+    },
+  };
+}
 
   async favoriteTechnician(
   user: any,

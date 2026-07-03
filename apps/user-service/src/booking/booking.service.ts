@@ -201,7 +201,7 @@ export class BookingService {
           id: dto.customerAddressId,
           userId: customerId,
           isActive: true,
-          isDefault: true,
+          // isDefault: true,
         },
       });
       if (!address) {
@@ -1295,148 +1295,148 @@ export class BookingService {
 
   
 
-async createTechnicianPayout(
-  adminId: number,
-  dto: CreateTechnicianPayoutDto,
-) {
-  const booking = await this.bookingRepository.findBookingById(
-    dto.bookingId,
-  );
-
-  if (!booking) {
-    throw new NotFoundException('Booking not found');
-  }
-
-  if (booking.status !== BOOKING_STATUS.COMPLETED) {
-    throw new BadRequestException('Booking is not completed yet');
-  }
-
-  if (booking.paymentStatus !== BOOKING_PAYMENT_STATUS.PAID) {
-    throw new BadRequestException(
-      'Customer payment is not completed yet',
-    );
-  }
-
-  if (!booking.technicianId) {
-    throw new BadRequestException(
-      'No technician is assigned to this booking',
-    );
-  }
-
-  const technician = await this.userRepository.findOne({
-    where: {
-      id: booking.technicianId,
-      role: USER_ROLE.TECHNICIAN,
-    },
-    relations: ['technicianProfile'],
-  });
-
-  if (!technician) {
-    throw new NotFoundException('Technician not found');
-  }
-
-  const profile = technician.technicianProfile;
-
-  if (!profile) {
-    throw new BadRequestException('Technician profile not found');
-  }
-
-  if (!profile.razorpayFundAccountId) {
-    throw new BadRequestException(
-      'Technician fund account is not created',
-    );
-  }
-
-  const payoutAmount = Number(
-    booking.priceBreakdown?.technicianEarning ?? 0,
-  );
-
-  if (!payoutAmount || payoutAmount <= 0) {
-    throw new BadRequestException(
-      'Technician payout amount is invalid',
-    );
-  }
-
-  const existingPayout =
-    await this.technicianPayoutRepository.findExistingPayout(
-      booking.id,
-      technician.id,
-    );
-
-  if (
-    existingPayout &&
-    [
-      TECHNICIAN_PAYOUT_STATUS.PENDING,
-      TECHNICIAN_PAYOUT_STATUS.PROCESSING,
-      TECHNICIAN_PAYOUT_STATUS.SUCCESS,
-    ].includes(existingPayout.status)
+  async createTechnicianPayout(
+    adminId: number,
+    dto: CreateTechnicianPayoutDto,
   ) {
-    throw new BadRequestException(
-      'An active or successful payout already exists',
+    const booking = await this.bookingRepository.findBookingById(
+      dto.bookingId,
     );
-  }
 
-  const idempotencyKey = randomUUID();
-
-  const payout = await this.technicianPayoutRepository.createPayout({
-    bookingId: booking.id,
-    serviceId: booking.serviceId,
-    technicianId: technician.id,
-    payoutBy: adminId,
-    amount: payoutAmount,
-    idempotencyKey,
-    status: TECHNICIAN_PAYOUT_STATUS.PENDING,
-  });
-
-  try {
-    const razorpayPayout =
-      await this.razorpayXService.createPayout({
-        fundAccountId: profile.razorpayFundAccountId,
-        amount: payoutAmount,
-        bookingId: booking.id,
-        technicianId: technician.id,
-        internalPayoutId: payout.id,
-        idempotencyKey,
-      });
-
-    payout.razorpayPayoutId = razorpayPayout.id;
-
-    if (razorpayPayout.status === 'processed') {
-      payout.status = TECHNICIAN_PAYOUT_STATUS.SUCCESS;
-      payout.utr = razorpayPayout.utr || null;
-    } else if (razorpayPayout.status === 'failed') {
-      payout.status = TECHNICIAN_PAYOUT_STATUS.FAILED;
-      payout.failureReason =
-        razorpayPayout.status_details?.description ||
-        'RazorpayX payout failed';
-    } else {
-      payout.status = TECHNICIAN_PAYOUT_STATUS.PROCESSING;
+    if (!booking) {
+      throw new NotFoundException('Booking not found');
     }
 
-    await this.technicianPayoutRepository.updatePayout(payout);
+    if (booking.status !== BOOKING_STATUS.COMPLETED) {
+      throw new BadRequestException('Booking is not completed yet');
+    }
 
-    return {
-      success: true,
-      message: 'Technician payout initiated successfully',
-      data: {
-        payoutId: payout.id,
-        razorpayPayoutId: payout.razorpayPayoutId,
-        amount: payout.amount,
-        status: payout.status,
+    if (booking.paymentStatus !== BOOKING_PAYMENT_STATUS.PAID) {
+      throw new BadRequestException(
+        'Customer payment is not completed yet',
+      );
+    }
+
+    if (!booking.technicianId) {
+      throw new BadRequestException(
+        'No technician is assigned to this booking',
+      );
+    }
+
+    const technician = await this.userRepository.findOne({
+      where: {
+        id: booking.technicianId,
+        role: USER_ROLE.TECHNICIAN,
       },
-    };
-  } catch (error) {
-    payout.status = TECHNICIAN_PAYOUT_STATUS.FAILED;
-    payout.failureReason =
-      error instanceof Error
-        ? error.message
-        : 'Failed to initiate technician payout';
+      relations: ['technicianProfile'],
+    });
 
-    await this.technicianPayoutRepository.updatePayout(payout);
+    if (!technician) {
+      throw new NotFoundException('Technician not found');
+    }
 
-    throw error;
+    const profile = technician.technicianProfile;
+
+    if (!profile) {
+      throw new BadRequestException('Technician profile not found');
+    }
+
+    if (!profile.razorpayFundAccountId) {
+      throw new BadRequestException(
+        'Technician fund account is not created',
+      );
+    }
+
+    const payoutAmount = Number(
+      booking.priceBreakdown?.technicianEarning ?? 0,
+    );
+
+    if (!payoutAmount || payoutAmount <= 0) {
+      throw new BadRequestException(
+        'Technician payout amount is invalid',
+      );
+    }
+
+    const existingPayout =
+      await this.technicianPayoutRepository.findExistingPayout(
+        booking.id,
+        technician.id,
+      );
+
+    if (
+      existingPayout &&
+      [
+        TECHNICIAN_PAYOUT_STATUS.PENDING,
+        TECHNICIAN_PAYOUT_STATUS.PROCESSING,
+        TECHNICIAN_PAYOUT_STATUS.SUCCESS,
+      ].includes(existingPayout.status)
+    ) {
+      throw new BadRequestException(
+        'An active or successful payout already exists',
+      );
+    }
+
+    const idempotencyKey = randomUUID();
+
+    const payout = await this.technicianPayoutRepository.createPayout({
+      bookingId: booking.id,
+      serviceId: booking.serviceId,
+      technicianId: technician.id,
+      payoutBy: adminId,
+      amount: payoutAmount,
+      idempotencyKey,
+      status: TECHNICIAN_PAYOUT_STATUS.PENDING,
+    });
+
+    try {
+      const razorpayPayout =
+        await this.razorpayXService.createPayout({
+          fundAccountId: profile.razorpayFundAccountId,
+          amount: payoutAmount,
+          bookingId: booking.id,
+          technicianId: technician.id,
+          internalPayoutId: payout.id,
+          idempotencyKey,
+        });
+
+      payout.razorpayPayoutId = razorpayPayout.id;
+
+      if (razorpayPayout.status === 'processed') {
+        payout.status = TECHNICIAN_PAYOUT_STATUS.SUCCESS;
+        payout.utr = razorpayPayout.utr || null;
+      } else if (razorpayPayout.status === 'failed') {
+        payout.status = TECHNICIAN_PAYOUT_STATUS.FAILED;
+        payout.failureReason =
+          razorpayPayout.status_details?.description ||
+          'RazorpayX payout failed';
+      } else {
+        payout.status = TECHNICIAN_PAYOUT_STATUS.PROCESSING;
+      }
+
+      await this.technicianPayoutRepository.updatePayout(payout);
+
+      return {
+        success: true,
+        message: 'Technician payout initiated successfully',
+        data: {
+          payoutId: payout.id,
+          razorpayPayoutId: payout.razorpayPayoutId,
+          amount: payout.amount,
+          status: payout.status,
+        },
+      };
+    } catch (error) {
+      payout.status = TECHNICIAN_PAYOUT_STATUS.FAILED;
+      payout.failureReason =
+        error instanceof Error
+          ? error.message
+          : 'Failed to initiate technician payout';
+
+      await this.technicianPayoutRepository.updatePayout(payout);
+
+      throw error;
+    }
   }
-}
 
   //payment
   async getAllPayments(

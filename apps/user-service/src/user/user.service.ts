@@ -452,10 +452,10 @@ export class UserService {
         lastName: dto.lastName,
         password: hashedPassword,
         role: otpRecord.role || USER_ROLE.CUSTOMER,
-        status:
-          otpRecord.role === USER_ROLE.TECHNICIAN
-            ? USER_STATUS.PENDING
-            : USER_STATUS.ACTIVE,
+        // status:
+        //   otpRecord.role === USER_ROLE.TECHNICIAN
+        //     ? USER_STATUS.PENDING
+        //     : USER_STATUS.ACTIVE,
       });
 
       let savedUser = await userRepository.save(newUser);

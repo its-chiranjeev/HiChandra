@@ -77,6 +77,8 @@ export class BookingController {
     );
   }
 
+
+  
   @Get('all')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(USER_ROLE.ADMIN)

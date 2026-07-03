@@ -1,28 +1,15 @@
 import { Transform } from 'class-transformer';
 import {
-  IsEmail,
   IsNotEmpty,
-  IsOptional,
   IsString,
   MinLength,
-  ValidateIf,
 } from 'class-validator';
 
 export class LoginDto {
-  // @IsString()
-  // @IsNotEmpty()
-  // @Transform(({ value }) => value?.trim())
-  // email!: string; // email OR username
-
-  @ValidateIf((o) => !o.phone)
-  @IsEmail()
+  @IsString()
   @IsNotEmpty()
-  @Transform(({ value }) => value?.trim().toLowerCase())
-  email?: string;
-
-  @ValidateIf((o) => !o.email)
-  @IsNotEmpty()
-  phone?: string;
+  @Transform(({ value }) => value?.trim())
+  identifier!: string; // email OR phone number
 
   @IsString()
   @IsNotEmpty()

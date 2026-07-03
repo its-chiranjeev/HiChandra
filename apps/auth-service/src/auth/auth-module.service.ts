@@ -248,34 +248,98 @@ export class AuthModuleService {
   //   };
   // }
 
+  // async loginService(dto: LoginDto) {
+  //  // const user = await this.userRepository.findByEmailOrUsername(dto.email);
+  //  const user = await this.userRepository.findOne({
+  //     where: dto.email
+  //       ? { email: dto.email }
+  //       : { phone: dto.phone },
+  //   });
+  //   if (!user) {
+  //     throw new NotFoundException('User not found');
+  //   }
+
+  //   const passwordMatch = await bcrypt.compare(dto.password, user.password);
+  //   if (!passwordMatch) {
+  //     throw new UnauthorizedException('Invalid credentials');
+  //   }
+
+  //   if (
+  //     user.status === USER_STATUS.BLOCKED ||
+  //     user.status === USER_STATUS.INACTIVE
+  //   ) {
+  //     throw new ForbiddenException('User is blocked');
+  //   }
+  //   const data = await this.issueAuthTokens(user);
+  //   return {
+  //     message: 'Login successful',
+  //     ...data,
+  //   };
+  // }
+
   async loginService(dto: LoginDto) {
-   // const user = await this.userRepository.findByEmailOrUsername(dto.email);
-   const user = await this.userRepository.findOne({
-      where: dto.email
-        ? { email: dto.email }
-        : { phone: dto.phone },
-    });
-    if (!user) {
-      throw new NotFoundException('User not found');
+    const identifier = dto.identifier.trim();
+
+    if (!identifier) {
+    throw new BadRequestException(
+    'Email or phone number is required',
+    );
     }
 
-    const passwordMatch = await bcrypt.compare(dto.password, user.password);
+    const isEmail = identifier.includes('@');
+
+    const user = await this.userRepository.findOne({
+    where: isEmail
+    ? { email: identifier.toLowerCase() }
+    : { phone: identifier },
+    select: [
+    'id',
+    'email',
+    'username',
+    'phone',
+    'password',
+    'role',
+    'status',
+    'firstName',
+    'lastName',
+    'tokenVersion',
+    ],
+    });
+
+    if (!user) {
+    throw new UnauthorizedException(
+    'Invalid email/phone or password',
+    );
+    }
+
+    const passwordMatch = await bcrypt.compare(
+    dto.password,
+    user.password,
+    );
+
     if (!passwordMatch) {
-      throw new UnauthorizedException('Invalid credentials');
+    throw new UnauthorizedException(
+    'Invalid email/phone or password',
+    );
     }
 
     if (
-      user.status === USER_STATUS.BLOCKED ||
-      user.status === USER_STATUS.INACTIVE
+    user.status === USER_STATUS.BLOCKED ||
+    user.status === USER_STATUS.INACTIVE
     ) {
-      throw new ForbiddenException('User is blocked');
+    throw new ForbiddenException(
+    'User is blocked or inactive',
+    );
     }
+
     const data = await this.issueAuthTokens(user);
+
     return {
-      message: 'Login successful',
-      ...data,
+    message: 'Login successful',
+    ...data,
     };
   }
+
 
   private verifyJwt(token: string, secret: string): Record<string, any> {
     const parts = token.split('.');

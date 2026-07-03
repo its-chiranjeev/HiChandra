@@ -4,7 +4,7 @@ import { JwtAuthGuard, Roles, RolesGuard } from '@hichandra/common';
 import { StartBookingDto, CreateBookingDto, AssignBookingDto, CancelBookingDto, CreateComplaintDto, UpdateComplaintDto, UpdateBookingStatusDto, CreateTechnicianPayoutDto , RescheduleBookingDto , RepeatBookingDto , TechnicianCancelBookingDto, CreateBookingReviewDto } from '@hichandra/dtos';
 import { USER_ROLE, BOOKING_STATUS, COMPLAINT_STATUS, PAYMENT_STATUS, User} from '@hichandra/entities';
 import type { Request } from 'express';
-import { PaymentService } from '../libs/payment/payment.service';
+import { PaymentService } from '@hichandra/payment';
 
 interface AuthenticatedRequest extends Request {
   user: User;

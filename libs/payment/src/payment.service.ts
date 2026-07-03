@@ -41,8 +41,8 @@ export class PaymentService {
       key_secret: process.env.RAZORPAY_KEY_SECRET || '',
     });
 
-    console.log('KEY ID:', process.env.RAZORPAY_KEY_ID);
-    console.log('KEY SECRET:', process.env.RAZORPAY_KEY_SECRET);
+    // console.log('KEY ID:', process.env.RAZORPAY_KEY_ID);
+    // console.log('KEY SECRET:', process.env.RAZORPAY_KEY_SECRET);
   }
 
   async createPaymentLink(
@@ -83,7 +83,6 @@ export class PaymentService {
     }
 
     try {
-
        console.log('Creating payment link...');
       const paymentLink = await this.razorpay.paymentLink.create(
         payload as unknown as Parameters<Razorpay['paymentLink']['create']>[0],
@@ -116,6 +115,42 @@ export class PaymentService {
     return expectedSignature === signature;
   }
 
+  private getPaymentStatusDisplay(status: string): string {
+    switch (status?.toLowerCase()) {
+      case 'captured':
+      case 'paid':
+        return 'Paid';
+
+      case 'failed':
+        return 'Failed';
+
+      case 'authorized':
+        return 'Authorized';
+
+      case 'created':
+      case 'pending':
+        return 'Pending';
+
+      case 'refunded':
+        return 'Refunded';
+
+      default:
+        return status || 'Pending';
+    }
+  }
+
+  private formatPaymentMethod(method: string): string {
+    const paymentMethods: Record<string, string> = {
+      netbanking: 'Net Banking',
+      card: 'Card',
+      upi: 'UPI',
+      wallet: 'Wallet',
+      emi: 'EMI',
+    };
+
+    return paymentMethods[method?.toLowerCase()] || method || '-';
+  }
+
   async generateInvoicePdf(
     user: User,
     bookingId: number,
@@ -143,55 +178,140 @@ export class PaymentService {
     let razorpayPayment: Record<string, unknown> | null = null;
 
     if (payment.paymentId) {
-      razorpayPayment =
-        (await this.razorpay.payments.fetch(payment.paymentId)) as unknown as Record<
-          string,
-          unknown
-        >;
-    } else if (payment.orderId) {
-      const payments =
-        await this.razorpay.orders.fetchPayments(payment.orderId);
-
-      razorpayPayment =
-        (payments.items?.[0] as unknown as Record<string, unknown>) ?? null;
+      try {
+        razorpayPayment =
+          (await this.razorpay.payments.fetch(payment.paymentId)) as unknown as Record<
+            string,
+            unknown
+          >;
+      } catch {
+        razorpayPayment = null;
+      }
     }
 
-    if (!razorpayPayment) {
-      throw new NotFoundException('Razorpay payment not found');
-    }
+    const razorpayStatus = String(
+      razorpayPayment?.status ?? payment.status ?? 'PENDING',
+    ).toLowerCase();
 
-    const razorpayStatus = String(razorpayPayment.status ?? 'pending');
+    const paymentStatusDisplay =
+      this.getPaymentStatusDisplay(razorpayStatus);
 
     const statusClass =
-      razorpayStatus === 'captured'
+      razorpayStatus === 'captured' || razorpayStatus === 'paid'
         ? 'success'
         : razorpayStatus === 'failed'
           ? 'failed'
           : 'pending';
 
-    const razorpayAmount = Number(razorpayPayment.amount ?? 0) / 100;
+    const paymentMethodDisplay =
+      this.formatPaymentMethod(
+        String(razorpayPayment?.method ?? '-'),
+      );
+
+    const amount =
+      razorpayPayment?.amount
+        ? Number(razorpayPayment.amount) / 100
+        : Number(payment.amount ?? 0);
+
+    const errorMessage = String(
+      razorpayPayment?.error_description ??
+        payment.errorMessage ??
+        '-',
+    );
+
+    const isPaid =
+      razorpayStatus === 'captured' ||
+      razorpayStatus === 'paid';
+
+    const invoiceTitle = isPaid
+      ? 'HiChandra Invoice'
+      : 'HiChandra Proforma Invoice';
+
+    const invoiceId = isPaid
+      ? `INV-${booking.id}`
+      : `PROFORMA-INV-${booking.id}`;
+
+    const dateLabel = isPaid
+      ? 'Payment Date'
+      : 'Invoice Date';
+
+    const serviceBasePrice =
+      Number(booking.service?.pricingRule?.serviceBasePrice ?? 0);
+
+    const gst =
+      Number(booking.service?.pricingRule?.gst ?? 0);
+
+    const platformFee =
+      Number(booking.service?.pricingRule?.platformFee ?? 0);
+
+    const gstAmount = (serviceBasePrice * gst) / 100;
+
+    const finalAmount =
+      serviceBasePrice + gstAmount + platformFee;
 
     const html = paymentInvoiceTemplate({
-      invoiceId: `INV-${booking.id}`,
+
+      companyName: 'HiChandra',
+      companyEmail: 'support@hichandra.com',
+      companyPhone: '+91 XXXXXXXXXX',
+      companyAddress: 'Ghaziabad, Uttar Pradesh, India',
+
+      billingAddress: booking.address
+        ? [
+            booking.address.fullAddress,
+            booking.address.city,
+            booking.address.state,
+            booking.address.pincode,
+          ]
+            .filter(Boolean)
+            .join(', ')
+        : '-',
+
+      technicianName: booking.technician
+        ? `${booking.technician.firstName} ${booking.technician.lastName}`
+        : '-',
+
+      serviceBasePrice: serviceBasePrice.toFixed(2),
+      gstPercent: gst.toFixed(2),
+      gstAmount: gstAmount.toFixed(2),
+      platformFee: platformFee.toFixed(2),
+      finalAmount: finalAmount.toFixed(2),
+      invoiceTitle,
+      invoiceId,
+      dateLabel,
+
       bookingId: booking.id,
+
       customerName: `${booking.customer.firstName} ${booking.customer.lastName}`,
       customerEmail: booking.customer.email ?? '-',
       customerPhone: booking.customer.phone ?? '-',
+
       serviceName: booking.service.name,
       bookingStatus: booking.status,
-      paymentId: String(razorpayPayment.id ?? payment.paymentId ?? '-'),
-      orderId: String(razorpayPayment.order_id ?? payment.orderId ?? '-'),
-      paymentMethod: String(razorpayPayment.method ?? '-'),
-      paymentStatus: razorpayStatus,
-      statusClass,
-      currency: String(razorpayPayment.currency ?? payment.currency ?? 'INR'),
-      amount: razorpayAmount.toFixed(2),
-      date: new Date().toLocaleString(),
-      errorMessage: String(
-        razorpayPayment.error_description ??
-          payment.errorMessage ??
-          '-',
+
+      paymentId: String(
+        razorpayPayment?.id ?? payment.paymentId ?? '-',
       ),
+
+      orderId: String(
+        razorpayPayment?.order_id ?? payment.orderId ?? '-',
+      ),
+
+      paymentMethod: paymentMethodDisplay,
+
+      paymentStatus: paymentStatusDisplay,
+
+      statusClass,
+
+      currency: String(
+        razorpayPayment?.currency ?? payment.currency ?? 'INR',
+      ),
+
+      amount: amount.toFixed(2),
+
+     date: new Date(payment.createdAt).toLocaleString('en-IN'),
+
+      errorMessage,
     });
 
     const browser = await puppeteer.launch({

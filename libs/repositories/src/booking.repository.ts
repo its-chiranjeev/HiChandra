@@ -61,7 +61,10 @@ export class BookingRepository {
       relations: {
         customer: true,
         technician: true,
-        service: true,
+        service: {
+          pricingRule: true,
+          specifications: true,
+        },
         address: true,
       },
     });

@@ -199,7 +199,7 @@ export class BookingService {
           id: dto.customerAddressId,
           userId: customerId,
           isActive: true,
-          isDefault: true,
+          // isDefault: true,
         },
       });
       if (!address) {

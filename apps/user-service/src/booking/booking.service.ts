@@ -2043,15 +2043,15 @@ export class BookingService {
     };
   }
 
-  async deleteComplaintService(complaintId: number) {
+  async deleteComplaint(id: number) {
     const complaint =
-      await this.complaintRepository.findComplaintById(complaintId);
+      await this.complaintRepository.findComplaintById(id);
 
     if (!complaint) {
       throw new NotFoundException('Complaint not found');
     }
 
-    await this.complaintRepository.deleteComplaintById(complaintId);
+    await this.complaintRepository.softDeleteComplaint(id);
 
     return {
       success: true,

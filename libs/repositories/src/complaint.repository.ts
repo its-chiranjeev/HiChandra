@@ -38,14 +38,18 @@ export class ComplaintRepository {
   }
 
   async findComplaintById(
-  complaintId: number,
-): Promise<Complaint | null> {
-  return this.repo.findOne({
-    where: {
-      id: complaintId,
-    },
-  });
-}
+    complaintId: number,
+  ): Promise<Complaint | null> {
+    return this.repo.findOne({
+      where: {
+        id: complaintId,
+      },
+    });
+  }
+
+  async softDeleteComplaint(id: number) {
+    return this.repo.softDelete(id);
+  }
 
   async findAllComplaints(
     user: any,

@@ -418,13 +418,12 @@ export class BookingController {
   }
 
   // Delete Complaint by admin 
-  @Delete('admin/complaints/:id')
+  @Delete('complaint/:id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(USER_ROLE.ADMIN)
-  async deleteComplaint(
-    @Param('id', ParseIntPipe) id: number,
-  ) {
-    return this.bookingService.deleteComplaintService(id);
+  @HttpCode(HttpStatus.OK)
+  async deleteComplaint(@Param('id', ParseIntPipe) id: number) {
+    return this.bookingService.deleteComplaint(id);
   }
 
   @Post('review')

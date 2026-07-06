@@ -217,9 +217,13 @@ export class AuthModuleService {
   }
 
   async logoutService(userId: number) {
-    await this.userRepository.update(userId, {
-      hashedRefreshToken: undefined,
-    });
+    const user = await this.userRepository.findById(userId);
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    user.hashedRefreshToken = null;
+    user.tokenVersion += 1;
+    await this.userRepository.saveUser(user);
     return {
       message: 'Logout successful',
     };
@@ -433,9 +437,6 @@ export class AuthModuleService {
 
       // 6. Issue new tokens (rotation)
       const data = await this.issueAuthTokens(user);
-      if (data.tokens && data.tokens.refreshToken) {
-        data.tokens.refreshToken = refreshToken;
-      }
       return data;
     } catch (e:any) {
       throw new UnauthorizedException(e.message || 'Invalid refresh token');

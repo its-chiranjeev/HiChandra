@@ -64,20 +64,20 @@ export class AuthModuleController {
 
     return this.authModuleService.refreshToken(refreshToken);
   }
-@Get('profile')
-@UseGuards(JwtAuthGuard)
-@HttpCode(HttpStatus.OK)
-async getProfile(
-  @Req() req: any,
-  @Query('page') page: string = '1',
-  @Query('limit') limit: string = '10',
-) {
-  return this.authModuleService.getProfileService(
-    req.user.sub || req.user.id,
-    Number(page),
-    Number(limit),
-  );
-}
+  @Get('profile')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async getProfile(
+    @Req() req: any,
+    @Query('page') page: string = '1',
+    @Query('limit') limit: string = '10',
+  ) {
+    return this.authModuleService.getProfileService(
+      req.user.sub || req.user.id,
+      Number(page),
+      Number(limit),
+    );
+  }
 
   @Post('forgot-password')
   @HttpCode(HttpStatus.OK)

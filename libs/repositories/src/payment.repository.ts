@@ -77,12 +77,23 @@ export class PaymentRepository {
     return this.repo.save(payment);
   }
   async findPaymentById(id: number) {
-  return this.repo.findOne({
-    where: { id },
-    relations: {
-      booking: true,
-      customer: true,
-    },
-  });
-}
+    return this.repo.findOne({
+      where: { id },
+      relations: {
+        booking: true,
+        customer: true,
+      },
+    });
+  }
+
+  async findLatestByBookingId(
+    bookingId: number,
+  ): Promise<Payment | null> {
+    return this.repo.findOne({
+      where: { bookingId },
+      order: {
+        createdAt: 'DESC',
+      },
+    });
+  }
 }

@@ -3,6 +3,7 @@ import {
   BadRequestException,
   InternalServerErrorException,
   Injectable,
+  Logger,
   NotFoundException,
   UnauthorizedException,
   ForbiddenException,
@@ -12,6 +13,7 @@ import * as bcrypt from 'bcryptjs';
 import { User, USER_STATUS, USER_ROLE, TechnicianService } from '@hichandra/entities';
 import { ConfigService } from '@nestjs/config';
 import { createHmac } from 'crypto';
+import { Cron } from '@nestjs/schedule';
 import {
   LoginDto,
   RegisterDto,
@@ -20,12 +22,15 @@ import {
   ResetPasswordDto,
   ForgotPasswordDto
 } from '@hichandra/dtos';
-import { DataSource } from 'typeorm';
+import { DataSource, Repository, LessThan  } from 'typeorm';
+import { InjectRepository } from '@nestjs/typeorm';
 import { EmailService } from '@hichandra/email-services';
 import { SmsService } from '@hichandra/sms-services';
 
 @Injectable()
 export class AuthModuleService {
+  private readonly logger = new Logger(AuthModuleService.name);
+
   constructor(
     private readonly userRepository: UserRepository,
     private readonly otpRepository: OtpRepository,
@@ -33,6 +38,7 @@ export class AuthModuleService {
     private readonly configService: ConfigService,
     //private readonly emailService: EmailService,
     private readonly smsService: SmsService,
+    private readonly emailService: EmailService, 
   ) {}
 
   async issueAuthTokens(user: User) {
@@ -219,7 +225,14 @@ export class AuthModuleService {
     };
   }
 
+@Cron('0 */6 * * *')
+async deleteExpiredOtpsCron() {
+  this.logger.log('Starting OTP cleanup...');
 
+  const deletedCount = await this.otpRepository.deleteExpiredOtps();
+
+  this.logger.log(`Deleted ${deletedCount} expired OTP(s).`);
+}
 
   // async registerService(dto: RegisterDto) {
   //   const existingUser = await this.userRepository.findByEmail(dto.email);
@@ -425,41 +438,59 @@ export class AuthModuleService {
     }
   }
 
-  async getProfileService(userId: number) {
+  async getProfileService(userId: number, page = 1, limit = 10) {
     const user = await this.userRepository.findOne({
       where: { id: userId },
-      relations: ['addresses',
-      'technicianProfile', 
-      'technicianProfile.services',
-      'technicianProfile.brandExpertise',
-      'technicianProfile.locations'],
+      relations: [
+        'addresses',
+        'technicianProfile',
+        'technicianProfile.services',
+        'technicianProfile.services.service',
+        'technicianProfile.services.service.specifications',
+        'technicianProfile.services.service.pricingRule',
+        'technicianProfile.brandExpertise',
+        'technicianProfile.locations',
+      ],
     });
 
     if (!user) {
       throw new NotFoundException('User not found');
     }
+
+    const allServices = user.technicianProfile?.services || [];
+    const startIndex = (page - 1) * limit;
+    const paginatedServices = allServices.slice(startIndex, startIndex + limit);
+
     return {
-      success: true,
-      message: 'Profile fetched successfully',
-      data: {
-        id: user.id,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        email: user.email,
-        username: user.username,
-        phone: user.phone,
-        emergencyContact: user.emergencyContact,
-        profileImage: user.profileImage,
-        role: user.role,
-        status: user.status,
-        createdAt: user.createdAt,
-        lastLoginAt: user.lastLoginAt,
+      id: user.id,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      email: user.email,
+      username: user.username,
+      phone: user.phone,
+      emergencyContact: user.emergencyContact,
+      profileImage: user.profileImage,
+      role: user.role,
+      status: user.status,
+      createdAt: user.createdAt,
+      lastLoginAt: user.lastLoginAt,
 
-        addresses: user.role === USER_ROLE.CUSTOMER ? user.addresses : undefined,
+      addresses:
+        user.role === USER_ROLE.CUSTOMER ? user.addresses : undefined,
 
-        technicianProfile:
-          user.role === USER_ROLE.TECHNICIAN ? user.technicianProfile : undefined,
-      },
+      technicianProfile:
+        user.role === USER_ROLE.TECHNICIAN
+          ? {
+              ...user.technicianProfile,
+              services: paginatedServices,
+              servicesPagination: {
+                total: allServices.length,
+                page,
+                limit,
+                totalPages: Math.ceil(allServices.length / limit),
+              },
+            }
+          : undefined,
     };
   }
 

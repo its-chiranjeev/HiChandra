@@ -3,28 +3,27 @@ import {
   ExecutionContext,
   Injectable,
   NestInterceptor,
+  StreamableFile,
 } from '@nestjs/common';
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
 
 @Injectable()
-export class ResponseInterceptor<T> implements NestInterceptor<
-  T,
-  { success: boolean; statusCode: number; message: string; data: T }
-> {
+export class ResponseInterceptor<T>
+  implements NestInterceptor<T, T | StreamableFile>
+{
   intercept(
     context: ExecutionContext,
     next: CallHandler,
-  ): Observable<{
-    success: boolean;
-    statusCode: number;
-    message: string;
-    data: T;
-  }> {
+  ): Observable<T | StreamableFile> {
     const response = context.switchToHttp().getResponse();
 
     return next.handle().pipe(
       map((data) => {
+        if (data instanceof StreamableFile) {
+          return data;
+        }
+
         if (
           data &&
           typeof data === 'object' &&
@@ -46,7 +45,7 @@ export class ResponseInterceptor<T> implements NestInterceptor<
           statusCode: response.statusCode,
           message,
           data,
-        };
+        } as T;
       }),
     );
   }

@@ -1,6 +1,11 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, StreamableFile, NotFoundException , ForbiddenException} from '@nestjs/common';
 import Razorpay from 'razorpay';
 import * as crypto from 'crypto';
+import puppeteer from 'puppeteer';
+import { paymentInvoiceTemplate } from './templates/invoice.template';
+import { User } from '@hichandra/entities';
+import { BookingRepository, PaymentRepository } from '@hichandra/repositories';
+
 
 interface CustomerData {
   name: string;
@@ -27,14 +32,17 @@ interface PaymentLinkPayload {
 export class PaymentService {
   private razorpay: Razorpay;
 
-  constructor() {
+  constructor(
+      private readonly bookingRepository: BookingRepository,
+      private readonly paymentRepository: PaymentRepository,
+  ) {
     this.razorpay = new Razorpay({
       key_id: process.env.RAZORPAY_KEY_ID || '',
       key_secret: process.env.RAZORPAY_KEY_SECRET || '',
     });
 
-    console.log('KEY ID:', process.env.RAZORPAY_KEY_ID);
-console.log('KEY SECRET:', process.env.RAZORPAY_KEY_SECRET);
+    // console.log('KEY ID:', process.env.RAZORPAY_KEY_ID);
+    // console.log('KEY SECRET:', process.env.RAZORPAY_KEY_SECRET);
   }
 
   async createPaymentLink(
@@ -75,7 +83,6 @@ console.log('KEY SECRET:', process.env.RAZORPAY_KEY_SECRET);
     }
 
     try {
-
        console.log('Creating payment link...');
       const paymentLink = await this.razorpay.paymentLink.create(
         payload as unknown as Parameters<Razorpay['paymentLink']['create']>[0],
@@ -106,5 +113,229 @@ console.log('KEY SECRET:', process.env.RAZORPAY_KEY_SECRET);
       .update(rawBody)
       .digest('hex');
     return expectedSignature === signature;
+  }
+
+  private getPaymentStatusDisplay(status: string): string {
+    switch (status?.toLowerCase()) {
+      case 'captured':
+      case 'paid':
+        return 'Paid';
+
+      case 'failed':
+        return 'Failed';
+
+      case 'authorized':
+        return 'Authorized';
+
+      case 'created':
+      case 'pending':
+        return 'Pending';
+
+      case 'refunded':
+        return 'Refunded';
+
+      default:
+        return status || 'Pending';
+    }
+  }
+
+  private formatPaymentMethod(method: string): string {
+    const paymentMethods: Record<string, string> = {
+      netbanking: 'Net Banking',
+      card: 'Card',
+      upi: 'UPI',
+      wallet: 'Wallet',
+      emi: 'EMI',
+    };
+
+    return paymentMethods[method?.toLowerCase()] || method || '-';
+  }
+
+  async generateInvoicePdf(
+    user: User,
+    bookingId: number,
+  ): Promise<StreamableFile> {
+    const booking =
+      await this.bookingRepository.findBookingById(bookingId);
+
+    if (!booking) {
+      throw new NotFoundException('Booking not found');
+    }
+
+    if (booking.customerId !== user.id) {
+      throw new ForbiddenException(
+        'You are not allowed to download this invoice',
+      );
+    }
+
+    const payment =
+      await this.paymentRepository.findLatestByBookingId(booking.id);
+
+    if (!payment) {
+      throw new NotFoundException('Payment record not found');
+    }
+
+    let razorpayPayment: Record<string, unknown> | null = null;
+
+    if (payment.paymentId) {
+      try {
+        razorpayPayment =
+          (await this.razorpay.payments.fetch(payment.paymentId)) as unknown as Record<
+            string,
+            unknown
+          >;
+      } catch {
+        razorpayPayment = null;
+      }
+    }
+
+    const razorpayStatus = String(
+      razorpayPayment?.status ?? payment.status ?? 'PENDING',
+    ).toLowerCase();
+
+    const paymentStatusDisplay =
+      this.getPaymentStatusDisplay(razorpayStatus);
+
+    const statusClass =
+      razorpayStatus === 'captured' || razorpayStatus === 'paid'
+        ? 'success'
+        : razorpayStatus === 'failed'
+          ? 'failed'
+          : 'pending';
+
+    const paymentMethodDisplay =
+      this.formatPaymentMethod(
+        String(razorpayPayment?.method ?? '-'),
+      );
+
+    const amount =
+      razorpayPayment?.amount
+        ? Number(razorpayPayment.amount) / 100
+        : Number(payment.amount ?? 0);
+
+    const errorMessage = String(
+      razorpayPayment?.error_description ??
+        payment.errorMessage ??
+        '-',
+    );
+
+    const isPaid =
+      razorpayStatus === 'captured' ||
+      razorpayStatus === 'paid';
+
+    const invoiceTitle = isPaid
+      ? 'HiChandra Invoice'
+      : 'HiChandra Proforma Invoice';
+
+    const invoiceId = isPaid
+      ? `INV-${booking.id}`
+      : `PROFORMA-INV-${booking.id}`;
+
+    const dateLabel = isPaid
+      ? 'Payment Date'
+      : 'Invoice Date';
+
+    const serviceBasePrice =
+      Number(booking.service?.pricingRule?.serviceBasePrice ?? 0);
+
+    const gst =
+      Number(booking.service?.pricingRule?.gst ?? 0);
+
+    const platformFee =
+      Number(booking.service?.pricingRule?.platformFee ?? 0);
+
+    const gstAmount = (serviceBasePrice * gst) / 100;
+
+    const finalAmount =
+      serviceBasePrice + gstAmount + platformFee;
+
+    const html = paymentInvoiceTemplate({
+
+      companyName: 'HiChandra',
+      companyEmail: 'support@hichandra.com',
+      companyPhone: '+91 XXXXXXXXXX',
+      companyAddress: 'Ghaziabad, Uttar Pradesh, India',
+
+      billingAddress: booking.address
+        ? [
+            booking.address.fullAddress,
+            booking.address.city,
+            booking.address.state,
+            booking.address.pincode,
+          ]
+            .filter(Boolean)
+            .join(', ')
+        : '-',
+
+      technicianName: booking.technician
+        ? `${booking.technician.firstName} ${booking.technician.lastName}`
+        : '-',
+
+      serviceBasePrice: serviceBasePrice.toFixed(2),
+      gstPercent: gst.toFixed(2),
+      gstAmount: gstAmount.toFixed(2),
+      platformFee: platformFee.toFixed(2),
+      finalAmount: finalAmount.toFixed(2),
+      invoiceTitle,
+      invoiceId,
+      dateLabel,
+
+      bookingId: booking.id,
+
+      customerName: `${booking.customer.firstName} ${booking.customer.lastName}`,
+      customerEmail: booking.customer.email ?? '-',
+      customerPhone: booking.customer.phone ?? '-',
+
+      serviceName: booking.service.name,
+      bookingStatus: booking.status,
+
+      paymentId: String(
+        razorpayPayment?.id ?? payment.paymentId ?? '-',
+      ),
+
+      orderId: String(
+        razorpayPayment?.order_id ?? payment.orderId ?? '-',
+      ),
+
+      paymentMethod: paymentMethodDisplay,
+
+      paymentStatus: paymentStatusDisplay,
+
+      statusClass,
+
+      currency: String(
+        razorpayPayment?.currency ?? payment.currency ?? 'INR',
+      ),
+
+      amount: amount.toFixed(2),
+
+     date: new Date(payment.createdAt).toLocaleString('en-IN'),
+
+      errorMessage,
+    });
+
+    const browser = await puppeteer.launch({
+      headless: true,
+    });
+
+    try {
+      const page = await browser.newPage();
+
+      await page.setContent(html, {
+        waitUntil: 'load',
+      });
+
+      const pdfBuffer = await page.pdf({
+        format: 'A4',
+        printBackground: true,
+      });
+
+      return new StreamableFile(pdfBuffer, {
+        type: 'application/pdf',
+        disposition: `attachment; filename=invoice-${booking.id}.pdf`,
+      });
+    } finally {
+      await browser.close();
+    }
   }
 }

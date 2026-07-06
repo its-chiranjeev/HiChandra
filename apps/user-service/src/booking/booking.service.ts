@@ -388,21 +388,32 @@ export class BookingService {
   }
 
   async getAllBookings(
+    user: any,
     page: number,
     limit: number,
     status?: BOOKING_STATUS,
   ) {
     const { bookings, total } =
       await this.bookingRepository.findAllBookings(
+        user,
         page,
         limit,
         status,
       );
 
+    const formattedBookings = bookings.map((booking: Booking) =>
+      this.formatBookingByRole(booking, user.role),
+    );
+
     return {
       success: true,
-      message: 'Bookings fetched successfully',
-      data: bookings,
+      message:
+        user.role === USER_ROLE.ADMIN
+          ? 'Bookings fetched successfully'
+          : user.role === USER_ROLE.CUSTOMER
+            ? 'My bookings fetched successfully'
+            : 'Assigned bookings fetched successfully',
+      data: formattedBookings,
       pagination: {
         total,
         page,
@@ -411,30 +422,153 @@ export class BookingService {
       },
     };
   }
+
+  private formatBookingByRole(
+    booking: Booking,
+    role: USER_ROLE,
+  ) {
+    const commonData = {
+      bookingId: booking.id,
+      status: booking.status,
+      paymentStatus: booking.paymentStatus,
+      service: booking.service
+        ? {
+            id: booking.service.id,
+            name: booking.service.name,
+          }
+        : null,
+      address: booking.address
+        ? {
+            fullAddress: booking.address.fullAddress,
+            city: booking.address.city,
+            state: booking.address.state,
+            pincode: booking.address.pincode,
+          }
+        : null,
+      scheduledAt: booking.scheduledAt,
+      totalAmount: booking.totalAmount,
+      isEmergency: booking.isEmergency,
+      createdAt: booking.createdAt,
+    };
+
+    if (role === USER_ROLE.ADMIN) {
+      return {
+        ...commonData,
+        customer: booking.customer
+          ? {
+              id: booking.customer.id,
+              name: `${booking.customer.firstName} ${booking.customer.lastName}`,
+              phone: booking.customer.phone,
+            }
+          : null,
+        technician: booking.technician
+          ? {
+              id: booking.technician.id,
+              name: `${booking.technician.firstName} ${booking.technician.lastName}`,
+              phone: booking.technician.phone,
+            }
+          : null,
+      };
+    }
+
+    if (role === USER_ROLE.CUSTOMER) {
+      return {
+        ...commonData,
+        technician: booking.technician
+          ? {
+              id: booking.technician.id,
+              name: `${booking.technician.firstName} ${booking.technician.lastName}`,
+              phone: booking.technician.phone,
+              rating: booking.technician.overallRating,
+            }
+          : null,
+        myRating: booking.customerRating,
+        myReview: booking.customerReview,
+        technicianRating: booking.technicianRating,
+        technicianReview: booking.technicianReview,
+      };
+    }
+
+    if (role === USER_ROLE.TECHNICIAN) {
+      return {
+        ...commonData,
+        customer: booking.customer
+          ? {
+              id: booking.customer.id,
+              name: `${booking.customer.firstName} ${booking.customer.lastName}`,
+              phone: booking.customer.phone,
+            }
+          : null,
+        technicianEarning:
+          booking.priceBreakdown?.technicianEarning ?? null,
+        customerRating: booking.customerRating,
+        customerReview: booking.customerReview,
+        myRating: booking.technicianRating,
+        myReview: booking.technicianReview,
+      };
+    }
+
+    return commonData;
+  }
   //complaint 
   async getAllComplaints(
+    user: any,
     page: number,
     limit: number,
     status?: COMPLAINT_STATUS,
   ) {
-    const {
-      complaints,
-      total,
-    } = await this.complaintRepository.findAllComplaints(
-      page,
-      limit,
-      status,
-    );
+    const { complaints, total } =
+      await this.complaintRepository.findAllComplaints(
+        user,
+        page,
+        limit,
+        status,
+      );
+
+    const totalPages = Math.ceil(total / limit);
 
     return {
       success: true,
-      message: 'Complaints fetched successfully',
-      data: complaints,
+      message:
+        total === 0
+          ? user.role === USER_ROLE.ADMIN
+            ? 'No complaints found.'
+            : 'You have not raised any complaints yet.'
+          : 'Complaints fetched successfully',
+
+      data: complaints.map((complaint) => ({
+        id: complaint.id,
+        title: complaint.title,
+        description: complaint.description,
+        status: complaint.status,
+
+        createdBy: complaint.createdByUser
+          ? {
+              id: complaint.createdByUser.id,
+              name: `${complaint.createdByUser.firstName ?? ''} ${complaint.createdByUser.lastName ?? ''}`.trim(),
+              username: complaint.createdByUser.username,
+              role: complaint.createdByUser.role,
+            }
+          : null,
+
+        booking: complaint.booking
+          ? {
+              id: complaint.booking.id,
+              status: complaint.booking.status,
+            }
+          : null,
+
+        createdAt: complaint.createdAt,
+        updatedAt: complaint.updatedAt,
+      })),
+
       pagination: {
         total,
         page,
         limit,
-        totalPages: Math.ceil(total / limit),
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPreviousPage: page > 1,
       },
     };
   }
@@ -714,6 +848,15 @@ export class BookingService {
     if (complaint.createdBy !== user.id) {
       throw new BadRequestException(
         'You can only edit your own complaint',
+      );
+    }
+
+    const createdAtTime = new Date(complaint.createdAt).getTime();
+    const currentTime = new Date().getTime();
+
+    if (currentTime - createdAtTime > 10 * 60 * 1000) {
+      throw new BadRequestException(
+        'Complaint can only be edited within 10 minutes of creation',
       );
     }
 
@@ -1805,5 +1948,303 @@ export class BookingService {
     }
 
     await this.userRepository.save(customer);
+  }
+
+  async getTechnicianReviews(
+    technicianId: number,
+    page = 1,
+    limit = 10,
+  ) {
+    const { reviews, total } =
+      await this.bookingRepository.findTechnicianReviews(
+        technicianId,
+        page,
+        limit,
+      );
+
+    const technician = reviews[0]?.technician;
+
+    return {
+      message: 'Technician reviews fetched successfully',
+      data: {
+        technician: technician
+          ? {
+              id: technician.id,
+              name: `${technician.firstName} ${technician.lastName}`,
+              profileImage: technician.profileImage,
+              overallRating: technician.overallRating,
+            }
+          : null,
+
+        reviews: reviews.map((booking) => ({
+          bookingId: booking.id,
+          rating: booking.customerRating,
+          review: booking.customerReview,
+          customer: {
+            id: booking.customer?.id,
+            name: `${booking.customer?.firstName} ${booking.customer?.lastName}`,
+            profileImage: booking.customer?.profileImage,
+          },
+          service: {
+            id: booking.service?.id,
+            name: booking.service?.name,
+          },
+          createdAt: booking.updatedAt,
+        })),
+
+        pagination: {
+          total,
+          page,
+          limit,
+          totalPages: Math.ceil(total / limit),
+        },
+      },
+    };
+  }
+
+  async getMyBookings(
+    user: any,
+    page = 1,
+    limit = 10,
+    status?: BOOKING_STATUS,
+  ) {
+    const { bookings, total } =
+      await this.bookingRepository.findMyBookings(
+        user.id,
+        user.role,
+        page,
+        limit,
+        status,
+      );
+
+    const data = bookings.map((booking) => {
+      const commonData = {
+        bookingId: booking.id,
+        status: booking.status,
+        paymentStatus: booking.paymentStatus,
+        scheduledAt: booking.scheduledAt,
+        totalAmount: booking.totalAmount,
+        isEmergency: booking.isEmergency,
+        cancellationReason: booking.cancellationReason,
+
+        service: booking.service
+          ? {
+              id: booking.service.id,
+              name: booking.service.name,
+              description: booking.service.description,
+              iconUrl: booking.service.iconUrl,
+            }
+          : null,
+
+        address: booking.address
+          ? {
+              fullAddress: booking.address.fullAddress,
+              city: booking.address.city,
+              state: booking.address.state,
+              pincode: booking.address.pincode,
+              label: booking.address.label,
+            }
+          : null,
+
+        createdAt: booking.createdAt,
+        updatedAt: booking.updatedAt,
+      };
+
+      if (user.role === USER_ROLE.CUSTOMER) {
+        return {
+          ...commonData,
+
+          technician: booking.technician
+            ? {
+                id: booking.technician.id,
+                name: `${booking.technician.firstName} ${booking.technician.lastName}`,
+                profileImage: booking.technician.profileImage,
+                overallRating: booking.technician.overallRating,
+              }
+            : null,
+
+          customerRating: booking.customerRating,
+          customerReview: booking.customerReview,
+        };
+      }
+
+      if (user.role === USER_ROLE.TECHNICIAN) {
+        return {
+          ...commonData,
+
+          customer: booking.customer
+            ? {
+                id: booking.customer.id,
+                name: `${booking.customer.firstName} ${booking.customer.lastName}`,
+                profileImage: booking.customer.profileImage,
+                phone: booking.customer.phone,
+              }
+            : null,
+
+          technicianRating: booking.technicianRating,
+          technicianReview: booking.technicianReview,
+        };
+      }
+
+      return commonData;
+    });
+
+    return {
+      success: true,
+      message: 'My bookings fetched successfully',
+      data,
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  async getMyReviews(user: any, page = 1, limit = 10) {
+    const { reviews, total } =
+      user.role === USER_ROLE.ADMIN
+        ? await this.bookingRepository.findAllReviews(page, limit)
+        : await this.bookingRepository.findMyReviews(
+            user.id,
+            user.role,
+            page,
+            limit,
+          );
+
+      const formattedReviews = reviews.map((booking) => {
+      const isCustomer = user.role === USER_ROLE.CUSTOMER;
+      const isAdmin = user.role === USER_ROLE.ADMIN;
+
+      if (isAdmin) {
+        return {
+          bookingId: booking.id,
+
+          service: booking.service
+            ? {
+                id: booking.service.id,
+                name: booking.service.name,
+              }
+            : null,
+
+          customerReview: {
+            reviewFor: {
+              id: booking.customer?.id,
+              name: `${booking.customer?.firstName} ${booking.customer?.lastName}`,
+              profileImage: booking.customer?.profileImage,
+            },
+            reviewer: {
+              id: booking.technician?.id,
+              name: `${booking.technician?.firstName} ${booking.technician?.lastName}`,
+              profileImage: booking.technician?.profileImage,
+            },
+            rating: booking.customerRating,
+            review: booking.customerReview,
+          },
+
+          technicianReview: {
+            reviewFor: {
+              id: booking.technician?.id,
+              name: `${booking.technician?.firstName} ${booking.technician?.lastName}`,
+              profileImage: booking.technician?.profileImage,
+            },
+            reviewer: {
+              id: booking.customer?.id,
+              name: `${booking.customer?.firstName} ${booking.customer?.lastName}`,
+              profileImage: booking.customer?.profileImage,
+            },
+            rating: booking.technicianRating,
+            review: booking.technicianReview,
+          },
+
+          reviewedAt: booking.updatedAt,
+        };
+      }
+
+      return {
+        bookingId: booking.id,
+
+        service: booking.service
+          ? {
+              id: booking.service.id,
+              name: booking.service.name,
+            }
+          : null,
+
+        reviewer: isCustomer
+          ? {
+              id: booking.technician?.id,
+              name: `${booking.technician?.firstName} ${booking.technician?.lastName}`,
+              profileImage: booking.technician?.profileImage,
+            }
+          : {
+              id: booking.customer?.id,
+              name: `${booking.customer?.firstName} ${booking.customer?.lastName}`,
+              profileImage: booking.customer?.profileImage,
+            },
+
+        rating: isCustomer
+          ? booking.technicianRating
+          : booking.customerRating,
+
+        review: isCustomer
+          ? booking.technicianReview
+          : booking.customerReview,
+
+        reviewedAt: booking.updatedAt,
+      };
+    });
+
+    return {
+      reviews: formattedReviews,
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  async resolveComplaintService(complaintId: number) {
+    const complaint =
+      await this.complaintRepository.findComplaintById(complaintId);
+
+    if (!complaint) {
+      throw new NotFoundException('Complaint not found');
+    }
+
+    if (complaint.status === COMPLAINT_STATUS.RESOLVED) {
+      throw new BadRequestException('Complaint is already resolved');
+    }
+
+    const updatedComplaint =
+      await this.complaintRepository.updateComplaintStatus(
+        complaint,
+        COMPLAINT_STATUS.RESOLVED,
+      );
+
+    return {
+      success: true,
+      message: 'Complaint resolved successfully',
+      data: updatedComplaint,
+    };
+  }
+
+  async deleteComplaintService(complaintId: number) {
+    const complaint =
+      await this.complaintRepository.findComplaintById(complaintId);
+
+    if (!complaint) {
+      throw new NotFoundException('Complaint not found');
+    }
+
+    await this.complaintRepository.deleteComplaintById(complaintId);
+
+    return {
+      success: true,
+      message: 'Complaint deleted successfully',
+    };
   }
 }

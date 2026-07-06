@@ -1,11 +1,11 @@
-import {Booking, BOOKING_STATUS, BOOKING_PAYMENT_STATUS, Service, CustomerAddress, User, USER_ROLE, USER_STATUS, TECHNICIAN_STATUS, JOB_STATUS, TechnicianService, TechnicianLocation, Otp, PriceBreakdown, Payment, PAYMENT_STATUS, COMPLAINT_STATUS, TECHNICIAN_PAYOUT_STATUS} from '@hichandra/entities';
+import {Booking, BOOKING_STATUS, BOOKING_PAYMENT_STATUS, Service, CustomerAddress, User, USER_ROLE, USER_STATUS, TECHNICIAN_STATUS, JOB_STATUS, TechnicianService, TechnicianLocation, Otp, PriceBreakdown, Payment, PAYMENT_STATUS, COMPLAINT_STATUS, TECHNICIAN_PAYOUT_STATUS, TechnicianProfile} from '@hichandra/entities';
 import { EmailService } from '@hichandra/email-services';
 import { PaymentService, RazorpayXService } from '@hichandra/payment';
 import { Injectable, NotFoundException, BadRequestException, UnprocessableEntityException , ForbiddenException, UnauthorizedException} from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { CreateBookingDto, UpdateBookingStatusDto,CreateBookingReviewDto, StartBookingDto, AssignBookingDto, CancelBookingDto, CreateComplaintDto, UpdateComplaintDto, CreateTechnicianPayoutDto, RescheduleBookingDto, RepeatBookingDto , TechnicianCancelBookingDto } from '@hichandra/dtos';
 import { AssignmentService } from '../assignment/assignment.service';
-import { BookingRepository, UserRepository, ComplaintRepository, PaymentRepository, TechnicianPayoutRepository, TechnicianProfile } from '@hichandra/repositories';
+import { BookingRepository, UserRepository, ComplaintRepository, PaymentRepository, TechnicianPayoutRepository } from '@hichandra/repositories';
 import { randomUUID } from 'crypto';
 
 @Injectable()

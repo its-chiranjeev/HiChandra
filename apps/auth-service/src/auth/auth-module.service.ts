@@ -225,14 +225,14 @@ export class AuthModuleService {
     };
   }
 
-@Cron('0 */6 * * *')
-async deleteExpiredOtpsCron() {
-  this.logger.log('Starting OTP cleanup...');
+  @Cron('0 */6 * * *')
+  async deleteExpiredOtpsCron() {
+    this.logger.log('Starting OTP cleanup...');
 
-  const deletedCount = await this.otpRepository.deleteExpiredOtps();
+    const deletedCount = await this.otpRepository.deleteExpiredOtps();
 
-  this.logger.log(`Deleted ${deletedCount} expired OTP(s).`);
-}
+    this.logger.log(`Deleted ${deletedCount} expired OTP(s).`);
+  }
 
   // async registerService(dto: RegisterDto) {
   //   const existingUser = await this.userRepository.findByEmail(dto.email);
@@ -432,7 +432,11 @@ async deleteExpiredOtpsCron() {
       }
 
       // 6. Issue new tokens (rotation)
-      return this.issueAuthTokens(user);
+      const data = await this.issueAuthTokens(user);
+      if (data.tokens && data.tokens.refreshToken) {
+        data.tokens.refreshToken = refreshToken;
+      }
+      return data;
     } catch (e:any) {
       throw new UnauthorizedException(e.message || 'Invalid refresh token');
     }

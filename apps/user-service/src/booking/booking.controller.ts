@@ -119,16 +119,18 @@ export class BookingController {
   }
   
   //complaint api
-  @Get('admin/complaints')
+  @Get('complaints')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(USER_ROLE.ADMIN)
+  @Roles(USER_ROLE.ADMIN, USER_ROLE.CUSTOMER, USER_ROLE.TECHNICIAN)
   @HttpCode(HttpStatus.OK)
   async getAllComplaints(
-    @Query('page') page = 1,
-    @Query('limit') limit = 10,
+    @Req() req: any,
+    @Query('page') page = '1',
+    @Query('limit') limit = '10',
     @Query('status') status?: COMPLAINT_STATUS,
   ) {
     return this.bookingService.getAllComplaints(
+      req.user,
       Number(page),
       Number(limit),
       status,

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Complaint, COMPLAINT_STATUS } from '@hichandra/entities';
+import { Complaint, COMPLAINT_STATUS ,USER_ROLE} from '@hichandra/entities';
 import { Repository } from 'typeorm';
 
 @Injectable()
@@ -48,38 +48,32 @@ export class ComplaintRepository {
 }
 
   async findAllComplaints(
+    user: any,
     page: number,
     limit: number,
     status?: COMPLAINT_STATUS,
   ) {
     const query = this.repo
       .createQueryBuilder('complaint')
-      .leftJoinAndSelect(
-        'complaint.booking',
-        'booking',
-      )
-      .leftJoinAndSelect(
-        'complaint.createdByUser',
-        'createdByUser',
-      );
+      .leftJoinAndSelect('complaint.booking', 'booking')
+      .leftJoinAndSelect('complaint.createdByUser', 'createdByUser');
 
     if (status) {
-      query.andWhere(
-        'complaint.status = :status',
-        { status },
-      );
+      query.andWhere('complaint.status = :status', { status });
     }
 
-    query.orderBy(
-      'complaint.createdAt',
-      'DESC',
-    );
+    if (user.role !== USER_ROLE.ADMIN) {
+      query.andWhere('complaint.createdBy = :userId', {
+        userId: user.id,
+      });
+    }
 
-    const [complaints, total] =
-      await query
-        .skip((page - 1) * limit)
-        .take(limit)
-        .getManyAndCount();
+    query.orderBy('complaint.createdAt', 'DESC');
+
+    const [complaints, total] = await query
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getManyAndCount();
 
     return {
       complaints,

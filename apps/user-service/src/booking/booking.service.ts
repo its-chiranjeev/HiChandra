@@ -503,28 +503,63 @@ export class BookingService {
   }
   //complaint 
   async getAllComplaints(
+    user: any,
     page: number,
     limit: number,
     status?: COMPLAINT_STATUS,
   ) {
-    const {
-      complaints,
-      total,
-    } = await this.complaintRepository.findAllComplaints(
-      page,
-      limit,
-      status,
-    );
+    const { complaints, total } =
+      await this.complaintRepository.findAllComplaints(
+        user,
+        page,
+        limit,
+        status,
+      );
+
+    const totalPages = Math.ceil(total / limit);
 
     return {
       success: true,
-      message: 'Complaints fetched successfully',
-      data: complaints,
+      message:
+        total === 0
+          ? user.role === USER_ROLE.ADMIN
+            ? 'No complaints found.'
+            : 'You have not raised any complaints yet.'
+          : 'Complaints fetched successfully',
+
+      data: complaints.map((complaint) => ({
+        id: complaint.id,
+        title: complaint.title,
+        description: complaint.description,
+        status: complaint.status,
+
+        createdBy: complaint.createdByUser
+          ? {
+              id: complaint.createdByUser.id,
+              name: `${complaint.createdByUser.firstName ?? ''} ${complaint.createdByUser.lastName ?? ''}`.trim(),
+              username: complaint.createdByUser.username,
+              role: complaint.createdByUser.role,
+            }
+          : null,
+
+        booking: complaint.booking
+          ? {
+              id: complaint.booking.id,
+              status: complaint.booking.status,
+            }
+          : null,
+
+        createdAt: complaint.createdAt,
+        updatedAt: complaint.updatedAt,
+      })),
+
       pagination: {
         total,
         page,
         limit,
-        totalPages: Math.ceil(total / limit),
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPreviousPage: page > 1,
       },
     };
   }

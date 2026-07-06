@@ -178,10 +178,10 @@ export class RegisterDto {
   @Transform(({ value }) => value?.trim())
   firstName!: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
   @Transform(({ value }) => value?.trim())
-  lastName!: string;
+  lastName?: string;
 
   @IsString()
   @IsNotEmpty()

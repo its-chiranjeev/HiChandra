@@ -401,17 +401,19 @@ export class UserService {
       );
       const customerAddressRepository = manager.getRepository(CustomerAddress);
 
-      const existingUserByEmail = await userRepository.findOne({
-        where: { email: dto.email },
-      });
-      if (existingUserByEmail) {
-        throw new ConflictException('Email already in use');
-      }
-      const existingUserByPhone = await userRepository.findOne({
-        where: { phone: dto.phone },
-      });
-      if (existingUserByPhone) {
-        throw new ConflictException('Phone number already in use');
+      // const existingUserByEmail = await userRepository.findOne({
+      //   where: { email: dto.email },
+      // });
+      // if (existingUserByEmail) {
+      //   throw new ConflictException('Email already in use');
+      // }
+      if (dto.email){
+        const existingUserByPhone = await userRepository.findOne({
+          where: { phone: dto.phone },
+        });
+        if (existingUserByPhone) {
+          throw new ConflictException('Phone number already in use');
+        }
       }
 
       if (dto.username) {

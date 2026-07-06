@@ -1,11 +1,11 @@
-import {Booking, BOOKING_STATUS, BOOKING_PAYMENT_STATUS, Service, CustomerAddress, User, USER_ROLE, USER_STATUS, TECHNICIAN_STATUS, TechnicianService, TechnicianLocation, Otp, PriceBreakdown, Payment, PAYMENT_STATUS, COMPLAINT_STATUS, TECHNICIAN_PAYOUT_STATUS} from '@hichandra/entities';
+import {Booking, BOOKING_STATUS, BOOKING_PAYMENT_STATUS, Service, CustomerAddress, User, USER_ROLE, USER_STATUS, TECHNICIAN_STATUS, JOB_STATUS, TechnicianService, TechnicianLocation, Otp, PriceBreakdown, Payment, PAYMENT_STATUS, COMPLAINT_STATUS, TECHNICIAN_PAYOUT_STATUS} from '@hichandra/entities';
 import { EmailService } from '@hichandra/email-services';
 import { PaymentService, RazorpayXService } from '@hichandra/payment';
 import { Injectable, NotFoundException, BadRequestException, UnprocessableEntityException , ForbiddenException, UnauthorizedException} from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { CreateBookingDto, UpdateBookingStatusDto,CreateBookingReviewDto, StartBookingDto, AssignBookingDto, CancelBookingDto, CreateComplaintDto, UpdateComplaintDto, CreateTechnicianPayoutDto, RescheduleBookingDto, RepeatBookingDto , TechnicianCancelBookingDto } from '@hichandra/dtos';
 import { AssignmentService } from '../assignment/assignment.service';
-import { BookingRepository, UserRepository, ComplaintRepository, PaymentRepository, TechnicianPayoutRepository } from '@hichandra/repositories';
+import { BookingRepository, UserRepository, ComplaintRepository, PaymentRepository, TechnicianPayoutRepository, TechnicianProfile } from '@hichandra/repositories';
 import { randomUUID } from 'crypto';
 
 @Injectable()
@@ -44,7 +44,14 @@ export class BookingService {
         technicianServices.map(async (ts) => {
           const technicianProfileId = ts.technicianProfileId;
           const user = await manager.getRepository(User).findOne({ //add condition for technician should be available
-            where: { technicianProfileId: technicianProfileId },
+            // where: { technicianProfileId: technicianProfileId },
+            where: {
+            status: USER_STATUS.ACTIVE,
+            technicianProfile: {
+              id: technicianProfileId,
+              jobStatus: JOB_STATUS.AVAILABLE,
+            },
+          },
             relations: ['technicianProfile', 'technicianProfile.locations'],
           });
           if (user?.technicianProfile?.locations) {
@@ -763,6 +770,7 @@ export class BookingService {
     return this.dataSource.transaction(async (manager) => {
       const bookingRepo = manager.getRepository(Booking);
       const otpRepo = manager.getRepository(Otp);
+      const technicianProfileRepo = manager.getRepository(TechnicianProfile);
 
       const booking = await bookingRepo.findOne({
         where: { id: bookingId },
@@ -832,6 +840,23 @@ export class BookingService {
 
       booking.status = dto.status;
       const updatedBooking = await bookingRepo.save(booking);
+
+      if (dto.status === BOOKING_STATUS.ENROUTE) {
+        await technicianProfileRepo.update(
+          { userId: technicianId },
+          { jobStatus: JOB_STATUS.BUSY },
+        );
+      }
+
+      if (
+        dto.status === BOOKING_STATUS.COMPLETED ||
+        dto.status === BOOKING_STATUS.CANCELLED
+      ) {
+        await technicianProfileRepo.update(
+          { userId: technicianId },
+          { jobStatus: JOB_STATUS.AVAILABLE },
+        );
+      }
 
       if (dto.status === BOOKING_STATUS.ARRIVED) {
         if (!booking.customer || !booking.customer.email) {

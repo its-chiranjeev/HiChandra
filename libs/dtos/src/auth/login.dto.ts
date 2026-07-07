@@ -16,5 +16,4 @@ export class LoginDto {
   @MinLength(6)
   @Transform(({ value }) => value?.trim())
   password!: string;
-  
 }

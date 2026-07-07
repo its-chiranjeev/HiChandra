@@ -87,6 +87,7 @@ export class AuthModuleController {
     return this.authModuleService.forgotPasswordService(dto);
   }
 
+  
   @Patch('reset-password')
   @HttpCode(HttpStatus.OK)
   async resetPassword(

@@ -1,16 +1,17 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { User } from '@hichandra/entities';
+import { Repository, Not } from 'typeorm';
+import { User, CustomerAddress, USER_ROLE, USER_STATUS } from '@hichandra/entities';
 import { BaseRepository } from './baseDb.repository';
-import { USER_ROLE, USER_STATUS } from '@hichandra/entities';
-import { Not } from 'typeorm';
 
 @Injectable()
 export class UserRepository extends BaseRepository<User> {
   constructor(
     @InjectRepository(User)
     repo: Repository<User>,
+
+    @InjectRepository(CustomerAddress)
+    private readonly addressRepository: Repository<CustomerAddress>,
   ) {
     super(repo);
   }
@@ -114,5 +115,18 @@ export class UserRepository extends BaseRepository<User> {
 
   async saveUser(user: User): Promise<User> {
     return this.repo.save(user);
+  }
+
+  async findCustomerAddresses(userId: number) {
+    return this.addressRepository.find({
+      where: {
+        userId,
+        isActive: true,
+      },
+      order: {
+        isDefault: 'DESC',
+        createdAt: 'DESC',
+      },
+    });
   }
 }

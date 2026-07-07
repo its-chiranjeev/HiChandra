@@ -183,6 +183,14 @@ export class UserController {
     return this.userService.userRegisterService(dto, files);
   }
 
+  @Get('customer/addresses')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLE.CUSTOMER)
+  @HttpCode(HttpStatus.OK)
+  async getMyAddresses(@Req() req: any) {
+    return this.userService.getMyAddresses(req.user.id);
+  }
+  
   @Post('customer/address')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(USER_ROLE.CUSTOMER)

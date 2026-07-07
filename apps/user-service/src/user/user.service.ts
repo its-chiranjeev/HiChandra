@@ -1448,4 +1448,29 @@ export class UserService {
     message: 'Technician added to favorites successfully',
   };
 }
+
+  async getMyAddresses(userId: number) {
+    const addresses = await this.userRepository.findCustomerAddresses(userId);
+
+    if (!addresses.length) {
+      throw new NotFoundException('No addresses found');
+    }
+
+    return {
+      success: true,
+      message: 'Addresses fetched successfully',
+      data: addresses.map(address => ({
+        id: address.id,
+        fullAddress: address.fullAddress,
+        city: address.city,
+        state: address.state,
+        pincode: address.pincode,
+        latitude: Number(address.latitude),
+        longitude: Number(address.longitude),
+        isDefault: address.isDefault,
+        createdAt: address.createdAt,
+        updatedAt: address.updatedAt,
+      })),
+    };
+  }
 }

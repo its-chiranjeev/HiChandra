@@ -177,7 +177,7 @@ export class PaymentService {
 
     let razorpayPayment: Record<string, unknown> | null = null;
 
-    if (payment.paymentId) {
+    if (payment?.paymentId) {
       try {
         razorpayPayment =
           (await this.razorpay.payments.fetch(payment.paymentId)) as unknown as Record<
@@ -286,7 +286,7 @@ export class PaymentService {
       customerEmail: booking.customer.email ?? '-',
       customerPhone: booking.customer.phone ?? '-',
 
-      serviceName: booking.service.name,
+      serviceName: booking.service?.name ?? '-',
       bookingStatus: booking.status,
 
       paymentId: String(

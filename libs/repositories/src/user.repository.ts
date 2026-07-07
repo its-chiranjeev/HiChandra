@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Not } from 'typeorm';
-import { User, CustomerAddress, USER_ROLE, USER_STATUS } from '@hichandra/entities';
+import { User, CustomerAddress, USER_ROLE, USER_STATUS, Booking, BOOKING_STATUS, } from '@hichandra/entities';
 import { BaseRepository } from './baseDb.repository';
 
 @Injectable()
@@ -9,6 +9,9 @@ export class UserRepository extends BaseRepository<User> {
   constructor(
     @InjectRepository(User)
     repo: Repository<User>,
+
+    @InjectRepository(Booking)
+    private readonly bookingRepository: Repository<Booking>,
 
     @InjectRepository(CustomerAddress)
     private readonly addressRepository: Repository<CustomerAddress>,
@@ -128,5 +131,60 @@ export class UserRepository extends BaseRepository<User> {
         createdAt: 'DESC',
       },
     });
+  }
+
+  async getCustomerDashboardStats(userId: number) {
+    const [
+      totalBookings,
+      upcomingBookings,
+      activeBookings,
+      savedAddresses,
+    ] = await Promise.all([
+      this.bookingRepository.count({
+        where: { customerId: userId },
+      }),
+
+      this.bookingRepository.count({
+        where: {
+          customerId: userId,
+          status: BOOKING_STATUS.PENDING,
+        },
+      }),
+
+      this.bookingRepository.count({
+        where: [
+          {
+            customerId: userId,
+            status: BOOKING_STATUS.ACCEPTED,
+          },
+          {
+            customerId: userId,
+            status: BOOKING_STATUS.ENROUTE,
+          },
+          {
+            customerId: userId,
+            status: BOOKING_STATUS.ARRIVED,
+          },
+          {
+            customerId: userId,
+            status: BOOKING_STATUS.ONGOING,
+          },
+        ],
+      }),
+
+      this.addressRepository.count({
+        where: {
+          userId,
+          isActive: true,
+        },
+      }),
+    ]);
+
+    return {
+      totalBookings,
+      upcomingBookings,
+      activeBookings,
+      savedAddresses,
+    };
   }
 }

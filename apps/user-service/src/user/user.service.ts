@@ -65,7 +65,7 @@ export class UserService {
     private readonly authModuleService: AuthModuleService,
     private readonly s3Service: S3Service,
     private readonly favoriteTechnicianRepository: FavoriteTechnicianRepository,
-     private readonly razorpayXService: RazorpayXService,
+    private readonly razorpayXService: RazorpayXService,
   ) {}
 
   async findById(id: number) {
@@ -1470,6 +1470,43 @@ export class UserService {
         isDefault: address.isDefault,
         createdAt: address.createdAt,
         updatedAt: address.updatedAt,
+      })),
+    };
+  }
+
+  async getCustomerDashboardStats(userId: number) {
+    const stats =
+      await this.userRepository.getCustomerDashboardStats(userId);
+
+    return {
+      success: true,
+      message: 'Customer dashboard stats fetched successfully',
+      data: stats,
+    };
+  }
+
+  async getFavouriteTechnicians(userId: number) {
+    const favourites =
+      await this.favoriteTechnicianRepository.findFavouriteTechnicians(userId);
+
+    return {
+      success: true,
+      message: favourites.length
+        ? 'Favourite technicians fetched successfully'
+        : 'No favourite technicians found',
+      data: favourites.map((fav) => ({
+        id: fav.technician.id,
+        firstName: fav.technician.firstName,
+        lastName: fav.technician.lastName,
+        phone: fav.technician.phone,
+        profileImage: fav.technician.profileImage,
+        technicianProfile: fav.technician.technicianProfile
+          ? {
+              id: fav.technician.technicianProfile.id,
+              status: fav.technician.technicianProfile.status,
+            }
+          : null,
+        addedAt: fav.createdAt,
       })),
     };
   }

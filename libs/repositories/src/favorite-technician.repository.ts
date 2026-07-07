@@ -51,4 +51,22 @@ export class FavoriteTechnicianRepository {
   ): Promise<FavoriteTechnician> {
     return this.repo.remove(favorite);
   }
+
+  async findFavouriteTechnicians(
+    customerId: number,
+  ): Promise<FavoriteTechnician[]> {
+    return this.repo.find({
+      where: {
+        customerId,
+      },
+      relations: {
+        technician: {
+          technicianProfile: true,
+        },
+      },
+      order: {
+        createdAt: 'DESC',
+      },
+    });
+  }
 }

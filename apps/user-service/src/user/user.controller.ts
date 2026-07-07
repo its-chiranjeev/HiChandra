@@ -75,12 +75,6 @@ export class UserController {
     );
   }
 
-  @Get(':id')
-  @UseGuards(JwtAuthGuard)
-  async getUserById(@Param('id', ParseIntPipe) id: number) {
-    return this.userService.getUserByIdService(id);
-  }
-
   @Patch('update/:id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(USER_ROLE.ADMIN)
@@ -252,6 +246,13 @@ export class UserController {
     return this.userService.updateProfileService(req.user.id, dto, files);
   }
 
+  @Get('customer/dashboard-stats')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLE.CUSTOMER)
+  @HttpCode(HttpStatus.OK)
+  async getCustomerDashboardStats(@Req() req: any) {
+    return this.userService.getCustomerDashboardStats(req.user.id);
+  }
   @Post('favorite-technicians/:technicianId')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(USER_ROLE.CUSTOMER)
@@ -264,6 +265,20 @@ export class UserController {
       req.user,
       technicianId,
     );
+  }
+
+  @Get('favourite-technicians')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLE.CUSTOMER)
+  @HttpCode(HttpStatus.OK)
+  async getFavouriteTechnicians(@Req() req: any) {
+    return this.userService.getFavouriteTechnicians(req.user.id);
+  }
+
+  @Get(':id')
+  @UseGuards(JwtAuthGuard)
+  async getUserById(@Param('id', ParseIntPipe) id: number) {
+    return this.userService.getUserByIdService(id);
   }
 
 }

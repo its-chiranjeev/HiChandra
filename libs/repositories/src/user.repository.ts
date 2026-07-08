@@ -1,8 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Not } from 'typeorm';
-import { User, CustomerAddress, USER_ROLE, USER_STATUS, Booking, BOOKING_STATUS, } from '@hichandra/entities';
+import { User, CustomerAddress, USER_ROLE, USER_STATUS, Booking, BOOKING_STATUS, TECHNICIAN_STATUS } from '@hichandra/entities';
 import { BaseRepository } from './baseDb.repository';
+import { Brackets } from 'typeorm';
 
 @Injectable()
 export class UserRepository extends BaseRepository<User> {
@@ -34,36 +35,100 @@ export class UserRepository extends BaseRepository<User> {
     });
   }
 
+  // async findAllUsers(
+  //   page = 1,
+  //   limit = 10,
+  //   role?: USER_ROLE,
+  //   status?: USER_STATUS,
+  // ) {
+  //   // const where: any = {
+  //   //   role: Not(USER_ROLE.ADMIN),
+  //   // };
+
+  //   const where: any = {};
+
+  //   if (role) {
+  //     where.role = role;
+  //   } else {
+  //     where.role = Not(USER_ROLE.ADMIN);
+  //   }
+
+  //   if (status) {
+  //     where.status = status;
+  //   }
+
+  //   const [users, total] = await this.repo.findAndCount({
+  //     where,
+  //     relations: {
+  //       technicianProfile: {
+  //         services: true,
+  //         brandExpertise: true,
+  //         locations: true,
+  //       },
+  //       addresses: true,
+  //     },
+  //     skip: (page - 1) * limit,
+  //     take: limit,
+  //     order: {
+  //       createdAt: 'DESC',
+  //     },
+  //   });
+
+  //   return { users, total };
+  // }
+
   async findAllUsers(
     page = 1,
     limit = 10,
     role?: USER_ROLE,
     status?: USER_STATUS,
+    technicianProfileStatus?: TECHNICIAN_STATUS,
   ) {
-    const where: any = {
-      role: Not(USER_ROLE.ADMIN),
-    };
+    const query = this.repo
+      .createQueryBuilder('user')
+      .leftJoinAndSelect('user.technicianProfile', 'technicianProfile')
+      .leftJoinAndSelect('technicianProfile.services', 'services')
+      .leftJoinAndSelect('technicianProfile.brandExpertise', 'brandExpertise')
+      .leftJoinAndSelect('technicianProfile.locations', 'locations')
+      .leftJoinAndSelect('user.addresses', 'addresses')
+      .where('user.role != :adminRole', {
+        adminRole: USER_ROLE.ADMIN,
+      });
 
-    if (status) {
-      where.status = status;
+    if (role) {
+      query.andWhere('user.role = :role', { role });
     }
 
-    const [users, total] = await this.repo.findAndCount({
-      where,
-      relations: {
-        technicianProfile: {
-          services: true,
-          brandExpertise: true,
-          locations: true,
-        },
-        addresses: true,
-      },
-      skip: (page - 1) * limit,
-      take: limit,
-      order: {
-        createdAt: 'DESC',
-      },
-    });
+    if (status) {
+      query.andWhere('user.status = :status', { status });
+    }
+
+    if (technicianProfileStatus) {
+      query.andWhere(
+        new Brackets((qb) => {
+          qb.where('user.role = :customerRole', {
+            customerRole: USER_ROLE.CUSTOMER,
+          }).orWhere(
+            new Brackets((subQb) => {
+              subQb
+                .where('user.role = :technicianRole', {
+                  technicianRole: USER_ROLE.TECHNICIAN,
+                })
+                .andWhere(
+                  'technicianProfile.status = :technicianProfileStatus',
+                  { technicianProfileStatus },
+                );
+            }),
+          );
+        }),
+      );
+    }
+
+    const [users, total] = await query
+      .orderBy('user.createdAt', 'DESC')
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getManyAndCount();
 
     return { users, total };
   }

@@ -1,4 +1,4 @@
-import {Booking, BOOKING_STATUS, BOOKING_PAYMENT_STATUS, Service, CustomerAddress, User, USER_ROLE, USER_STATUS, TECHNICIAN_STATUS, JOB_STATUS, TechnicianService, TechnicianLocation, Otp, PriceBreakdown, Payment, PAYMENT_STATUS, COMPLAINT_STATUS, TECHNICIAN_PAYOUT_STATUS, TechnicianProfile} from '@hichandra/entities';
+import {Booking, BOOKING_STATUS, BOOKING_PAYMENT_STATUS, Service, CustomerAddress, User, USER_ROLE, USER_STATUS, TECHNICIAN_STATUS, JOB_STATUS, TechnicianService, TechnicianLocation, Otp, PriceBreakdown, Payment, PAYMENT_STATUS, PAYMENT_BY,COMPLAINT_STATUS, TECHNICIAN_PAYOUT_STATUS, TechnicianProfile} from '@hichandra/entities';
 import { EmailService } from '@hichandra/email-services';
 import { PaymentService, RazorpayXService } from '@hichandra/payment';
 import { Injectable, NotFoundException, BadRequestException, UnprocessableEntityException , ForbiddenException, UnauthorizedException} from '@nestjs/common';
@@ -24,10 +24,40 @@ export class BookingService {
 
   ) { }
 
+  private getIstDateParts(date: Date) {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Kolkata',
+      weekday: 'short',
+      hour: 'numeric',
+      hour12: false,
+    }).formatToParts(date);
+
+    const weekday = parts.find((p) => p.type === 'weekday')?.value;
+    const hour = Number(parts.find((p) => p.type === 'hour')?.value);
+
+    return { weekday, hour };
+  }
+
+  private toIstString(date?: Date | string | null) {
+    if (!date) return null;
+
+    return new Date(date).toLocaleString('en-IN', {
+      timeZone: 'Asia/Kolkata',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true,
+    });
+  }
+
   async createBooking(
     customerId: number,
     dto: CreateBookingDto,
-  ): Promise<Booking> {
+  // ): Promise<Booking> {
+    ): Promise<any> {
     return this.dataSource.transaction(async (manager) => {
       const serviceRepo = manager.getRepository(Service);
       const addressRepo = manager.getRepository(CustomerAddress);
@@ -90,14 +120,31 @@ export class BookingService {
       }
 
       // Check for same-day booking of the same service
+      // const targetDate = dto.scheduledAt
+      //   ? new Date(dto.scheduledAt)
+      //   : new Date();
+      // const startOfDay = new Date(targetDate);
+      // startOfDay.setHours(0, 0, 0, 0);
+      // const endOfDay = new Date(targetDate);
+      // endOfDay.setHours(23, 59, 59, 999);
+//added
       const targetDate = dto.scheduledAt
         ? new Date(dto.scheduledAt)
         : new Date();
-      const startOfDay = new Date(targetDate);
-      startOfDay.setHours(0, 0, 0, 0);
-      const endOfDay = new Date(targetDate);
-      endOfDay.setHours(23, 59, 59, 999);
 
+      if (Number.isNaN(targetDate.getTime())) {
+        throw new BadRequestException('Invalid scheduledAt date');
+      }
+
+      // Get IST date only, example: 2026-07-08
+      const istDateString = targetDate.toLocaleDateString('en-CA', {
+        timeZone: 'Asia/Kolkata',
+      });
+
+      // IST day range converted to UTC for DB query
+      const startOfDay = new Date(`${istDateString}T00:00:00.000+05:30`);
+      const endOfDay = new Date(`${istDateString}T23:59:59.999+05:30`);
+//
       const sameDayBooking = await bookingRepo
         .createQueryBuilder('booking')
         .where('booking.customerId = :customerId', { customerId })
@@ -224,13 +271,24 @@ export class BookingService {
       // Calculate Fare and Breakdown using new toggle booleans
       const pricingRule = service.pricingRule;
       const serviceBasePrice = Number(pricingRule.serviceBasePrice);
-      const isWeekend = targetDate.getDay() === 0 || targetDate.getDay() === 6;
+      // const isWeekend = targetDate.getDay() === 0 || targetDate.getDay() === 6;
+      // const weekendMultiplier = isWeekend
+      //   ? Number(pricingRule.weekendMultiplier)
+      //   : 1.0;
+
+      // let isPeakHour = false;
+      // const hour = targetDate.getHours();
+//added
+      const { weekday, hour } = this.getIstDateParts(targetDate);
+
+      const isWeekend = weekday === 'Sat' || weekday === 'Sun';
+
       const weekendMultiplier = isWeekend
         ? Number(pricingRule.weekendMultiplier)
         : 1.0;
 
       let isPeakHour = false;
-      const hour = targetDate.getHours();
+//
       if (pricingRule.peakHours && Array.isArray(pricingRule.peakHours)) {
         for (const range of pricingRule.peakHours) {
           if (hour >= range.start && hour <= range.end) {
@@ -282,7 +340,7 @@ export class BookingService {
       const totalAmount = Number((subtotal + platformFee + gst).toFixed(2));
 
       // Make validation that totalAmount is greater than serviceBasePrice
-      if (totalAmount <= serviceBasePrice) {
+      if (totalAmount < serviceBasePrice) {
         throw new BadRequestException(
           'Calculation error: Total amount must be greater than the service base price.',
         );
@@ -369,7 +427,17 @@ export class BookingService {
       //  throw new Error("hell");
       //     return savedBooking;
 
-    return savedBooking;
+    //return savedBooking;
+    return {
+        ...savedBooking,
+        scheduledAtIst: this.toIstString(savedBooking.scheduledAt),
+        createdAtIst: this.toIstString(savedBooking.createdAt),
+        updatedAtIst: this.toIstString(savedBooking.updatedAt),
+      } as Booking & {
+        scheduledAtIst: string | null;
+        createdAtIst: string | null;
+        updatedAtIst: string | null;
+      };
     });
  }
 
@@ -445,10 +513,19 @@ export class BookingService {
             pincode: booking.address.pincode,
           }
         : null,
+      // scheduledAt: booking.scheduledAt,
+      // totalAmount: booking.totalAmount,
+      // isEmergency: booking.isEmergency,
+      // createdAt: booking.createdAt,
+
       scheduledAt: booking.scheduledAt,
+      scheduledAtIst: this.toIstString(booking.scheduledAt),
+
       totalAmount: booking.totalAmount,
       isEmergency: booking.isEmergency,
+
       createdAt: booking.createdAt,
+      createdAtIst: this.toIstString(booking.createdAt),
     };
 
     if (role === USER_ROLE.ADMIN) {
@@ -1180,6 +1257,7 @@ export class BookingService {
       const newPayment = paymentRepo.create({
         bookingId: booking.id,
         customerId: booking.customerId,
+        payBy: USER_ROLE.CUSTOMER,
         amount,
         currency: 'INR',
         status: PAYMENT_STATUS.PENDING,
@@ -2023,6 +2101,7 @@ export class BookingService {
         status: booking.status,
         paymentStatus: booking.paymentStatus,
         scheduledAt: booking.scheduledAt,
+        scheduledAtIst: this.toIstString(booking.scheduledAt),
         totalAmount: booking.totalAmount,
         isEmergency: booking.isEmergency,
         cancellationReason: booking.cancellationReason,
@@ -2046,8 +2125,13 @@ export class BookingService {
             }
           : null,
 
+        // createdAt: booking.createdAt,
+        // updatedAt: booking.updatedAt,
         createdAt: booking.createdAt,
+        createdAtIst: this.toIstString(booking.createdAt),
+
         updatedAt: booking.updatedAt,
+        updatedAtIst: this.toIstString(booking.updatedAt),
       };
 
       if (user.role === USER_ROLE.CUSTOMER) {

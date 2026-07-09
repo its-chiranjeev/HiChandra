@@ -8,7 +8,7 @@ import {
   JoinColumn,
   Index,
 } from 'typeorm';
-import { User } from './user.entity';
+import { User, USER_ROLE } from './user.entity';
 import { Booking } from './booking.entity';
 
 export enum PAYMENT_STATUS {
@@ -31,12 +31,18 @@ export class Payment {
   booking!: Booking;
 
   @Index()
-  @Column({ type: 'int' })
-  customerId!: number;
+  @Column({ type: 'int', nullable: true })
+  customerId!: number | null;
 
-  @ManyToOne(() => User, { onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'customerId' })
-  customer!: User;
+  // @ManyToOne(() => User, { onDelete: 'CASCADE' })
+  // @JoinColumn({ name: 'customerId' })
+  // customer!: User;
+
+  @ManyToOne(() => User, {
+  nullable: true,
+  onDelete: 'SET NULL',
+  })
+  customer?: User | null;
 
   @Index()
   @Column({ type: 'int', nullable: true })
@@ -61,6 +67,12 @@ export class Payment {
     default: PAYMENT_STATUS.PENDING,
   })
   status!: PAYMENT_STATUS;
+
+  @Column({ 
+    type: 'enum', nullable:true,
+    enum: USER_ROLE,
+  })
+  payBy!: USER_ROLE;
 
   @Index({ unique: true })
   @Column({ type: 'varchar', length: 100, nullable: true })

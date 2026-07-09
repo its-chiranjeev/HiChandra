@@ -96,12 +96,14 @@ export class UserService {
     limit: number,
     role?: USER_ROLE,
     status?: USER_STATUS,
+    technicianProfileStatus?: TECHNICIAN_STATUS,
   ) {
     const { users, total } = await this.userRepository.findAllUsers(
       page,
       limit,
       role,
       status,
+      technicianProfileStatus,
     );
     const formattedUsers = users.map((user) => {
       const {

@@ -14,7 +14,7 @@ import {
   AssignBookingDto,
   UpdateTechnicianStatusDto
 } from '@hichandra/dtos';
-import { USER_ROLE, USER_STATUS } from '@hichandra/entities';
+import { TECHNICIAN_STATUS, USER_ROLE, USER_STATUS } from '@hichandra/entities';
 import { UpdateServiceDto } from '@hichandra/dtos';
 import { filter } from 'rxjs';
 
@@ -60,18 +60,21 @@ export class UserController {
   }
 
   @Get('all')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLE.ADMIN)
   async getAllUsers(
     @Query('page') page = '1',
     @Query('limit') limit = '10',
     @Query('role') role?: USER_ROLE,
     @Query('status') status?: USER_STATUS,
+    @Query('technicianProfileStatus') technicianProfileStatus?: TECHNICIAN_STATUS,
   ) {
     return this.userService.getAllUsersService(
       Number(page),
       Number(limit),
       role,
       status,
+      technicianProfileStatus,
     );
   }
 
@@ -253,6 +256,7 @@ export class UserController {
   async getCustomerDashboardStats(@Req() req: any) {
     return this.userService.getCustomerDashboardStats(req.user.id);
   }
+
   @Post('favorite-technicians/:technicianId')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(USER_ROLE.CUSTOMER)

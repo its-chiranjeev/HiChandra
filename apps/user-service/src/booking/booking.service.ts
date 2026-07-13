@@ -1,4 +1,4 @@
-import {Booking, BOOKING_STATUS, BOOKING_PAYMENT_STATUS, Service, CustomerAddress, User, USER_ROLE, USER_STATUS, TECHNICIAN_STATUS, JOB_STATUS, TechnicianService, TechnicianLocation, Otp, PriceBreakdown, Payment, PAYMENT_STATUS, PAYMENT_BY,COMPLAINT_STATUS, TECHNICIAN_PAYOUT_STATUS, TechnicianProfile} from '@hichandra/entities';
+import {Booking, BOOKING_STATUS, BOOKING_PAYMENT_STATUS, Service, CustomerAddress, User, USER_ROLE, USER_STATUS, TECHNICIAN_STATUS, JOB_STATUS, TechnicianService, TechnicianLocation, Otp, PriceBreakdown, Payment, PAYMENT_STATUS, COMPLAINT_STATUS, TECHNICIAN_PAYOUT_STATUS, TechnicianProfile} from '@hichandra/entities';
 import { EmailService } from '@hichandra/email-services';
 import { PaymentService, RazorpayXService } from '@hichandra/payment';
 import { Injectable, NotFoundException, BadRequestException, UnprocessableEntityException , ForbiddenException, UnauthorizedException} from '@nestjs/common';
@@ -786,50 +786,105 @@ export class BookingService {
     };
   }
 
-  async cancelBooking(
-    customerId: number,
-    dto: CancelBookingDto,)
-   {
-    const { bookingId, cancellationReason } = dto;
+  async cancelBooking(user: any, dto: CancelBookingDto) {
+      const { bookingId } = dto;
 
-    const booking =
-      await this.bookingRepository.findCustomerBooking(
-        bookingId,
-        customerId,
-      );
+      const booking = await this.bookingRepository.findBookingById(bookingId);
 
-    if (!booking) {
-      throw new UnprocessableEntityException(
-        'Booking not found or does not belong to customer',
-      );
+      if (!booking) {
+        throw new NotFoundException('Booking not found');
+      }
+
+      if (booking.status === BOOKING_STATUS.COMPLETED) {
+        throw new BadRequestException('Completed booking cannot be cancelled');
+      }
+
+      if (booking.status === BOOKING_STATUS.CANCELLED) {
+        throw new BadRequestException('Booking already cancelled');
+      }
+
+      let updateData: Partial<Booking>;
+
+      switch (user.role) {
+        case USER_ROLE.CUSTOMER: {
+          if (booking.customerId !== user.id) {
+            throw new ForbiddenException(
+              'You are not allowed to cancel this booking',
+            );
+          }
+
+          if (!dto.cancellationReason) {
+            throw new BadRequestException('Cancellation reason is required');
+          }
+
+          updateData = {
+            status: BOOKING_STATUS.CANCELLED,
+            cancelledBy: user.id,
+            cancellationReason: dto.cancellationReason,
+          };
+
+          break;
+        }
+
+        case USER_ROLE.TECHNICIAN: {
+          if (!booking.technician || booking.technician.id !== user.id) {
+            throw new ForbiddenException(
+              'You are not assigned to this booking',
+            );
+          }
+
+          if (booking.status !== BOOKING_STATUS.ACCEPTED) {
+            throw new BadRequestException(
+              'Only accepted booking can be cancelled by technician',
+            );
+          }
+
+          updateData = {
+            status: BOOKING_STATUS.PENDING,
+            technicianId: null as any,
+            cancelledBy: user.id,
+            cancellationReason: '',
+          };
+
+          break;
+        }
+
+        default:
+          throw new ForbiddenException(
+            'You are not allowed to cancel this booking',
+          );
+      }
+
+      const updated =
+        await this.bookingRepository.updateBookingCancelFields(
+          booking.id,
+          updateData,
+        );
+
+      if (!updated) {
+        throw new NotFoundException('Booking not found after update');
+      }
+
+      return {
+        message:
+          user.role === USER_ROLE.CUSTOMER
+            ? 'Booking cancelled successfully'
+            : 'Booking released successfully',
+
+        data: {
+          bookingId: updated.id,
+          status: updated.status,
+          technicianId: updated.technicianId ?? null,
+          cancelledBy: updated.cancelledBy,
+          cancelledByRole: user.role,
+          cancellationReason:
+            user.role === USER_ROLE.CUSTOMER
+              ? updated.cancellationReason
+              : '-',
+          updatedAt: updated.updatedAt,
+        },
+      };
     }
-
-    if (booking.status === BOOKING_STATUS.CANCELLED) {
-      throw new UnprocessableEntityException(
-        'Booking already cancelled',
-      );
-    }
-
-    if (booking.status === BOOKING_STATUS.COMPLETED) {
-      throw new UnprocessableEntityException(
-        'Completed booking cannot be cancelled',
-      );
-    }
-
-    booking.status = BOOKING_STATUS.CANCELLED;
-    booking.cancellationReason = cancellationReason;
-
-    const updated =
-      await this.bookingRepository.saveBooking(
-        booking,
-      );
-
-    return {
-      success: true,
-      message: 'Booking cancelled successfully',
-      data: updated,
-    };
-  }
 
   async createComplaint(
     user: any,

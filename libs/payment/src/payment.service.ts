@@ -119,6 +119,7 @@ export class PaymentService {
     switch (status?.toLowerCase()) {
       case 'captured':
       case 'paid':
+      case 'success':
         return 'Paid';
 
       case 'failed':
@@ -189,19 +190,29 @@ export class PaymentService {
       }
     }
 
-    const razorpayStatus = String(
-      razorpayPayment?.status ?? payment.status ?? 'PENDING',
-    ).toLowerCase();
+    let finalStatus: string;
+
+    // 1. Prefer Razorpay
+    if (razorpayPayment?.status) {
+      finalStatus = String(razorpayPayment.status).toLowerCase();
+    } else {
+      // 2. Fallback to DB
+      finalStatus = String(payment.status ?? 'PENDING').toLowerCase();
+    }
 
     const paymentStatusDisplay =
-      this.getPaymentStatusDisplay(razorpayStatus);
+      this.getPaymentStatusDisplay(finalStatus);
 
-    const statusClass =
-      razorpayStatus === 'captured' || razorpayStatus === 'paid'
-        ? 'success'
-        : razorpayStatus === 'failed'
-          ? 'failed'
-          : 'pending';
+    const isPaid =
+      finalStatus === 'captured' ||
+      finalStatus === 'paid' ||
+      finalStatus === 'success';
+
+    const statusClass = isPaid
+      ? 'success'
+      : finalStatus === 'failed'
+        ? 'failed'
+        : 'pending';
 
     const paymentMethodDisplay =
       this.formatPaymentMethod(
@@ -219,12 +230,8 @@ export class PaymentService {
         '-',
     );
 
-    const isPaid =
-      razorpayStatus === 'captured' ||
-      razorpayStatus === 'paid';
-
     const invoiceTitle = isPaid
-      ? 'HiChandra Invoice'
+      ? 'HiChandra Tax Invoice'
       : 'HiChandra Proforma Invoice';
 
     const invoiceId = isPaid
@@ -286,7 +293,7 @@ export class PaymentService {
       customerEmail: booking.customer.email ?? '-',
       customerPhone: booking.customer.phone ?? '-',
 
-      serviceName: booking.service?.name ?? '-',
+      serviceName: booking.service?.name,
       bookingStatus: booking.status,
 
       paymentId: String(

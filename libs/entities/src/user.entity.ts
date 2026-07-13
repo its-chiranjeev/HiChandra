@@ -49,7 +49,7 @@ export class User {
   @Column({ type: 'varchar', length: 15, nullable: true })
   phone?: string;
 
-  @Column({type: 'varchar', length: 100, nullable: true })
+  @Column({ type: 'varchar', length: 100, nullable: true })
   country?: string;
 
   @Column({ type: 'varchar', length: 15, nullable: true })
@@ -99,6 +99,9 @@ export class User {
   @JoinColumn({ name: 'technicianProfileId' })
   technicianProfile?: TechnicianProfile;
 
+  @Column({ type: 'boolean', default: true })
+  isTechnicianProfileCompleted!: boolean;
+
   // Timestamps
   @CreateDateColumn()
   createdAt!: Date;
@@ -113,11 +116,16 @@ export class User {
   addresses?: CustomerAddress[];
 
   @Column({
-  type: 'decimal',
-  precision: 3,
-  scale: 2,
-  nullable: true,
+    type: 'decimal',
+    precision: 3,
+    scale: 2,
+    nullable: true,
   })
   overallRating?: number | null;
 
+  @Column({ type: 'int', nullable: true })
+  paymentId?: number | null;
+
+  @Column({ type: 'boolean', default: false })
+  isTokenPaid!: boolean;
 }

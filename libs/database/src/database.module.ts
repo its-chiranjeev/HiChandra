@@ -28,4 +28,4 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
   providers: [DatabaseService],
   exports: [DatabaseService],
 })
-export class DatabaseModule {}
+export class DatabaseModule { }

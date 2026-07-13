@@ -1,4 +1,4 @@
-import { IsOptional, IsString, IsNumber, IsBoolean, IsArray, ValidateNested, IsObject } from 'class-validator';
+import { IsOptional, IsString, IsNumber, IsBoolean, IsArray, ValidateNested, IsObject, Matches } from 'class-validator';
 import { plainToInstance, Transform, Type } from 'class-transformer';
 
 export class UpdateTechnicianLocationDto {
@@ -64,6 +64,16 @@ export class UpdateTechnicianProfileDetailsDto {
   @Transform(({ value }) => value === true || value === 'true')
   @IsBoolean()
   hasVehicle?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @Matches(
+    /^[a-zA-Z0-9.\-_]+@[a-zA-Z0-9.\-_]+$/,
+    {
+      message: 'Invalid UPI ID',
+    },
+  )
+  upiId?: string;
 
   @IsOptional()
   @IsString()

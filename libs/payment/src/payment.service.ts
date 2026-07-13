@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, StreamableFile, NotFoundException , ForbiddenException} from '@nestjs/common';
+import { BadRequestException, Injectable, StreamableFile, NotFoundException, ForbiddenException } from '@nestjs/common';
 import Razorpay from 'razorpay';
 import * as crypto from 'crypto';
 import puppeteer from 'puppeteer';
@@ -33,8 +33,8 @@ export class PaymentService {
   private razorpay: Razorpay;
 
   constructor(
-      private readonly bookingRepository: BookingRepository,
-      private readonly paymentRepository: PaymentRepository,
+    private readonly bookingRepository: BookingRepository,
+    private readonly paymentRepository: PaymentRepository,
   ) {
     this.razorpay = new Razorpay({
       key_id: process.env.RAZORPAY_KEY_ID || '',
@@ -83,7 +83,7 @@ export class PaymentService {
     }
 
     try {
-       console.log('Creating payment link...');
+      console.log('Creating payment link...');
       const paymentLink = await this.razorpay.paymentLink.create(
         payload as unknown as Parameters<Razorpay['paymentLink']['create']>[0],
       );
@@ -101,8 +101,65 @@ export class PaymentService {
       };
       throw new BadRequestException(
         error.error?.description ||
-          error.message ||
-          'Razorpay payment link creation failed',
+        error.message ||
+        'Razorpay payment link creation failed',
+      );
+    }
+  }
+
+  async createTokenPaymentLink(
+    amount: number,
+    userId: number,
+    customer: { name: string; email?: string; phone?: string },
+  ) {
+    const customerData: CustomerData = {
+      name: customer.name,
+    };
+    const notifyData: NotifyData = {};
+
+    if (customer.email && customer.email.trim() !== '') {
+      customerData.email = customer.email;
+      notifyData.email = true;
+    }
+    if (customer.phone && customer.phone.trim() !== '') {
+      customerData.contact = customer.phone;
+      notifyData.sms = true;
+    }
+
+    const referenceId = `token_user_${userId}_${Date.now()}`;
+
+    const payload: PaymentLinkPayload = {
+      amount: amount * 100,
+      currency: 'INR',
+      description: `Token Pre-Payment before booking`,
+      customer: customerData,
+      reminder_enable: true,
+      reference_id: referenceId,
+    };
+
+    if (Object.keys(notifyData).length > 0) {
+      payload.notify = notifyData;
+    }
+
+    try {
+      console.log('Creating token payment link...');
+      const paymentLink = await this.razorpay.paymentLink.create(
+        payload as unknown as Parameters<Razorpay['paymentLink']['create']>[0],
+      );
+
+      console.log(paymentLink);
+      return {
+        paymentLinkId: paymentLink.id,
+        url: paymentLink.short_url,
+        amount: amount,
+      };
+    } catch (err: unknown) {
+      const error = err as {
+        error?: { description?: string };
+        message?: string;
+      };
+      throw new BadRequestException(
+        error.error?.description || error.message || 'Failed to create token payment link',
       );
     }
   }
@@ -226,8 +283,8 @@ export class PaymentService {
 
     const errorMessage = String(
       razorpayPayment?.error_description ??
-        payment.errorMessage ??
-        '-',
+      payment.errorMessage ??
+      '-',
     );
 
     const invoiceTitle = isPaid
@@ -265,13 +322,13 @@ export class PaymentService {
 
       billingAddress: booking.address
         ? [
-            booking.address.fullAddress,
-            booking.address.city,
-            booking.address.state,
-            booking.address.pincode,
-          ]
-            .filter(Boolean)
-            .join(', ')
+          booking.address.fullAddress,
+          booking.address.city,
+          booking.address.state,
+          booking.address.pincode,
+        ]
+          .filter(Boolean)
+          .join(', ')
         : '-',
 
       technicianName: booking.technician
@@ -316,7 +373,7 @@ export class PaymentService {
 
       amount: amount.toFixed(2),
 
-     date: new Date(payment.createdAt).toLocaleString('en-IN'),
+      date: new Date(payment.createdAt).toLocaleString('en-IN'),
 
       errorMessage,
     });

@@ -10,6 +10,7 @@ import { S3Module } from '@hichandra/s3';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Service, PricingRule } from '@hichandra/entities';
 import { PaymentModule } from '@hichandra/payment';
+import { SmsServicesModule } from '@hichandra/sms-services';
 
 @Module({
 imports: [
@@ -23,6 +24,7 @@ imports: [
   AuthModuleModule,
   S3Module,
   PaymentModule,
+  SmsServicesModule,
 ],
   controllers: [UserController],
   providers: [UserService],

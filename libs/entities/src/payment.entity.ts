@@ -23,12 +23,12 @@ export class Payment {
   id!: number;
 
   @Index()
-  @Column({ type: 'int' })
-  bookingId!: number;
+  @Column({ type: 'int', nullable: true })
+  bookingId!: number | null;
 
-  @ManyToOne(() => Booking, { onDelete: 'CASCADE' })
+  @ManyToOne(() => Booking, { onDelete: 'CASCADE', nullable: true })
   @JoinColumn({ name: 'bookingId' })
-  booking!: Booking;
+  booking?: Booking | null;
 
   @Index()
   @Column({ type: 'int', nullable: true })

@@ -57,9 +57,9 @@ export class CreateServiceDto {
   @IsBoolean()
   isActive?: boolean;
 
+  @IsOptional()
   @IsNumber()
-  @IsNotEmpty()
-  serviceBasePrice!: number;
+  serviceBasePrice?: number;
 
   @IsOptional()
   @IsNumber()

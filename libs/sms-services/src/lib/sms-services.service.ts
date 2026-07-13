@@ -38,4 +38,29 @@ export class SmsService {
       throw error;
     }
   }
+
+  async sendSms(to: string, message: string) {
+    const phoneNumber = to.startsWith('+') ? to : `+91${to}`;
+
+    try {
+      const response = await this.twilioClient.messages.create({
+        body: message,
+        from: this.configService.getOrThrow<string>('TWILIO_PHONE_NUMBER'),
+        to: phoneNumber,
+      });
+
+      this.logger.log(
+        `SMS sent successfully to ${phoneNumber}. SID: ${response.sid}`,
+      );
+
+      return response;
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to send SMS to ${phoneNumber}`,
+        error?.stack,
+      );
+
+      throw error;
+    }
+  }
 }

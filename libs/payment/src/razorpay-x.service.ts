@@ -106,6 +106,46 @@ export class RazorpayXService {
     }
   }
 
+  async createVpaFundAccount(params: {
+    contactId: string;
+    upiId: string;
+  }) {
+    try {
+      const response = await axios.post(
+        `${this.baseUrl}/fund_accounts`,
+        {
+          contact_id: params.contactId,
+          account_type: 'vpa',
+          vpa: {
+            address: params.upiId,
+          },
+        },
+        {
+          auth: this.auth,
+        },
+      );
+
+      return response.data;
+    } catch (err: unknown) {
+      const error = err as {
+        response?: {
+          data?: {
+            error?: {
+              description?: string;
+            };
+          };
+        };
+        message?: string;
+      };
+
+      throw new BadRequestException(
+        error.response?.data?.error?.description ||
+          error.message ||
+          'Failed to create RazorpayX UPI fund account',
+      );
+    }
+  }
+
   async createPayout(params: {
     fundAccountId: string;
     amount: number;

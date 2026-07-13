@@ -37,6 +37,11 @@ import {
   Otp,
   TechnicianProfile,
   JOB_STATUS,
+  TechnicianPayoutAccount,
+  PAYOUT_ACCOUNT_TYPE,
+  PAYOUT_ONBOARDING_STATUS,
+  Payment,
+  PAYMENT_STATUS,
 } from '@hichandra/entities';
 import { AuthModuleService } from 'apps/auth-service/src/auth/auth-module.service';
 import { S3Service } from '@hichandra/s3';
@@ -49,9 +54,11 @@ import {
   UpdateCustomerAddressDto,
   UpdateProfileDto,
   UpdateServiceDto,
-  UpdateTechnicianStatusDto
+  UpdateTechnicianStatusDto,
+  AdminCreateTechnicianDto,
 } from '@hichandra/dtos';
-import { RazorpayXService } from '@hichandra/payment';
+import { RazorpayXService, PaymentService } from '@hichandra/payment';
+import { SmsService } from '@hichandra/sms-services';
 
 @Injectable()
 export class UserService {
@@ -66,7 +73,9 @@ export class UserService {
     private readonly s3Service: S3Service,
     private readonly favoriteTechnicianRepository: FavoriteTechnicianRepository,
     private readonly razorpayXService: RazorpayXService,
-  ) {}
+    private readonly paymentService: PaymentService,
+    private readonly smsService: SmsService,
+  ) { }
 
   async findById(id: number) {
     const user = await this.userRepository.findOne({
@@ -409,7 +418,7 @@ export class UserService {
       // if (existingUserByEmail) {
       //   throw new ConflictException('Email already in use');
       // }
-      if (dto.email){
+      if (dto.email) {
         const existingUserByPhone = await userRepository.findOne({
           where: { phone: dto.phone },
         });
@@ -442,6 +451,12 @@ export class UserService {
 
       if (!otpRecord.isVerified) {
         throw new ForbiddenException('OTP is not verified');
+      }
+
+      if (otpRecord.role === USER_ROLE.TECHNICIAN) {
+        if (!files?.aadharUrl?.[0]) {
+          throw new BadRequestException('Aadhaar document is required for technician registration');
+        }
       }
 
       await otpRepository.delete(otpRecord.id);
@@ -508,6 +523,8 @@ export class UserService {
           );
         }
 
+        const technicianPayoutAccountRepository = manager.getRepository(TechnicianPayoutAccount);
+
         const newProfile = technicianProfileRepository.create({
           userId: savedUser.id,
           yearsOfExperience: profileData.yearsOfExperience,
@@ -523,12 +540,36 @@ export class UserService {
           hasACGauges: profileData.hasACGauges || false,
           hasSafetyEquipment: profileData.hasSafetyEquipment || false,
           hasVehicle: profileData.hasVehicle || false,
-          accountHolderName: profileData.accountHolderName || '',
-          accountNumber: profileData.accountNumber || '',
-          ifscCode: profileData.ifscCode || '',
-          bankName: profileData.bankName || '',
         });
         const savedProfile = await technicianProfileRepository.save(newProfile);
+
+        if (
+          profileData.upiId ||
+          profileData.accountHolderName ||
+          profileData.accountNumber ||
+          profileData.ifscCode ||
+          profileData.bankName
+        ) {
+          let accountType: PAYOUT_ACCOUNT_TYPE | undefined;
+          if (profileData.upiId) {
+            accountType = PAYOUT_ACCOUNT_TYPE.VPA;
+          } else if (profileData.accountNumber) {
+            accountType = PAYOUT_ACCOUNT_TYPE.BANK_ACCOUNT;
+          }
+
+          const payoutAccount = technicianPayoutAccountRepository.create({
+            technicianId: savedUser.id,
+            upiId: profileData.upiId,
+            accountHolderName: profileData.accountHolderName,
+            bankName: profileData.bankName,
+            accountNumber: profileData.accountNumber,
+            ifscCode: profileData.ifscCode,
+            accountType,
+            status: PAYOUT_ONBOARDING_STATUS.PENDING,
+            isActive: false,
+          });
+          await technicianPayoutAccountRepository.save(payoutAccount);
+        }
 
         // Save location
         const newLocation = locationRepository.create({
@@ -686,7 +727,7 @@ export class UserService {
 
       const pricingRule = pricingRuleRepository.create({
         serviceId: savedService.id,
-        serviceBasePrice: dto.serviceBasePrice,
+        serviceBasePrice: dto.serviceBasePrice ?? 0,
         perHourRate: dto.perHourRate ?? 0,
         perKmRate: dto.perKmRate ?? 0,
         weekendMultiplier: dto.weekendMultiplier ?? 1.0,
@@ -986,16 +1027,56 @@ export class UserService {
             profile.hasSafetyEquipment = profileData.hasSafetyEquipment;
           if (profileData.hasVehicle !== undefined)
             profile.hasVehicle = profileData.hasVehicle;
-          if (profileData.accountHolderName !== undefined)
-            profile.accountHolderName = profileData.accountHolderName;
-          if (profileData.accountNumber !== undefined)
-            profile.accountNumber = profileData.accountNumber;
-          if (profileData.ifscCode !== undefined)
-            profile.ifscCode = profileData.ifscCode;
-          if (profileData.bankName !== undefined)
-            profile.bankName = profileData.bankName;
 
           await profileRepo.save(profile);
+
+          const payoutRepo = manager.getRepository(TechnicianPayoutAccount);
+          let payoutAccount = await payoutRepo.findOne({
+            where: { technicianId: user.id },
+          });
+
+          const upiId = profileData.upiId !== undefined ? profileData.upiId : payoutAccount?.upiId;
+          const accountHolderName = profileData.accountHolderName !== undefined ? profileData.accountHolderName : payoutAccount?.accountHolderName;
+          const bankName = profileData.bankName !== undefined ? profileData.bankName : payoutAccount?.bankName;
+          const accountNumber = profileData.accountNumber !== undefined ? profileData.accountNumber : payoutAccount?.accountNumber;
+          const ifscCode = profileData.ifscCode !== undefined ? profileData.ifscCode : payoutAccount?.ifscCode;
+
+          if (
+            upiId !== undefined ||
+            accountHolderName !== undefined ||
+            bankName !== undefined ||
+            accountNumber !== undefined ||
+            ifscCode !== undefined
+          ) {
+            let accountType = payoutAccount?.accountType;
+            if (upiId) {
+              accountType = PAYOUT_ACCOUNT_TYPE.VPA;
+            } else if (accountNumber) {
+              accountType = PAYOUT_ACCOUNT_TYPE.BANK_ACCOUNT;
+            }
+
+            if (!payoutAccount) {
+              payoutAccount = payoutRepo.create({
+                technicianId: user.id,
+                upiId,
+                accountHolderName,
+                bankName,
+                accountNumber,
+                ifscCode,
+                accountType,
+                status: PAYOUT_ONBOARDING_STATUS.PENDING,
+                isActive: false,
+              });
+            } else {
+              payoutAccount.upiId = upiId;
+              payoutAccount.accountHolderName = accountHolderName;
+              payoutAccount.bankName = bankName;
+              payoutAccount.accountNumber = accountNumber;
+              payoutAccount.ifscCode = ifscCode;
+              payoutAccount.accountType = accountType;
+            }
+            await payoutRepo.save(payoutAccount);
+          }
         }
 
         if (dto.location) {
@@ -1251,7 +1332,7 @@ export class UserService {
       };
     });
   }
-//temporarily commented
+  //temporarily commented
   // async updateTechnicianStatusService(
   //   technicianId: number,
   //   dto: UpdateTechnicianStatusDto,
@@ -1291,165 +1372,186 @@ export class UserService {
   //     data: technician.technicianProfile,
   //   };
   // }
-//added
+  //added
   async updateTechnicianStatusService(
-  technicianId: number,
-  dto: UpdateTechnicianStatusDto,
-) {
-  const technician = await this.userRepository.findOne({
-    where: {
-      id: technicianId,
-      role: USER_ROLE.TECHNICIAN,
-    },
-    relations: ['technicianProfile'],
-  });
-
-  if (!technician) {
-    throw new NotFoundException('Technician not found');
-  }
-
-  const profile = technician.technicianProfile;
-
-  if (!profile) {
-    throw new BadRequestException('Technician profile not found');
-  }
-
-  if (profile.status === dto.status) {
-    throw new BadRequestException(
-      `Technician is already ${dto.status.toLowerCase()}`,
-    );
-  }
-
-  /*
-   * Create Razorpay Contact and Fund Account only when:
-   * 1. Admin is approving the technician
-   * 2. Fund account has not already been created
-   */
-  if (
-    dto.status === TECHNICIAN_STATUS.APPROVED &&
-    !profile.razorpayFundAccountId
+    technicianId: number,
+    dto: UpdateTechnicianStatusDto,
   ) {
-    if (
-      !profile.accountHolderName ||
-      !profile.accountNumber ||
-      !profile.ifscCode ||
-      !profile.bankName
-    ) {
+    const technician = await this.userRepository.findOne({
+      where: {
+        id: technicianId,
+        role: USER_ROLE.TECHNICIAN,
+      },
+      relations: ['technicianProfile'],
+    });
+
+    if (!technician) {
+      throw new NotFoundException('Technician not found');
+    }
+
+    const profile = technician.technicianProfile;
+
+    if (!profile) {
+      throw new BadRequestException('Technician profile not found');
+    }
+
+    if (profile.status === dto.status) {
       throw new BadRequestException(
-        'Technician bank details are required before approval',
+        `Technician is already ${dto.status.toLowerCase()}`,
       );
     }
 
-    let contactId = profile.razorpayContactId;
+    const payoutAccountRepo = this.dataSource.getRepository(TechnicianPayoutAccount);
+    const payoutAccount = await payoutAccountRepo.findOne({
+      where: { technicianId: technician.id },
+    });
 
     /*
-     * Create Contact only when it was not created earlier.
-     * This avoids duplicate Razorpay contacts if approval is retried.
+     * Create Razorpay Contact and Fund Account only when:
+     * 1. Admin is approving the technician
+     * 2. Fund account has not already been created
      */
-    if (!contactId) {
-      const fullName =
-        `${technician.firstName || ''} ${
-          technician.lastName || ''
-        }`.trim() || technician.username;
+    if (
+      dto.status === TECHNICIAN_STATUS.APPROVED &&
+      (!payoutAccount || !payoutAccount.razorpayFundAccountId)
+    ) {
+      const hasUpi = payoutAccount && payoutAccount.upiId && payoutAccount.upiId.trim() !== '';
 
-      if (!fullName) {
+      if (!hasUpi) {
+        if (
+          !payoutAccount ||
+          !payoutAccount.accountHolderName ||
+          !payoutAccount.accountNumber ||
+          !payoutAccount.ifscCode ||
+          !payoutAccount.bankName
+        ) {
+          throw new BadRequestException(
+            'Technician bank details or UPI ID are required before approval',
+          );
+        }
+      }
+
+      let contactId = payoutAccount.razorpayContactId;
+
+      /*
+       * Create Contact only when it was not created earlier.
+       * This avoids duplicate Razorpay contacts if approval is retried.
+       */
+      if (!contactId) {
+        const fullName =
+          `${technician.firstName || ''} ${technician.lastName || ''
+            }`.trim() || technician.username;
+
+        if (!fullName) {
+          throw new BadRequestException(
+            'Technician name is required to create Razorpay contact',
+          );
+        }
+
+        const contact = await this.razorpayXService.createContact({
+          technicianId: technician.id,
+          name: fullName,
+          email: technician.email || undefined,
+          phone: technician.phone || undefined,
+        });
+
+        contactId = contact.id;
+        payoutAccount.razorpayContactId = contact.id;
+      }
+
+      if (!contactId) {
         throw new BadRequestException(
-          'Technician name is required to create Razorpay contact',
+          'Failed to create Razorpay contact',
         );
       }
 
-      const contact = await this.razorpayXService.createContact({
-        technicianId: technician.id,
-        name: fullName,
-        email: technician.email || undefined,
-        phone: technician.phone || undefined,
-      });
+      /*
+       * Create the beneficiary fund account in RazorpayX.
+       * This fundAccountId will be used later during direct payout.
+       */
+      let fundAccount;
+      if (hasUpi) {
+        fundAccount = await this.razorpayXService.createVpaFundAccount({
+          contactId,
+          upiId: payoutAccount.upiId!,
+        });
+        payoutAccount.accountType = PAYOUT_ACCOUNT_TYPE.VPA;
+      } else {
+        fundAccount = await this.razorpayXService.createFundAccount({
+          contactId,
+          accountHolderName: payoutAccount.accountHolderName!,
+          accountNumber: payoutAccount.accountNumber!,
+          ifscCode: payoutAccount.ifscCode!,
+        });
+        payoutAccount.accountType = PAYOUT_ACCOUNT_TYPE.BANK_ACCOUNT;
+      }
 
-      contactId = contact.id;
-      profile.razorpayContactId = contact.id;
+      payoutAccount.razorpayFundAccountId = fundAccount.id;
+      payoutAccount.status = PAYOUT_ONBOARDING_STATUS.ACTIVE;
+      payoutAccount.isActive = true;
+      await payoutAccountRepo.save(payoutAccount);
     }
 
-    if (!contactId) {
-      throw new BadRequestException(
-        'Failed to create Razorpay contact',
-      );
-    }
+    // Change approval/rejection status after external setup succeeds.
+    profile.status = dto.status;
 
-    /*
-     * Create the beneficiary bank account in RazorpayX.
-     * This fundAccountId will be used later during direct payout.
-     */
-    const fundAccount =
-      await this.razorpayXService.createFundAccount({
-        contactId,
-        accountHolderName: profile.accountHolderName,
-        accountNumber: profile.accountNumber,
-        ifscCode: profile.ifscCode,
-      });
-
-    profile.razorpayFundAccountId = fundAccount.id;
-  }
-
-  // Change approval/rejection status after external setup succeeds.
-  profile.status = dto.status;
-
-  await this.technicianProfileRepository.save(profile);
-
-  return {
-    success: true,
-    message: 'Technician status updated successfully',
-    data: {
-      id: profile.id,
-      userId: profile.userId,
-      status: profile.status,
-      razorpayContactId: profile.razorpayContactId,
-      razorpayFundAccountId: profile.razorpayFundAccountId,
-    },
-  };
-}
-
-  async favoriteTechnician(
-  user: any,
-  technicianId: number,
-) {
-  const technician = await this.userRepository.findOne({
-    where: {
-      id: technicianId,
-      role: USER_ROLE.TECHNICIAN,
-    },
-  });
-
-  if (!technician) {
-    throw new NotFoundException('Technician not found');
-  }
-
-  const existing =
-    await this.favoriteTechnicianRepository.findFavoriteTechnician(
-      user.id,
-      technicianId,
-    );
-
-  if (existing) {
-    await this.favoriteTechnicianRepository.removeFavoriteTechnician(
-      existing,
-    );
+    await this.technicianProfileRepository.save(profile);
 
     return {
-      isFavorite: false,
-      message: 'Technician removed from favorites successfully',
+      success: true,
+      message: 'Technician status updated successfully',
+      data: {
+        id: profile.id,
+        userId: profile.userId,
+        status: profile.status,
+        razorpayContactId: payoutAccount?.razorpayContactId,
+        razorpayFundAccountId: payoutAccount?.razorpayFundAccountId,
+      },
     };
   }
 
-  await this.favoriteTechnicianRepository.createFavoriteTechnician({
-    customerId: user.id,
-    technicianId,
-  });
+  async favoriteTechnician(
+    user: any,
+    technicianId: number,
+  ) {
+    const technician = await this.userRepository.findOne({
+      where: {
+        id: technicianId,
+        role: USER_ROLE.TECHNICIAN,
+      },
+    });
 
-  return {
-    isFavorite: true,
-    message: 'Technician added to favorites successfully',
-  };
-}
+    if (!technician) {
+      throw new NotFoundException('Technician not found');
+    }
+
+    const existing =
+      await this.favoriteTechnicianRepository.findFavoriteTechnician(
+        user.id,
+        technicianId,
+      );
+
+    if (existing) {
+      await this.favoriteTechnicianRepository.removeFavoriteTechnician(
+        existing,
+      );
+
+      return {
+        isFavorite: false,
+        message: 'Technician removed from favorites successfully',
+      };
+    }
+
+    await this.favoriteTechnicianRepository.createFavoriteTechnician({
+      customerId: user.id,
+      technicianId,
+    });
+
+    return {
+      isFavorite: true,
+      message: 'Technician added to favorites successfully',
+    };
+  }
 
   async getMyAddresses(userId: number) {
     const addresses = await this.userRepository.findCustomerAddresses(userId);
@@ -1504,12 +1606,117 @@ export class UserService {
         profileImage: fav.technician.profileImage,
         technicianProfile: fav.technician.technicianProfile
           ? {
-              id: fav.technician.technicianProfile.id,
-              status: fav.technician.technicianProfile.status,
-            }
+            id: fav.technician.technicianProfile.id,
+            status: fav.technician.technicianProfile.status,
+          }
           : null,
         addedAt: fav.createdAt,
       })),
+    };
+  }
+
+  async createTokenPaymentLinkService(userId: number) {
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+    });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const setting = await this.platformSettingRepository.findOne({
+      where: { key: 'CUSTOMER_TOKEN_AMOUNT' },
+    });
+    if (!setting) {
+      throw new BadRequestException('Pre-booking token amount is not configured on the platform');
+    }
+    const amount = parseFloat(setting.value);
+    if (isNaN(amount) || amount <= 0) {
+      throw new BadRequestException('Configured token amount is invalid');
+    }
+
+    const customerName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'Customer';
+    const paymentLink = await this.paymentService.createTokenPaymentLink(
+      amount,
+      user.id,
+      {
+        name: customerName,
+        email: user.email || undefined,
+        phone: user.phone || undefined,
+      },
+    );
+
+    // Save a new pending payment record in DB
+    const paymentRepo = this.dataSource.getRepository(Payment);
+    const newPayment = paymentRepo.create({
+      customerId: user.id,
+      payBy: USER_ROLE.CUSTOMER,
+      amount,
+      currency: 'INR',
+      status: PAYMENT_STATUS.PENDING,
+      paymentLinkId: paymentLink.paymentLinkId,
+    });
+    const savedPayment = await paymentRepo.save(newPayment);
+
+    // Save payment details inside User table
+    user.paymentId = savedPayment.id;
+    user.isTokenPaid = false; // Reset to false when generating a new payment link
+    await this.userRepository.save(user);
+
+    return {
+      success: true,
+      message: 'Token payment link generated successfully',
+      data: {
+        paymentLinkId: paymentLink.paymentLinkId,
+        paymentLink: paymentLink.url,
+        paymentId: savedPayment.id,
+        amount,
+      },
+    };
+  }
+
+  async adminCreateTechnicianService(dto: AdminCreateTechnicianDto) {
+    const existingUser = await this.userRepository.findOne({
+      where: [
+        { phone: dto.phone },
+        ...(dto.email ? [{ email: dto.email }] : []),
+      ],
+    });
+    if (existingUser) {
+      throw new ConflictException('A user with this phone or email already exists');
+    }
+
+    const username = dto.phone;
+    const hashedPassword = await bcrypt.hash(dto.password, 10);
+
+    const newUser = this.userRepository.create({
+      firstName: dto.firstName,
+      lastName: dto.lastName,
+      phone: dto.phone,
+      email: dto.email,
+      username,
+      password: hashedPassword,
+      role: USER_ROLE.TECHNICIAN,
+      status: USER_STATUS.ACTIVE,
+      isTechnicianProfileCompleted: false,
+    });
+
+    const savedUser = await this.userRepository.save(newUser);
+
+    try {
+      await this.smsService.sendSms(
+        dto.phone,
+        `Your HiChandra technician profile has been created by Admin. Please log in using your phone number (${dto.phone}) and password (${dto.password}) to complete your profile setup.`,
+      );
+    } catch (smsError) {
+      console.error(`Failed to send technician creation SMS to ${dto.phone}:`, smsError);
+    }
+
+    const { password, ...result } = savedUser;
+
+    return {
+      success: true,
+      message: 'Technician created successfully by Admin',
+      data: result,
     };
   }
 }

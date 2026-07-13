@@ -1,4 +1,4 @@
-import {Booking, BOOKING_STATUS, BOOKING_PAYMENT_STATUS, Service, CustomerAddress, User, USER_ROLE, USER_STATUS, TECHNICIAN_STATUS, JOB_STATUS, TechnicianService, TechnicianLocation, Otp, PriceBreakdown, Payment, PAYMENT_STATUS, COMPLAINT_STATUS, TECHNICIAN_PAYOUT_STATUS, TechnicianProfile} from '@hichandra/entities';
+import {Booking, BOOKING_STATUS, BOOKING_PAYMENT_STATUS, Service, CustomerAddress, User, USER_ROLE, USER_STATUS, TECHNICIAN_STATUS, JOB_STATUS, TechnicianService, TechnicianLocation, Otp, PriceBreakdown, Payment, PAYMENT_STATUS, COMPLAINT_STATUS, TECHNICIAN_PAYOUT_STATUS, TechnicianProfile, TechnicianPayoutAccount} from '@hichandra/entities';
 import { EmailService } from '@hichandra/email-services';
 import { PaymentService, RazorpayXService } from '@hichandra/payment';
 import { Injectable, NotFoundException, BadRequestException, UnprocessableEntityException , ForbiddenException, UnauthorizedException} from '@nestjs/common';
@@ -56,9 +56,21 @@ export class BookingService {
   async createBooking(
     customerId: number,
     dto: CreateBookingDto,
+    userRole?: USER_ROLE,
   // ): Promise<Booking> {
     ): Promise<any> {
     return this.dataSource.transaction(async (manager) => {
+      const userRepo = manager.getRepository(User);
+      const customer = await userRepo.findOne({
+        where: { id: customerId },
+      });
+      if (!customer) {
+        throw new NotFoundException('Customer not found');
+      }
+      if (userRole !== USER_ROLE.ADMIN && !customer.isTokenPaid) {
+        throw new BadRequestException('Token payment is required before booking');
+      }
+
       const serviceRepo = manager.getRepository(Service);
       const addressRepo = manager.getRepository(CustomerAddress);
       const bookingRepo = manager.getRepository(Booking);
@@ -1402,12 +1414,26 @@ export class BookingService {
       payment,
     );
 
-    payment.booking.paymentStatus =
-      BOOKING_PAYMENT_STATUS.PAID;
+    if (payment.booking) {
+      payment.booking.paymentStatus =
+        BOOKING_PAYMENT_STATUS.PAID;
 
-    await this.bookingRepository.saveBooking(
-      payment.booking,
-    );
+      await this.bookingRepository.saveBooking(
+        payment.booking,
+      );
+    } else {
+      if (payment.customerId) {
+        const userRepo = this.dataSource.getRepository(User);
+        const user = await userRepo.findOne({
+          where: { id: payment.customerId },
+        });
+        if (user) {
+          user.isTokenPaid = true;
+          user.paymentId = payment.id;
+          await userRepo.save(user);
+        }
+      }
+    }
 
     // const payout =
     //   await this.technicianPayoutRepository.findByPaymentRecordId(
@@ -1642,7 +1668,11 @@ export class BookingService {
       throw new BadRequestException('Technician profile not found');
     }
 
-    if (!profile.razorpayFundAccountId) {
+    const payoutAccount = await this.dataSource.getRepository(TechnicianPayoutAccount).findOne({
+      where: { technicianId: technician.id },
+    });
+
+    if (!payoutAccount || !payoutAccount.razorpayFundAccountId) {
       throw new BadRequestException(
         'Technician fund account is not created',
       );
@@ -1692,7 +1722,7 @@ export class BookingService {
     try {
       const razorpayPayout =
         await this.razorpayXService.createPayout({
-          fundAccountId: profile.razorpayFundAccountId,
+          fundAccountId: payoutAccount.razorpayFundAccountId,
           amount: payoutAmount,
           bookingId: booking.id,
           technicianId: technician.id,

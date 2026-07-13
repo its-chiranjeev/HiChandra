@@ -12,7 +12,8 @@ import {
   UpdateCustomerAddressDto,
   UpdateProfileDto,
   AssignBookingDto,
-  UpdateTechnicianStatusDto
+  UpdateTechnicianStatusDto,
+  AdminCreateTechnicianDto
 } from '@hichandra/dtos';
 import { TECHNICIAN_STATUS, USER_ROLE, USER_STATUS } from '@hichandra/entities';
 import { UpdateServiceDto } from '@hichandra/dtos';
@@ -36,6 +37,17 @@ export class UserController {
     dto: CreateServiceDto,
   ) {
     return this.userService.createServiceWithPricing(dto, files);
+  }
+
+  @Post('admin/technician')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLE.ADMIN)
+  @HttpCode(HttpStatus.CREATED)
+  async adminCreateTechnician(
+    @Body(new ValidationPipe({ whitelist: true, transform: true }))
+    dto: AdminCreateTechnicianDto,
+  ) {
+    return this.userService.adminCreateTechnicianService(dto);
   }
 
   @Delete('delete/service/:id')
@@ -188,6 +200,14 @@ export class UserController {
     return this.userService.getMyAddresses(req.user.id);
   }
   
+  @Post('customer/token-payment-link')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLE.CUSTOMER)
+  @HttpCode(HttpStatus.OK)
+  async createTokenPaymentLink(@Req() req: any) {
+    return this.userService.createTokenPaymentLinkService(req.user.id);
+  }
+
   @Post('customer/address')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(USER_ROLE.CUSTOMER)

@@ -14,12 +14,12 @@ async function bootstrap() {
 
   app.setGlobalPrefix('api');
 
-//   //Need to be commented in production
-// app.enableCors({
-//   origin: true, // Allow all origins
-//   credentials: true,
-//   methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
-// });
+  //   //Need to be commented in production
+  app.enableCors({
+    origin: true, // Allow all origins
+    credentials: true,
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+  });
 
   const logger = new Logger('HTTP');
 

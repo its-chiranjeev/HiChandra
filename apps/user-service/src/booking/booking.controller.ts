@@ -1,8 +1,8 @@
-import { Body, Controller, Get, Param, ParseIntPipe, HttpCode, Patch, HttpStatus, Query, Post, Req, Headers, UseGuards, ValidationPipe, Delete, StreamableFile} from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseIntPipe, HttpCode, Patch, HttpStatus, Query, Post, Req, Headers, UseGuards, ValidationPipe, Delete, StreamableFile } from '@nestjs/common';
 import { BookingService } from './booking.service';
 import { JwtAuthGuard, Roles, RolesGuard } from '@hichandra/common';
-import { StartBookingDto, CreateBookingDto, AssignBookingDto, CancelBookingDto, CreateComplaintDto, UpdateComplaintDto, UpdateBookingStatusDto, CreateTechnicianPayoutDto , RescheduleBookingDto , RepeatBookingDto , TechnicianCancelBookingDto, CreateBookingReviewDto } from '@hichandra/dtos';
-import { USER_ROLE, BOOKING_STATUS, COMPLAINT_STATUS, PAYMENT_STATUS, User} from '@hichandra/entities';
+import { StartBookingDto, CreateBookingDto, AssignBookingDto, CancelBookingDto, CreateComplaintDto, UpdateComplaintDto, UpdateBookingStatusDto, CreateTechnicianPayoutDto, RescheduleBookingDto, RepeatBookingDto, TechnicianCancelBookingDto, CreateBookingReviewDto } from '@hichandra/dtos';
+import { USER_ROLE, BOOKING_STATUS, COMPLAINT_STATUS, PAYMENT_STATUS, User } from '@hichandra/entities';
 import type { Request } from 'express';
 import { PaymentService } from '@hichandra/payment';
 
@@ -12,9 +12,9 @@ interface AuthenticatedRequest extends Request {
 
 @Controller('bookings')
 export class BookingController {
-  constructor( 
-  private readonly bookingService: BookingService,
-  private readonly paymentService: PaymentService,
+  constructor(
+    private readonly bookingService: BookingService,
+    private readonly paymentService: PaymentService,
   ) { }
 
   @Post()
@@ -26,7 +26,7 @@ export class BookingController {
     @Body(new ValidationPipe({ whitelist: true, transform: true }))
     dto: CreateBookingDto,
   ) {
-    const booking = await this.bookingService.createBooking(req.user.id, dto);
+    const booking = await this.bookingService.createBooking(req.user.id, dto, req.user.role);
     return {
       success: true,
       message: 'Booking created successfully',
@@ -86,8 +86,6 @@ export class BookingController {
     );
   }
 
-
-  
   @Get(':bookingId/invoice')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(USER_ROLE.CUSTOMER)
@@ -103,8 +101,7 @@ export class BookingController {
 
   //Get All booking For Admin And My Booking For User 
   @Get('all')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(USER_ROLE.ADMIN, USER_ROLE.CUSTOMER, USER_ROLE.TECHNICIAN)
+  @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
   async getAllBookings(
     @Req() req: any,
@@ -119,7 +116,7 @@ export class BookingController {
       status,
     );
   }
-  
+
   //complaint api
   @Get('complaints')
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -138,7 +135,7 @@ export class BookingController {
       status,
     );
   }
-  
+
   // @Get('my-bookings')
   // @UseGuards(JwtAuthGuard, RolesGuard)
   // @Roles(USER_ROLE.CUSTOMER, USER_ROLE.TECHNICIAN)
@@ -169,7 +166,7 @@ export class BookingController {
   ) {
     return this.bookingService.rescheduleBooking(id, dto, req.user);
   }
-  
+
   //Complaint By ID
   @Get('admin/complaints/:id')
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -204,10 +201,10 @@ export class BookingController {
   @Roles(USER_ROLE.ADMIN)
   @HttpCode(HttpStatus.OK)
   async getPaymentById(
-      @Param('id', ParseIntPipe) id: number,
-    ) {
-      return this.bookingService.getPaymentById(id);
-    }
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.bookingService.getPaymentById(id);
+  }
 
   //My-Reviews For Users
   @Get('my-reviews')
@@ -224,7 +221,7 @@ export class BookingController {
       Number(limit),
     );
   }
-  
+
   @Get(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(USER_ROLE.CUSTOMER)
@@ -248,7 +245,7 @@ export class BookingController {
     return this.bookingService.getBookingById(id);
   }
 
-  
+
   @Post(':id/accept')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(USER_ROLE.TECHNICIAN)

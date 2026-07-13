@@ -24,3 +24,4 @@ export * from './booking/technician-cancel-booking.dto';
 export * from './user/create-review.dto';
 export * from './user/update-technician-status.dto';
 export * from './auth/forgot-password.dto';
+export * from './user/admin-create-technician.dto';

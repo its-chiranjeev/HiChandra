@@ -10,6 +10,7 @@ import {
   Max,
   MaxLength,
   ValidateNested,
+  Matches,
 } from 'class-validator';
 export class TechnicianServiceDto {
   @Type(() => Number)
@@ -71,6 +72,16 @@ export class TechnicianProfileDto {
   @Type(() => Number)
   @IsNumber()
   serviceRadiusKm?: number;
+
+  @IsOptional()
+  @IsString()
+  @Matches(
+    /^[a-zA-Z0-9.\-_]+@[a-zA-Z0-9.\-_]+$/,
+    {
+      message: 'Invalid UPI ID',
+    },
+  )
+  upiId?: string;
 
   @IsOptional()
   @IsString()

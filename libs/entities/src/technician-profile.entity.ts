@@ -97,26 +97,6 @@ export class TechnicianProfile {
   @Column({ default: false })
   hasVehicle!: boolean;
 
-  // Bank details
-
-  @Column({ type: 'varchar', length: 100, nullable: true })
-  accountHolderName?: string;
-
-  @Column({ type: 'varchar', length: 20, nullable: true })
-  accountNumber?: string;
-
-  @Column({ type: 'varchar', length: 11, nullable: true })
-  ifscCode?: string;
-
-  @Column({ type: 'varchar', length: 100, nullable: true })
-  bankName?: string;
-
-  @Column({ nullable: true, unique: true })
-  razorpayContactId?: string;
-
-  @Column({ nullable: true, unique: true })
-  razorpayFundAccountId?: string;
-
   // Timestamps
   @CreateDateColumn()
   createdAt!: Date;

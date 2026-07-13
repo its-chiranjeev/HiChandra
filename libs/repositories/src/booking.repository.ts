@@ -279,4 +279,13 @@ export class BookingRepository {
       total,
     };
   }
+
+  async updateBookingCancelFields(
+    bookingId: number,
+    data: Partial<Booking>,
+  ) {
+    await this.repo.update(bookingId, data);
+
+    return this.findBookingById(bookingId);
+  }
 }

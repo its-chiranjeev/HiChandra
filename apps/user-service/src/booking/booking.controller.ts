@@ -335,9 +335,10 @@ export class BookingController {
     return this.bookingService.repeatBooking(id, dto, req.user);
   }
 
-  @Patch('customer/cancel')
+  //Cancel Booking By Both Technician & Customer
+  @Patch('cancel')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(USER_ROLE.CUSTOMER)
+  @Roles(USER_ROLE.CUSTOMER, USER_ROLE.TECHNICIAN)
   @HttpCode(HttpStatus.OK)
   async cancelBooking(
     @Req() req: any,
@@ -349,22 +350,19 @@ export class BookingController {
     )
     dto: CancelBookingDto,
   ) {
-    return this.bookingService.cancelBooking(
-      req.user.id,
-      dto,
-    );
+    return this.bookingService.cancelBooking(req.user, dto);
   }
 
   // cancel booking--Technician 
-  @Patch('technician/cancel')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(USER_ROLE.TECHNICIAN)
-  async technicianCancelBooking(
-    @Body() dto: TechnicianCancelBookingDto,
-    @Req() req: any,
-  ) {
-    return this.bookingService.technicianCancelBooking(dto, req.user);
-  }
+  // @Patch('technician/cancel')
+  // @UseGuards(JwtAuthGuard, RolesGuard)
+  // @Roles(USER_ROLE.TECHNICIAN)
+  // async technicianCancelBooking(
+  //   @Body() dto: TechnicianCancelBookingDto,
+  //   @Req() req: any,
+  // ) {
+  //   return this.bookingService.technicianCancelBooking(dto, req.user);
+  // }
 
   //create complaint
   @Post('complaint')

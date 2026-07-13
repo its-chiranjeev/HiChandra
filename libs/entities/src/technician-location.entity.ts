@@ -10,6 +10,10 @@ import {
 } from 'typeorm';
 import { TechnicianProfile } from './technician-profile.entity';
 
+export enum TECHNICIAN_LOCATION_TYPE {
+  WORK = 'WORK',
+}
+
 @Entity('technician_locations')
 export class TechnicianLocation {
   @PrimaryGeneratedColumn()
@@ -33,6 +37,13 @@ export class TechnicianLocation {
 
   @Column({ type: 'int' })
   serviceRadiusKm!: number;
+
+  @Column({
+    type: 'enum',
+    enum: TECHNICIAN_LOCATION_TYPE,
+    default: TECHNICIAN_LOCATION_TYPE.WORK,
+  })
+  type!: TECHNICIAN_LOCATION_TYPE;
 
   @Column({ type: 'varchar', length: 255, nullable: true })
   fullAddress?: string;

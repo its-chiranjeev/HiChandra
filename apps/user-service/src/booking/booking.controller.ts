@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Param, ParseIntPipe, HttpCode, Patch, HttpStatus, Query, Post, Req, Headers, UseGuards, ValidationPipe, Delete, StreamableFile } from '@nestjs/common';
 import { BookingService } from './booking.service';
 import { JwtAuthGuard, Roles, RolesGuard } from '@hichandra/common';
-import { StartBookingDto, CreateBookingDto, AssignBookingDto, CancelBookingDto, CreateComplaintDto, UpdateComplaintDto, UpdateBookingStatusDto, CreateTechnicianPayoutDto, RescheduleBookingDto, RepeatBookingDto, TechnicianCancelBookingDto, CreateBookingReviewDto } from '@hichandra/dtos';
+import { StartBookingDto, CreateBookingDto, AssignBookingDto, CancelBookingDto, CreateComplaintDto, UpdateComplaintDto, UpdateBookingStatusDto, CreateTechnicianPayoutDto, RescheduleBookingDto, RepeatBookingDto, TechnicianCancelBookingDto, CreateBookingReviewDto, AdminCreateBookingDto } from '@hichandra/dtos';
 import { USER_ROLE, BOOKING_STATUS, COMPLAINT_STATUS, PAYMENT_STATUS, User } from '@hichandra/entities';
 import type { Request } from 'express';
 import { PaymentService } from '@hichandra/payment';
@@ -30,6 +30,22 @@ export class BookingController {
     return {
       success: true,
       message: 'Booking created successfully',
+      data: booking,
+    };
+  }
+
+  @Post('admin/create')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLE.ADMIN)
+  @HttpCode(HttpStatus.CREATED)
+  async adminCreateBooking(
+    @Body(new ValidationPipe({ whitelist: true, transform: true }))
+    dto: AdminCreateBookingDto,
+  ) {
+    const booking = await this.bookingService.adminCreateBooking(dto);
+    return {
+      success: true,
+      message: 'Booking created successfully by Admin',
       data: booking,
     };
   }

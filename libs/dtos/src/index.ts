@@ -25,3 +25,4 @@ export * from './user/create-review.dto';
 export * from './user/update-technician-status.dto';
 export * from './auth/forgot-password.dto';
 export * from './user/admin-create-technician.dto';
+export * from './booking/admin-create-booking.dto';

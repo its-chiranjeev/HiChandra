@@ -2,8 +2,8 @@ import {Booking, BOOKING_STATUS, BOOKING_PAYMENT_STATUS, Service, CustomerAddres
 import { EmailService } from '@hichandra/email-services';
 import { PaymentService, RazorpayXService } from '@hichandra/payment';
 import { Injectable, NotFoundException, BadRequestException, UnprocessableEntityException , ForbiddenException, UnauthorizedException} from '@nestjs/common';
-import { DataSource } from 'typeorm';
-import { CreateBookingDto, UpdateBookingStatusDto,CreateBookingReviewDto, StartBookingDto, AssignBookingDto, CancelBookingDto, CreateComplaintDto, UpdateComplaintDto, CreateTechnicianPayoutDto, RescheduleBookingDto, RepeatBookingDto , TechnicianCancelBookingDto } from '@hichandra/dtos';
+import { DataSource, Not } from 'typeorm';
+import { CreateBookingDto, UpdateBookingStatusDto,CreateBookingReviewDto, StartBookingDto, AssignBookingDto, CancelBookingDto, CreateComplaintDto, UpdateComplaintDto, CreateTechnicianPayoutDto, RescheduleBookingDto, RepeatBookingDto , TechnicianCancelBookingDto, AdminCreateBookingDto } from '@hichandra/dtos';
 import { AssignmentService } from '../assignment/assignment.service';
 import { BookingRepository, UserRepository, ComplaintRepository, PaymentRepository, TechnicianPayoutRepository } from '@hichandra/repositories';
 import { randomUUID } from 'crypto';
@@ -2415,5 +2415,152 @@ export class BookingService {
       success: true,
       message: 'Complaint deleted successfully',
     };
+  }
+
+  async adminCreateBooking(dto: AdminCreateBookingDto): Promise<any> {
+    return this.dataSource.transaction(async (manager) => {
+      const customer = await manager.getRepository(User).findOne({
+        where: { id: dto.customerId, role: USER_ROLE.CUSTOMER },
+      });
+      if (!customer) {
+        throw new NotFoundException('Customer not found or not a customer');
+      }
+
+      const technician = await manager.getRepository(User).findOne({
+        where: { id: dto.technicianId, role: USER_ROLE.TECHNICIAN },
+      });
+      if (!technician) {
+        throw new NotFoundException('Technician not found or not a technician');
+      }
+
+      const service = await manager.getRepository(Service).findOne({
+        where: { id: dto.serviceId, isActive: true },
+        relations: ['specifications', 'pricingRule'],
+      });
+      if (!service) {
+        throw new NotFoundException('Service not found or inactive');
+      }
+      if (!service.pricingRule) {
+        throw new BadRequestException('Pricing rules are not configured for this service');
+      }
+
+      const address = await manager.getRepository(CustomerAddress).findOne({
+        where: { id: dto.customerAddressId, userId: dto.customerId, isActive: true },
+      });
+      if (!address) {
+        throw new NotFoundException('Address not found or does not belong to this customer');
+      }
+
+      // Check technician schedule conflict
+      const conflictingBooking = await manager.getRepository(Booking).findOne({
+        where: {
+          technicianId: dto.technicianId,
+          scheduledAt: dto.scheduledAt,
+          status: Not(BOOKING_STATUS.CANCELLED),
+        },
+      });
+      if (conflictingBooking) {
+        throw new BadRequestException('Technician is already booked at the given date and time');
+      }
+
+      const dbSpecs = service.specifications || [];
+      const userSpecs = dto.serviceSpecifications || [];
+      const dbSpecsMap = new Map(dbSpecs.map((s) => [s.id, s]));
+
+      // Validate specifications
+      for (const uSpec of userSpecs) {
+        const dbSpec = dbSpecsMap.get(uSpec.specificationId);
+        if (!dbSpec || !dbSpec.isActive) {
+          throw new BadRequestException(
+            `Specification ID ${uSpec.specificationId} is not valid for this service`,
+          );
+        }
+        uSpec.name = dbSpec.name;
+      }
+
+      const serviceSpecifications = userSpecs.map((uSpec) => ({
+        specificationId: uSpec.specificationId,
+        value: uSpec.value,
+      }));
+
+      // Calculate Fare and Breakdown
+      const pricingRule = service.pricingRule;
+      const serviceBasePrice = Number(pricingRule.serviceBasePrice);
+
+      const targetDate = new Date(dto.scheduledAt);
+      const { weekday, hour } = this.getIstDateParts(targetDate);
+      const isWeekend = weekday === 'Sat' || weekday === 'Sun';
+
+      const weekendMultiplier = isWeekend ? Number(pricingRule.weekendMultiplier) : 1.0;
+      let isPeakHour = false;
+      if (pricingRule.peakHours && Array.isArray(pricingRule.peakHours)) {
+        for (const range of pricingRule.peakHours) {
+          if (hour >= range.start && hour <= range.end) {
+            isPeakHour = true;
+            break;
+          }
+        }
+      }
+      const peakHourMultiplier = isPeakHour ? Number(pricingRule.peakHourMultiplier) : 1.0;
+      const surgeMultiplier = pricingRule.isSurgeEnabled ? Number(pricingRule.surgeFactor) : 1.0;
+
+      const weekendCharge = pricingRule.isWeekendApplied && isWeekend
+        ? Number((serviceBasePrice * (weekendMultiplier - 1)).toFixed(2))
+        : 0;
+      const peakHourCharge = pricingRule.isPeakHourApplied && isPeakHour
+        ? Number((serviceBasePrice * (peakHourMultiplier - 1)).toFixed(2))
+        : 0;
+      const surgeCharge = pricingRule.isSurgeEnabled
+        ? Number((serviceBasePrice * (surgeMultiplier - 1)).toFixed(2))
+        : 0;
+      const emergencyCharge = pricingRule.isEmergencyApplied && dto.isEmergency
+        ? Number(pricingRule.emergencyCharge)
+        : 0;
+      const distanceCharge = 0;
+
+      const subtotal = serviceBasePrice + weekendCharge + peakHourCharge + surgeCharge + emergencyCharge + distanceCharge;
+      const platformFee = pricingRule.isPlatformFeeApplied ? Number(pricingRule.platformFee) : 0;
+      const gstRate = Number(pricingRule.gst) / 100;
+      const gst = pricingRule.isGstApplied ? Number(((subtotal + platformFee) * gstRate).toFixed(2)) : 0;
+
+      const totalAmount = Number((subtotal + platformFee + gst).toFixed(2));
+      if (totalAmount < serviceBasePrice) {
+        throw new BadRequestException('Calculation error: Total amount must be greater than base price.');
+      }
+
+      const commissionRate = 0.15;
+      const platformCommission = Number((subtotal * commissionRate).toFixed(2));
+      const platformEarning = Number((platformFee + platformCommission).toFixed(2));
+      const technicianEarning = Number((subtotal - platformCommission).toFixed(2));
+
+      const priceBreakdown: PriceBreakdown = {
+        serviceBasePrice,
+        distanceCharge,
+        emergencyCharge,
+        peakHourCharge,
+        weekendCharge,
+        surgeCharge,
+        gst,
+        platformFee,
+        technicianEarning,
+        platformEarning,
+      };
+
+      const booking = manager.getRepository(Booking).create({
+        customerId: dto.customerId,
+        technicianId: dto.technicianId,
+        serviceId: dto.serviceId,
+        addressId: dto.customerAddressId,
+        serviceSpecifications: serviceSpecifications as any,
+        isEmergency: dto.isEmergency ?? false,
+        scheduledAt: targetDate,
+        status: BOOKING_STATUS.ACCEPTED, // Pre-assigned by Admin
+        totalAmount,
+        priceBreakdown,
+        isManualAssign: true,
+      });
+
+      return manager.getRepository(Booking).save(booking);
+    });
   }
 }

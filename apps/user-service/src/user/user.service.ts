@@ -282,6 +282,9 @@ export class UserService {
       throw new NotFoundException('Service not found');
     }
 
+    service.isActive = false;
+    await this.serviceRepository.save(service);
+
     await this.serviceRepository.softDeleteService(id);
 
     return {
@@ -1717,6 +1720,68 @@ export class UserService {
       success: true,
       message: 'Technician created successfully by Admin',
       data: result,
+    };
+  }
+
+  async getTechniciansByServiceId(serviceId: number) {
+    const service = await this.serviceRepository.findOne({
+      where: { id: serviceId, isActive: true },
+    });
+    if (!service) {
+      throw new NotFoundException('Service not found or inactive');
+    }
+
+    const techServices = await this.dataSource.getRepository(TechnicianService).find({
+      where: { serviceId },
+      relations: ['technicianProfile', 'technicianProfile.user'],
+    });
+
+    const payoutAccountRepo = this.dataSource.getRepository(TechnicianPayoutAccount);
+
+    const technicians = await Promise.all(
+      techServices
+        .map((ts) => ts.technicianProfile)
+        .filter((profile): profile is TechnicianProfile =>
+          !!profile &&
+          profile.status === TECHNICIAN_STATUS.APPROVED &&
+          !!profile.user &&
+          profile.user.status === USER_STATUS.ACTIVE
+        )
+        .map(async (profile) => {
+          const { password, ...result } = profile.user!;
+
+          const payoutAccount = await payoutAccountRepo.findOne({
+            where: { technicianId: profile.userId },
+          });
+
+          return {
+            ...result,
+            technicianProfile: {
+              id: profile.id,
+              status: profile.status,
+              yearsOfExperience: profile.yearsOfExperience,
+              languages: profile.languages,
+              payoutAccount: payoutAccount ? {
+                id: payoutAccount.id,
+                upiId: payoutAccount.upiId,
+                accountHolderName: payoutAccount.accountHolderName,
+                bankName: payoutAccount.bankName,
+                accountNumber: payoutAccount.accountNumber,
+                ifscCode: payoutAccount.ifscCode,
+                accountType: payoutAccount.accountType,
+                status: payoutAccount.status,
+                razorpayContactId: payoutAccount.razorpayContactId,
+                razorpayFundAccountId: payoutAccount.razorpayFundAccountId,
+              } : null,
+            },
+          };
+        })
+    );
+
+    return {
+      success: true,
+      message: 'Technicians fetched successfully for this service',
+      data: technicians,
     };
   }
 }

@@ -1,5 +1,5 @@
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
-import { Body,  Controller,  Query,  Get, Put,Patch,Delete,Param,ParseIntPipe,HttpCode,HttpStatus,Post,Req,UnauthorizedException,UseGuards, UseInterceptors, ValidationPipe,UploadedFiles, UnprocessableEntityException,} from '@nestjs/common';
+import { Body, Controller, Query, Get, Put, Patch, Delete, Param, ParseIntPipe, HttpCode, HttpStatus, Post, Req, UnauthorizedException, UseGuards, UseInterceptors, ValidationPipe, UploadedFiles, UnprocessableEntityException, } from '@nestjs/common';
 import { UserService } from './user.service';
 import { AuthGuard } from '@nestjs/passport';
 import { JwtAuthGuard, Roles, RolesGuard } from '@hichandra/common';
@@ -21,7 +21,7 @@ import { filter } from 'rxjs';
 
 @Controller('users')
 export class UserController {
-  constructor(private readonly userService: UserService) {}
+  constructor(private readonly userService: UserService) { }
 
   @Post('admin/service')
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -118,6 +118,16 @@ export class UserController {
     );
   }
 
+  @Get('service/:serviceId/technicians')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLE.ADMIN, USER_ROLE.CUSTOMER)
+  @HttpCode(HttpStatus.OK)
+  async getTechniciansByServiceId(
+    @Param('serviceId', ParseIntPipe) serviceId: number,
+  ) {
+    return this.userService.getTechniciansByServiceId(serviceId);
+  }
+
   @Get('service/:id')
   async getServiceById(@Param('id') id: string) {
     return this.userService.getServiceById(Number(id));
@@ -147,8 +157,8 @@ export class UserController {
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateTechnicianStatusDto,
   ) {
-      return this.userService.updateTechnicianStatusService(id,dto);  
-    }
+    return this.userService.updateTechnicianStatusService(id, dto);
+  }
 
   @Get('platform-settings/:id')
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -199,7 +209,7 @@ export class UserController {
   async getMyAddresses(@Req() req: any) {
     return this.userService.getMyAddresses(req.user.id);
   }
-  
+
   @Post('customer/token-payment-link')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(USER_ROLE.CUSTOMER)

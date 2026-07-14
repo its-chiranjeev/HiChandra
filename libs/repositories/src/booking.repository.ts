@@ -288,4 +288,47 @@ export class BookingRepository {
 
     return this.findBookingById(bookingId);
   }
+
+  // async findActiveBookingForTechnician(
+  //   technicianId: number,
+  // ): Promise<Booking | null> {
+  //   return this.repo.findOne({
+  //     where: {
+  //       status: BOOKING_STATUS.PENDING,
+  //       isManualAssign: false,
+  //       filteredTechnicians: technicianId,
+  //     },
+  //     relations: {
+  //       customer: true,
+  //       service: true,
+  //       address: true,
+  //     },
+  //     order: {
+  //       createdAt: 'DESC',
+  //     },
+  //   });
+  // }
+
+  async markExpiredAsManual(): Promise<number> {
+    const fiveMinutesAgo = new Date(
+      Date.now() - 5 * 60 * 1000,
+    );
+
+    const result = await this.repo.createQueryBuilder().update(Booking).set({
+        isManualAssign: true,
+      })
+      .where('status = :status', {
+        status: BOOKING_STATUS.PENDING,
+      })
+      .andWhere('"technicianId" IS NULL')
+      .andWhere('"isManualAssign" = :isManualAssign', {
+        isManualAssign: false,
+      })
+      .andWhere('"createdAt" <= :fiveMinutesAgo', {
+        fiveMinutesAgo,
+      })
+      .execute();
+
+    return result.affected ?? 0;
+  }
 }

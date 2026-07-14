@@ -26,3 +26,5 @@ export * from './user/update-technician-status.dto';
 export * from './auth/forgot-password.dto';
 export * from './user/admin-create-technician.dto';
 export * from './booking/admin-create-booking.dto';
+export * from './user/create-technician-payout-account.dto';
+export * from './user/update-technician-payout-account.dto';

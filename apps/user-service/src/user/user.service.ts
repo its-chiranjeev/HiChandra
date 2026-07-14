@@ -17,7 +17,8 @@ import {
   TechnicianProfileRepository,
   ServiceRepository,
   PlatformSettingRepository,
-  FavoriteTechnicianRepository
+  FavoriteTechnicianRepository,
+  TechnicianPayoutAccountRepository
 } from '@hichandra/repositories';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -56,6 +57,8 @@ import {
   UpdateServiceDto,
   UpdateTechnicianStatusDto,
   AdminCreateTechnicianDto,
+  CreateTechnicianPayoutAccountDto,
+  UpdateTechnicianPayoutAccountDto
 } from '@hichandra/dtos';
 import { RazorpayXService, PaymentService } from '@hichandra/payment';
 import { SmsService } from '@hichandra/sms-services';
@@ -75,6 +78,7 @@ export class UserService {
     private readonly razorpayXService: RazorpayXService,
     private readonly paymentService: PaymentService,
     private readonly smsService: SmsService,
+    private readonly technicianPayoutAccountRepository: TechnicianPayoutAccountRepository,
   ) { }
 
   async findById(id: number) {
@@ -1782,6 +1786,483 @@ export class UserService {
       success: true,
       message: 'Technicians fetched successfully for this service',
       data: technicians,
+    };
+  }
+
+  private maskAccountNumber(
+    accountNumber: string,
+  ): string {
+    if (accountNumber.length <= 4) {
+      return accountNumber;
+    }
+
+    return `${'*'.repeat(
+      accountNumber.length - 4,
+    )}${accountNumber.slice(-4)}`;
+  }
+
+  async createTechnicianPayoutAccount(
+    technicianId: number,
+    dto: CreateTechnicianPayoutAccountDto,
+  ) {
+    const technician =
+      await this.userRepository.findById(
+        technicianId,
+      );
+
+    if (!technician) {
+      throw new NotFoundException(
+        'Technician not found',
+      );
+    }
+
+    if (
+      technician.role !== USER_ROLE.TECHNICIAN
+    ) {
+      throw new ForbiddenException(
+        'Only technicians can create payout accounts',
+      );
+    }
+
+    /*
+    * CHECK EXISTING PAYOUT ACCOUNT
+    */
+
+    const existingAccount =
+      await this
+        .technicianPayoutAccountRepository
+        .findByTechnicianId(technicianId);
+
+    if (existingAccount) {
+      throw new ConflictException(
+        'Technician payout account already exists',
+      );
+    }
+
+    const {
+      accountType,
+      upiId,
+      accountHolderName,
+      bankName,
+      accountNumber,
+      ifscCode,
+    } = dto;
+
+    /*
+    * CREATE RAZORPAY CONTACT
+    */
+
+    const technicianName = `${technician.firstName} ${technician.lastName}`.trim();
+    const contact =
+      await this.razorpayXService.createContact({
+        technicianId: technician.id,
+        name: technicianName,
+        email: technician.email,
+        phone: technician.phone,
+      });
+
+    /*
+    * CREATE LOCAL PAYOUT ACCOUNT
+    */
+
+    const payoutAccount =
+      this.technicianPayoutAccountRepository.create({
+        technicianId,
+        accountType,
+        razorpayContactId: contact.id,
+        status:
+          PAYOUT_ONBOARDING_STATUS.PENDING,
+        isActive: false,
+      });
+
+    try {
+      /*
+      * VPA
+      */
+
+      if (
+        accountType ===
+        PAYOUT_ACCOUNT_TYPE.VPA
+      ) {
+        if (!upiId) {
+          throw new BadRequestException(
+            'UPI ID is required',
+          );
+        }
+
+        const fundAccount =
+          await this.razorpayXService
+            .createVpaFundAccount({
+              contactId: contact.id,
+              upiId,
+            });
+
+        payoutAccount.upiId = upiId;
+
+        payoutAccount.razorpayFundAccountId =
+          fundAccount.id;
+      }
+
+      /*
+      * BANK ACCOUNT
+      */
+
+      if (
+        accountType ===
+        PAYOUT_ACCOUNT_TYPE.BANK_ACCOUNT
+      ) {
+        if (
+          !accountHolderName ||
+          !accountNumber ||
+          !ifscCode
+        ) {
+          throw new BadRequestException(
+            'Account holder name, account number and IFSC code are required',
+          );
+        }
+
+        const fundAccount =
+          await this.razorpayXService.createFundAccount({
+            contactId: contact.id,
+            accountHolderName,
+            accountNumber,
+            ifscCode,
+          });
+
+        payoutAccount.accountHolderName =
+          accountHolderName;
+
+        payoutAccount.bankName = bankName;
+
+        payoutAccount.accountNumber =
+          accountNumber;
+
+        payoutAccount.ifscCode = ifscCode;
+
+        payoutAccount.razorpayFundAccountId =
+          fundAccount.id;
+      }
+
+      payoutAccount.status =
+        PAYOUT_ONBOARDING_STATUS.ACTIVE;
+
+      payoutAccount.isActive = true;
+
+      const savedAccount =
+        await this
+          .technicianPayoutAccountRepository
+          .save(payoutAccount);
+
+      return {
+        id: savedAccount.id,
+
+        technicianId:
+          savedAccount.technicianId,
+
+        accountType:
+          savedAccount.accountType,
+
+        upiId:
+          savedAccount.upiId ?? null,
+
+        accountHolderName:
+          savedAccount.accountHolderName ??
+          null,
+
+        bankName:
+          savedAccount.bankName ?? null,
+
+        accountNumber:
+          savedAccount.accountNumber
+            ? this.maskAccountNumber(
+                savedAccount.accountNumber,
+              )
+            : null,
+
+        ifscCode:
+          savedAccount.ifscCode ?? null,
+
+        status:
+          savedAccount.status,
+
+        isActive:
+          savedAccount.isActive,
+
+        createdAt:
+          savedAccount.createdAt,
+      };
+    } catch (error) {
+      payoutAccount.status =
+        PAYOUT_ONBOARDING_STATUS.FAILED;
+
+      payoutAccount.isActive = false;
+
+      await this
+        .technicianPayoutAccountRepository
+        .save(payoutAccount);
+
+      throw error;
+    }
+  }
+
+  async updateTechnicianPayoutAccount(
+    technicianId: number,
+    dto: UpdateTechnicianPayoutAccountDto,
+  ) {
+    const payoutAccount =
+      await this.technicianPayoutAccountRepository
+        .findByTechnicianId(technicianId);
+
+    if (!payoutAccount) {
+      throw new NotFoundException(
+        'Technician payout account not found',
+      );
+    }
+
+    if (!payoutAccount.razorpayContactId) {
+      throw new BadRequestException(
+        'Razorpay contact ID not found',
+      );
+    }
+
+    if (Object.keys(dto).length === 0) {
+      throw new BadRequestException(
+        'At least one field is required to update the payout account',
+      );
+    }
+
+    const targetAccountType =
+      dto.accountType ?? payoutAccount.accountType;
+
+    if (!targetAccountType) {
+      throw new BadRequestException(
+        'Payout account type is required',
+      );
+    }
+
+    const accountTypeChanged =
+      dto.accountType !== undefined &&
+      dto.accountType !== payoutAccount.accountType;
+
+    const upiDetailsChanged =
+      targetAccountType === PAYOUT_ACCOUNT_TYPE.VPA &&
+      (
+        accountTypeChanged ||
+        (
+          dto.upiId !== undefined &&
+          dto.upiId !== payoutAccount.upiId
+        )
+      );
+
+    const bankDetailsChanged =
+      targetAccountType ===
+        PAYOUT_ACCOUNT_TYPE.BANK_ACCOUNT &&
+      (
+        accountTypeChanged ||
+        (
+          dto.accountHolderName !== undefined &&
+          dto.accountHolderName !==
+            payoutAccount.accountHolderName
+        ) ||
+        (
+          dto.accountNumber !== undefined &&
+          dto.accountNumber !==
+            payoutAccount.accountNumber
+        ) ||
+        (
+          dto.ifscCode !== undefined &&
+          dto.ifscCode !== payoutAccount.ifscCode
+        )
+      );
+
+    /*
+    * VPA update
+    */
+
+    if (targetAccountType === PAYOUT_ACCOUNT_TYPE.VPA) {
+      const finalUpiId =
+        dto.upiId ?? payoutAccount.upiId;
+
+      if (!finalUpiId) {
+        throw new BadRequestException(
+          'UPI ID is required for VPA payout account',
+        );
+      }
+
+      if (upiDetailsChanged) {
+        payoutAccount.status =
+          PAYOUT_ONBOARDING_STATUS.PENDING;
+
+        payoutAccount.isActive = false;
+
+        try {
+          const fundAccount =
+            await this.razorpayXService
+              .createVpaFundAccount({
+                contactId:
+                  payoutAccount.razorpayContactId,
+                upiId: finalUpiId,
+              });
+
+          payoutAccount.razorpayFundAccountId =
+            fundAccount.id;
+        } catch (error) {
+          payoutAccount.status =
+            PAYOUT_ONBOARDING_STATUS.FAILED;
+
+          payoutAccount.isActive = false;
+
+          await this.technicianPayoutAccountRepository
+            .save(payoutAccount);
+
+          throw error;
+        }
+      }
+
+      payoutAccount.accountType =
+        PAYOUT_ACCOUNT_TYPE.VPA;
+
+      payoutAccount.upiId = finalUpiId;
+
+      // Clear previous bank details.
+      payoutAccount.accountHolderName = undefined;
+      payoutAccount.bankName = undefined;
+      payoutAccount.accountNumber = undefined;
+      payoutAccount.ifscCode = undefined;
+    }
+
+    /*
+    * Bank-account update
+    */
+
+    if (
+      targetAccountType ===
+      PAYOUT_ACCOUNT_TYPE.BANK_ACCOUNT
+    ) {
+      const finalAccountHolderName =
+        dto.accountHolderName ??
+        payoutAccount.accountHolderName;
+
+      const finalAccountNumber =
+        dto.accountNumber ??
+        payoutAccount.accountNumber;
+
+      const finalIfscCode =
+        dto.ifscCode ??
+        payoutAccount.ifscCode;
+
+      if (
+        !finalAccountHolderName ||
+        !finalAccountNumber ||
+        !finalIfscCode
+      ) {
+        throw new BadRequestException(
+          'Account holder name, account number and IFSC code are required for a bank payout account',
+        );
+      }
+
+      if (bankDetailsChanged) {
+        payoutAccount.status =
+          PAYOUT_ONBOARDING_STATUS.PENDING;
+
+        payoutAccount.isActive = false;
+
+        try {
+          const fundAccount =
+            await this.razorpayXService
+              .createFundAccount({
+                contactId:
+                  payoutAccount.razorpayContactId,
+                accountHolderName:
+                  finalAccountHolderName,
+                accountNumber:
+                  finalAccountNumber,
+                ifscCode: finalIfscCode,
+              });
+
+          payoutAccount.razorpayFundAccountId =
+            fundAccount.id;
+        } catch (error) {
+          payoutAccount.status =
+            PAYOUT_ONBOARDING_STATUS.FAILED;
+
+          payoutAccount.isActive = false;
+
+          await this.technicianPayoutAccountRepository
+            .save(payoutAccount);
+
+          throw error;
+        }
+      }
+
+      payoutAccount.accountType =
+        PAYOUT_ACCOUNT_TYPE.BANK_ACCOUNT;
+
+      payoutAccount.upiId = undefined;
+
+      payoutAccount.accountHolderName =
+        finalAccountHolderName;
+
+      payoutAccount.accountNumber =
+        finalAccountNumber;
+
+      payoutAccount.ifscCode =
+        finalIfscCode;
+
+      if (dto.bankName !== undefined) {
+        payoutAccount.bankName = dto.bankName;
+      }
+    }
+
+    payoutAccount.status =
+      PAYOUT_ONBOARDING_STATUS.ACTIVE;
+
+    payoutAccount.isActive = true;
+
+    const updatedAccount =
+      await this.technicianPayoutAccountRepository
+        .save(payoutAccount);
+
+    return {
+      id: updatedAccount.id,
+      technicianId: updatedAccount.technicianId,
+      accountType: updatedAccount.accountType,
+      upiId: updatedAccount.upiId ?? null,
+      accountHolderName:
+        updatedAccount.accountHolderName ?? null,
+      bankName: updatedAccount.bankName ?? null,
+      accountNumber:
+        updatedAccount.accountNumber
+          ? this.maskAccountNumber(
+              updatedAccount.accountNumber,
+            )
+          : null,
+      ifscCode: updatedAccount.ifscCode ?? null,
+      status: updatedAccount.status,
+      isActive: updatedAccount.isActive,
+      updatedAt: updatedAccount.updatedAt,
+    };
+  }
+
+  async deleteTechnicianPayoutAccount(
+    technicianId: number,
+  ) {
+    const payoutAccount =
+      await this.technicianPayoutAccountRepository
+        .findByTechnicianId(technicianId);
+
+    if (!payoutAccount) {
+      throw new NotFoundException(
+        'Technician payout account not found',
+      );
+    }
+
+    await this.technicianPayoutAccountRepository
+      .deleteByTechnicianId(technicianId);
+
+    return {
+      technicianId,
+      deleted: true,
     };
   }
 }

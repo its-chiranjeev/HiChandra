@@ -7,9 +7,11 @@ import { DatabaseModule } from '@hichandra/database';
 import { UserManagementService } from './user-management.service';
 import { EntitiesModule } from '@hichandra/entities';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
   imports: [
+    ScheduleModule.forRoot(),
     ConfigModule.forRoot({
       isGlobal: true,
     }),

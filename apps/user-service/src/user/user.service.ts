@@ -18,7 +18,9 @@ import {
   ServiceRepository,
   PlatformSettingRepository,
   FavoriteTechnicianRepository,
-  TechnicianPayoutAccountRepository
+  TechnicianPayoutAccountRepository,
+  BookingRepository,
+  PaymentRepository,
 } from '@hichandra/repositories';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -79,6 +81,8 @@ export class UserService {
     private readonly paymentService: PaymentService,
     private readonly smsService: SmsService,
     private readonly technicianPayoutAccountRepository: TechnicianPayoutAccountRepository,
+    private readonly bookingRepository: BookingRepository,
+    private readonly paymentRepository: PaymentRepository,
   ) { }
 
   async findById(id: number) {
@@ -1408,6 +1412,18 @@ export class UserService {
       );
     }
 
+    if (
+      dto.status === TECHNICIAN_STATUS.PENDING_APPROVAL &&
+      (
+        profile.status === TECHNICIAN_STATUS.APPROVED ||
+        profile.status === TECHNICIAN_STATUS.REJECTED
+      )
+    ) {
+      throw new BadRequestException(
+        'Approved or rejected technicians cannot be moved back to pending approval',
+      );
+    }
+
     const payoutAccountRepo = this.dataSource.getRepository(TechnicianPayoutAccount);
     const payoutAccount = await payoutAccountRepo.findOne({
       where: { technicianId: technician.id },
@@ -2263,6 +2279,27 @@ export class UserService {
     return {
       technicianId,
       deleted: true,
+    };
+  }
+
+  async getAdminDashboardStats() {
+    const [
+      totalBookings,
+      activeTechnicians,
+      pendingApprovals,
+      todayRevenue,
+    ] = await Promise.all([
+      this.bookingRepository.countAllBookings(),
+      this.technicianProfileRepository.countActiveTechnicians(),
+      this.technicianProfileRepository.countPendingApprovals(),
+      this.paymentRepository.getTodayRevenue(),
+    ]);
+
+    return {
+      totalBookings,
+      activeTechnicians,
+      pendingApprovals,
+      todayRevenue,
     };
   }
 }

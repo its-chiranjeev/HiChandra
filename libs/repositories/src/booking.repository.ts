@@ -331,4 +331,8 @@ export class BookingRepository {
 
     return result.affected ?? 0;
   }
+
+  async countAllBookings(): Promise<number> {
+    return this.repo.count();
+  }
 }

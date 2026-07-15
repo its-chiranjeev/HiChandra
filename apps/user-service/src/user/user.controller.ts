@@ -369,6 +369,23 @@ export class UserController {
     return this.userService.updateProfileService(req.user.id, dto, files);
   }
 
+  @Get('admin/dashboard-stats')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLE.ADMIN)
+  @HttpCode(HttpStatus.OK)
+  async getAdminDashboardStats() {
+    const data =
+      await this.userService
+        .getAdminDashboardStats();
+
+    return {
+      success: true,
+      message:
+        'Admin dashboard statistics fetched successfully',
+      data,
+    };
+  }
+  
   @Get('customer/dashboard-stats')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(USER_ROLE.CUSTOMER)

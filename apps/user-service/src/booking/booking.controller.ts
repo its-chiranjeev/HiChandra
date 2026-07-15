@@ -318,7 +318,7 @@ export class BookingController {
       data: booking,
     };
   }
-  @Post('admin/assign-booking')
+  @Patch('admin/assign-booking')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(USER_ROLE.ADMIN)
   @HttpCode(HttpStatus.OK)

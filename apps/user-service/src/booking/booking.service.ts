@@ -1,15 +1,19 @@
 import {Booking, BOOKING_STATUS, BOOKING_PAYMENT_STATUS, Service, CustomerAddress, User, USER_ROLE, USER_STATUS, TECHNICIAN_STATUS, JOB_STATUS, TechnicianService, TechnicianLocation, Otp, PriceBreakdown, Payment, PAYMENT_STATUS, COMPLAINT_STATUS, TECHNICIAN_PAYOUT_STATUS, TechnicianProfile, TechnicianPayoutAccount} from '@hichandra/entities';
 import { EmailService } from '@hichandra/email-services';
 import { PaymentService, RazorpayXService } from '@hichandra/payment';
-import { Injectable, NotFoundException, BadRequestException, UnprocessableEntityException , ForbiddenException, UnauthorizedException} from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, UnprocessableEntityException , ForbiddenException, UnauthorizedException, Logger} from '@nestjs/common';
 import { DataSource, Not } from 'typeorm';
 import { CreateBookingDto, UpdateBookingStatusDto,CreateBookingReviewDto, StartBookingDto, AssignBookingDto, CancelBookingDto, CreateComplaintDto, UpdateComplaintDto, CreateTechnicianPayoutDto, RescheduleBookingDto, RepeatBookingDto , TechnicianCancelBookingDto, AdminCreateBookingDto } from '@hichandra/dtos';
 import { AssignmentService } from '../assignment/assignment.service';
 import { BookingRepository, UserRepository, ComplaintRepository, PaymentRepository, TechnicianPayoutRepository } from '@hichandra/repositories';
 import { randomUUID } from 'crypto';
+import {Cron, CronExpression} from '@nestjs/schedule';
 
 @Injectable()
 export class BookingService {
+    private readonly logger = new Logger(BookingService.name
+    );
+
   constructor(
     private readonly dataSource: DataSource,
     private readonly assignmentService: AssignmentService,
@@ -21,7 +25,6 @@ export class BookingService {
     private readonly complaintRepository: ComplaintRepository,
     private readonly paymentRepository: PaymentRepository,
     private readonly technicianPayoutRepository: TechnicianPayoutRepository,
-
   ) { }
 
   private getIstDateParts(date: Date) {
@@ -452,6 +455,33 @@ export class BookingService {
       };
     });
  }
+
+  @Cron(
+    CronExpression.EVERY_MINUTE,
+    {
+      name: 'mark-expired-bookings-manual',
+    },
+  )
+  async markExpiredBookingsManual(): Promise<void> {
+    try {
+      const updatedCount =
+        await this.bookingRepository
+          .markExpiredAsManual();
+
+      if (updatedCount > 0) {
+        this.logger.log(
+          `${updatedCount} booking(s) marked for manual assignment`,
+        );
+      }
+    } catch (error) {
+      this.logger.error(
+        'Failed to update expired bookings',
+        error instanceof Error
+          ? error.stack
+          : String(error),
+      );
+    }
+  }
 
   async getBooking(customerId: number, bookingId: number): Promise<Booking> {
     const bookingRepo = this.dataSource.getRepository(Booking);
@@ -2563,4 +2593,59 @@ export class BookingService {
       return manager.getRepository(Booking).save(booking);
     });
   }
+
+  // async getActiveBookingForTechnician(
+  //   technicianId: number,
+  // ) {
+  //   const booking =
+  //     await this.bookingRepository
+  //       .findActiveBookingForTechnician(
+  //         technicianId,
+  //       );
+
+  //   if (!booking) {
+  //     throw new NotFoundException(
+  //       'No active pending booking found for technician',
+  //     );
+  //   }
+
+  //   return {
+  //     id: booking.id,
+  //     status: booking.status,
+  //     isManualAssign: booking.isManualAssign,
+
+  //     customer: booking.customer
+  //       ? {
+  //           id: booking.customer.id,
+  //           email: booking.customer.email,
+  //           phone: booking.customer.phone,
+  //         }
+  //       : null,
+
+  //     service: booking.service
+  //       ? {
+  //           id: booking.service.id,
+  //           name: booking.service.name,
+  //         }
+  //       : null,
+
+  //     address: booking.address
+  //       ? {
+  //           id: booking.address.id,
+  //           fullAddress:
+  //             booking.address.fullAddress,
+  //           city: booking.address.city,
+  //           state: booking.address.state,
+  //         }
+  //       : null,
+
+  //     scheduledAt:
+  //       booking.scheduledAt ?? null,
+
+  //     totalAmount:
+  //       booking.totalAmount ?? null,
+
+  //     createdAt: booking.createdAt,
+  //   };
+  // }
 }

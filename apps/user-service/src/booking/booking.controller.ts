@@ -470,4 +470,28 @@ export class BookingController {
       Number(limit),
     );
   }
+
+  // @Get('technician/active-booking')
+  // @UseGuards(JwtAuthGuard, RolesGuard)
+  // @Roles(USER_ROLE.TECHNICIAN)
+  // @HttpCode(HttpStatus.OK)
+  // async getActiveBookingForTechnician(
+  //   @Req() req: any,
+  // ) {
+  //   const technicianId =
+  //     req.user.id || req.user.sub;
+
+  //   const data =
+  //     await this.bookingService
+  //       .getActiveBookingForTechnician(
+  //         technicianId,
+  //       );
+
+  //   return {
+  //     success: true,
+  //     message:
+  //       'Active technician booking fetched successfully',
+  //     data,
+  //   };
+  // }
 }

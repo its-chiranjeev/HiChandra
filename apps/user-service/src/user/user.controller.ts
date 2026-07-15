@@ -13,7 +13,9 @@ import {
   UpdateProfileDto,
   AssignBookingDto,
   UpdateTechnicianStatusDto,
-  AdminCreateTechnicianDto
+  AdminCreateTechnicianDto,
+  CreateTechnicianPayoutAccountDto,
+  UpdateTechnicianPayoutAccountDto
 } from '@hichandra/dtos';
 import { TECHNICIAN_STATUS, USER_ROLE, USER_STATUS } from '@hichandra/entities';
 import { UpdateServiceDto } from '@hichandra/dtos';
@@ -158,6 +160,94 @@ export class UserController {
     @Body() dto: UpdateTechnicianStatusDto,
   ) {
     return this.userService.updateTechnicianStatusService(id, dto);
+  }
+
+  @Post('technician/payout-account')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLE.TECHNICIAN)
+  @HttpCode(HttpStatus.CREATED)
+  async createTechnicianPayoutAccount(
+    @Req() req: any,
+    @Body(
+      new ValidationPipe({
+        whitelist: true,
+        transform: true,
+      }),
+    )
+    dto: CreateTechnicianPayoutAccountDto,
+  ) {
+    const technicianId =
+      req.user.id || req.user.sub;
+
+    const data =
+      await this.userService
+        .createTechnicianPayoutAccount(
+          technicianId,
+          dto,
+        );
+
+    return {
+      success: true,
+      message:
+        'Technician payout account created successfully',
+      data,
+    };
+  }
+
+  @Patch('technician/payout-account')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLE.TECHNICIAN)
+  @HttpCode(HttpStatus.OK)
+  async updateTechnicianPayoutAccount(
+    @Req() req: any,
+    @Body(
+      new ValidationPipe({
+        whitelist: true,
+        transform: true,
+      }),
+    )
+    dto: UpdateTechnicianPayoutAccountDto,
+  ) {
+    const technicianId =
+      req.user.id || req.user.sub;
+
+    const data =
+      await this.userService
+        .updateTechnicianPayoutAccount(
+          technicianId,
+          dto,
+        );
+
+    return {
+      success: true,
+      message:
+        'Technician payout account updated successfully',
+      data,
+    };
+  }
+
+  @Delete('technician/payout-account')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLE.TECHNICIAN)
+  @HttpCode(HttpStatus.OK)
+  async deleteTechnicianPayoutAccount(
+    @Req() req: any,
+  ) {
+    const technicianId =
+      req.user.id || req.user.sub;
+
+    const data =
+      await this.userService
+        .deleteTechnicianPayoutAccount(
+          technicianId,
+        );
+
+    return {
+      success: true,
+      message:
+        'Technician payout account deleted successfully',
+      data,
+    };
   }
 
   @Get('platform-settings/:id')

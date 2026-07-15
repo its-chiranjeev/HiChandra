@@ -104,6 +104,44 @@ export class UserService {
     return rest;
   }
 
+  private async presignUserS3Urls(user: any) {
+    if (!user) return user;
+
+    const updatedUser = { ...user };
+
+    if (updatedUser.profileImage) {
+      try {
+        updatedUser.profileImage = await this.s3Service.getDownloadUrl(updatedUser.profileImage);
+      } catch (error) {
+        console.error('Failed to get download URL for profileImage', error);
+      }
+    }
+
+    if (updatedUser.technicianProfile) {
+      updatedUser.technicianProfile = { ...updatedUser.technicianProfile };
+      const documentFields = [
+        'aadharUrl',
+        'panUrl',
+        'policeCertUrl',
+        'tradeLicenseUrl',
+        'selfieUrl',
+      ];
+
+      for (const field of documentFields) {
+        const urlValue = updatedUser.technicianProfile[field];
+        if (typeof urlValue === 'string' && urlValue.trim() !== '') {
+          try {
+            updatedUser.technicianProfile[field] = await this.s3Service.getDownloadUrl(urlValue);
+          } catch (error) {
+            console.error(`Failed to get download URL for technicianProfile.${field}`, error);
+          }
+        }
+      }
+    }
+
+    return updatedUser;
+  }
+
   async getAllUsersService(
     page: number,
     limit: number,
@@ -118,35 +156,36 @@ export class UserService {
       status,
       technicianProfileStatus,
     );
-    const formattedUsers = users.map((user) => {
-      const {
-        password,
-        hashedRefreshToken,
-        tokenVersion,
-        technicianProfileId,
-        technicianProfile,
-        addresses,
-        ...safeUser
-
-      } = user;
-
-      if (user.role === USER_ROLE.CUSTOMER) {
-        return {
-          ...safeUser,
-          addresses: addresses || [],
-        };
-      }
-
-      if (user.role === USER_ROLE.TECHNICIAN) {
-        return {
-          ...safeUser,
+    const formattedUsers = await Promise.all(
+      users.map(async (user) => {
+        const {
+          password,
+          hashedRefreshToken,
+          tokenVersion,
           technicianProfileId,
           technicianProfile,
-        };
-      }
+          addresses,
+          ...safeUser
+        } = user;
 
-      return safeUser;
-    });
+        let baseUser: any = { ...safeUser };
+
+        if (user.role === USER_ROLE.CUSTOMER) {
+          baseUser = {
+            ...safeUser,
+            addresses: addresses || [],
+          };
+        } else if (user.role === USER_ROLE.TECHNICIAN) {
+          baseUser = {
+            ...safeUser,
+            technicianProfileId,
+            technicianProfile,
+          };
+        }
+
+        return this.presignUserS3Urls(baseUser);
+      }),
+    );
     return {
       success: true,
       message: 'All users fetched successfully',
@@ -168,11 +207,12 @@ export class UserService {
     }
 
     const { password, hashedRefreshToken, tokenVersion, ...safeUser } = user;
+    const formattedUser = await this.presignUserS3Urls(safeUser);
 
     return {
       success: true,
       message: 'User fetched successfully',
-      data: safeUser,
+      data: formattedUser,
     };
   }
 

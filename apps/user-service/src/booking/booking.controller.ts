@@ -318,7 +318,7 @@ export class BookingController {
       data: booking,
     };
   }
-  @Patch('admin/assign-booking')
+  @Post('admin/assign-booking')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(USER_ROLE.ADMIN)
   @HttpCode(HttpStatus.OK)
@@ -336,7 +336,7 @@ export class BookingController {
     );
   }
 
-  // Repeat booking
+  // Repeat bookings
   @Post('repeat/:id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(USER_ROLE.CUSTOMER)

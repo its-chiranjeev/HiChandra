@@ -96,4 +96,32 @@ export class PaymentRepository {
       },
     });
   }
+
+  async getTodayRevenue(): Promise<number> {
+    const result = await this.repo
+      .createQueryBuilder('payment')
+      .select(
+        'COALESCE(SUM(payment.amount), 0)',
+        'totalRevenue',
+      )
+      .where('payment.status = :status', {
+        status: PAYMENT_STATUS.SUCCESS,
+      })
+      .andWhere(`
+        DATE(
+          payment."createdAt"
+          AT TIME ZONE 'UTC'
+          AT TIME ZONE 'Asia/Kolkata'
+        ) =
+        DATE(
+          NOW()
+          AT TIME ZONE 'Asia/Kolkata'
+        )
+      `)
+      .getRawOne<{
+        totalRevenue: string;
+      }>();
+
+    return Number(result?.totalRevenue ?? 0);
+  }
 }

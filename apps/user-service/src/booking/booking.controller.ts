@@ -336,7 +336,7 @@ export class BookingController {
     );
   }
 
-  // Repeat booking
+  // Repeat bookings
   @Post('repeat/:id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(USER_ROLE.CUSTOMER)

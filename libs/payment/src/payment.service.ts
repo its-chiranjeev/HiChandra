@@ -315,10 +315,11 @@ export class PaymentService {
 
     const html = paymentInvoiceTemplate({
 
-      companyName: 'HiChandra',
-      companyEmail: 'support@hichandra.com',
-      companyPhone: '+91 XXXXXXXXXX',
-      companyAddress: 'Ghaziabad, Uttar Pradesh, India',
+      companyName: process.env.HICHANDRA_COMPANY_NAME ?? 'HiChandra',
+      companyEmail: process.env.HICHANDRA_COMPANY_EMAIL ?? '-',
+      companyPhone: process.env.HICHANDRA_COMPANY_PHONE ?? '-',
+      companyAddress: process.env.HICHANDRA_COMPANY_ADDRESS ?? '-',
+      companyGstin:process.env.HICHANDRA_GSTIN ?? '-',
 
       billingAddress: booking.address
         ? [
@@ -351,7 +352,7 @@ export class PaymentService {
       customerPhone: booking.customer.phone ?? '-',
 
       serviceName: booking.service?.name,
-      bookingStatus: booking.status,
+      bookingStatus: booking.status.toLowerCase(),
 
       paymentId: String(
         razorpayPayment?.id ?? payment.paymentId ?? '-',

@@ -2342,4 +2342,53 @@ export class UserService {
       todayRevenue,
     };
   }
+  private roundCurrency(amount: number,): number {
+    return Math.round((amount + Number.EPSILON) * 100,) / 100;
+  }
+
+  async getTechnicianDashboardStats(
+    technicianId: number,
+  ): Promise<{
+    availableJobs: number;
+    activeJobs: number;
+    todayEarning: number;
+    walletBalance: number;
+    currency: 'INR';
+  }> {
+    if (!Number.isInteger(technicianId) || technicianId <= 0 ) {
+      throw new BadRequestException('Invalid technician ID', );
+    }
+
+    const technician =
+      await this.userRepository.findOne({
+        where: {
+          id: technicianId,
+          role: USER_ROLE.TECHNICIAN,
+          status: USER_STATUS.ACTIVE,
+        },
+        relations: [
+          'technicianProfile',
+        ],
+      });
+    if (!technician) {
+      throw new NotFoundException('Active technician not found',);
+    }
+    if (!technician.technicianProfile) {
+      throw new BadRequestException('Technician profile not found',);
+    }
+    if (technician.technicianProfile.status !== TECHNICIAN_STATUS.APPROVED) {
+      throw new ForbiddenException('Only approved technicians can access dashboard stats',);
+    }
+
+    const bookingStats =
+      await this.bookingRepository.getTechnicianDashboardBookingStats(technicianId,);
+
+    return {
+      availableJobs: bookingStats.availableJobs,
+      activeJobs: bookingStats.activeJobs,
+      todayEarning: this.roundCurrency( bookingStats.todayEarning, ),
+      walletBalance: this.roundCurrency( bookingStats.totalEarning, ),
+      currency: 'INR',
+    };
+  }
 }

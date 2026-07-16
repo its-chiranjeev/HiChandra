@@ -335,4 +335,130 @@ export class BookingRepository {
   async countAllBookings(): Promise<number> {
     return this.repo.count();
   }
+
+  async countAvailableJobsForTechnician(
+    technicianId: number,
+  ): Promise<number> {
+    return this.repo.createQueryBuilder('booking')
+      .where('booking.status = :status', {status: BOOKING_STATUS.PENDING,})
+      .andWhere('booking."technicianId" IS NULL')
+      .andWhere('booking."isManualAssign" = false')
+      .andWhere('booking."filteredTechnicians" @> :technicianFilter',
+        {
+          technicianFilter: JSON.stringify([technicianId,]),
+        },
+      )
+      .getCount();
+  }
+
+  async getTechnicianDashboardBookingStats(technicianId: number,
+  ): Promise<{
+    availableJobs: number;
+    activeJobs: number;
+    todayEarning: number;
+    totalEarning: number;
+  }> {
+    const activeStatuses = [
+      BOOKING_STATUS.ACCEPTED,
+      BOOKING_STATUS.ENROUTE,
+      BOOKING_STATUS.ARRIVED,
+      BOOKING_STATUS.ONGOING,
+    ];
+
+    const result = await this.repo
+      .createQueryBuilder('booking')
+      .select(
+        `
+        COUNT(*) FILTER (
+          WHERE booking.status = :pendingStatus
+            AND booking."technicianId" IS NULL
+            AND booking."isManualAssign" = false
+            AND booking."filteredTechnicians" IS NOT NULL
+            AND booking."filteredTechnicians"
+                @> CAST(:technicianFilter AS jsonb)
+        )
+        `,
+        'availableJobs',
+      )
+      .addSelect(
+        `
+        COUNT(*) FILTER (
+          WHERE booking."technicianId" = :technicianId
+            AND booking.status IN (:...activeStatuses)
+        )
+        `,
+        'activeJobs',
+      )
+      .addSelect(
+        `
+        COALESCE(
+          SUM(
+            CASE
+              WHEN booking."technicianId" = :technicianId
+                AND booking.status = :completedStatus
+                AND (
+                  booking."updatedAt"
+                  AT TIME ZONE 'Asia/Kolkata'
+                )::date =
+                (
+                  NOW()
+                  AT TIME ZONE 'Asia/Kolkata'
+                )::date
+              THEN COALESCE(
+                (
+                  booking."priceBreakdown"
+                  ->> 'technicianEarning'
+                )::numeric,
+                0
+              )
+              ELSE 0
+            END
+          ),
+          0
+        )
+        `,
+        'todayEarning',
+      )
+      .addSelect(
+        `
+        COALESCE(
+          SUM(
+            CASE
+              WHEN booking."technicianId" = :technicianId
+                AND booking.status = :completedStatus
+              THEN COALESCE(
+                (
+                  booking."priceBreakdown"
+                  ->> 'technicianEarning'
+                )::numeric,
+                0
+              )
+              ELSE 0
+            END
+          ),
+          0
+        )
+        `,
+        'totalEarning',
+      )
+      .setParameters({ technicianId,
+        technicianFilter: JSON.stringify([technicianId]),
+        pendingStatus: BOOKING_STATUS.PENDING,
+        completedStatus: BOOKING_STATUS.COMPLETED,
+        activeStatuses,
+      })
+      .getRawOne<{
+        availableJobs: string;
+        activeJobs: string;
+        todayEarning: string;
+        totalEarning: string;
+      }>();
+
+    return {
+      availableJobs: Number(result?.availableJobs ?? 0,),
+      activeJobs: Number(result?.activeJobs ?? 0,),
+      todayEarning: Number(result?.todayEarning ?? 0,),
+      totalEarning: Number(result?.totalEarning ?? 0,),
+    };
+  }
 }

@@ -2457,10 +2457,26 @@ export class BookingService {
       }
 
       const technician = await manager.getRepository(User).findOne({
-        where: { id: dto.technicianId, role: USER_ROLE.TECHNICIAN },
-      });
+          where: {
+            id: dto.technicianId,
+            role: USER_ROLE.TECHNICIAN,
+          },
+          relations: [
+            'technicianProfile',
+            'technicianProfile.services',
+            'technicianProfile.services.service',
+            'technicianProfile.services.service.specifications',
+          ],
+        });
       if (!technician) {
         throw new NotFoundException('Technician not found or not a technician');
+      }
+      if (!technician.technicianProfile) {
+        throw new BadRequestException('Technician profile is not available');
+      }
+      if (technician.technicianProfile.status !== TECHNICIAN_STATUS.APPROVED
+      ) {
+        throw new BadRequestException('Only approved technicians can be assigned to a booking',);
       }
 
       const service = await manager.getRepository(Service).findOne({
@@ -2472,6 +2488,15 @@ export class BookingService {
       }
       if (!service.pricingRule) {
         throw new BadRequestException('Pricing rules are not configured for this service');
+      }
+
+      const technicianService =
+        technician.technicianProfile.services?.find(
+          technicianService => 
+            technicianService.serviceId === dto.serviceId || technicianService.service?.id === dto.serviceId,
+        );
+      if (!technicianService) {
+        throw new BadRequestException(`Technician does not provide the selected service: ${service.name}`);
       }
 
       const address = await manager.getRepository(CustomerAddress).findOne({

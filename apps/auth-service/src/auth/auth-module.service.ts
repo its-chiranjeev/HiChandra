@@ -22,7 +22,7 @@ import {
   ResetPasswordDto,
   ForgotPasswordDto
 } from '@hichandra/dtos';
-import { DataSource, Repository, LessThan  } from 'typeorm';
+import { DataSource, Repository, LessThan } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { EmailService } from '@hichandra/email-services';
 import { SmsService } from '@hichandra/sms-services';
@@ -38,8 +38,8 @@ export class AuthModuleService {
     private readonly configService: ConfigService,
     //private readonly emailService: EmailService,
     private readonly smsService: SmsService,
-    private readonly emailService: EmailService, 
-  ) {}
+    private readonly emailService: EmailService,
+  ) { }
 
   async issueAuthTokens(user: User) {
     const accessSecret =
@@ -119,7 +119,7 @@ export class AuthModuleService {
     //     'At least email or phone number must be provided',
     //   );
     if (!dto.phone) {
-    throw new BadRequestException('Phone number is required');
+      throw new BadRequestException('Phone number is required');
     }
 
     if (![USER_ROLE.CUSTOMER, USER_ROLE.TECHNICIAN].includes(dto.role)) {
@@ -298,62 +298,62 @@ export class AuthModuleService {
     const identifier = dto.identifier.trim();
 
     if (!identifier) {
-    throw new BadRequestException(
-    'Email or phone number is required',
-    );
+      throw new BadRequestException(
+        'Email or phone number is required',
+      );
     }
 
     const isEmail = identifier.includes('@');
 
     const user = await this.userRepository.findOne({
-    where: isEmail
-    ? { email: identifier.toLowerCase() }
-    : { phone: identifier },
-    select: [
-    'id',
-    'email',
-    'username',
-    'phone',
-    'password',
-    'role',
-    'status',
-    'firstName',
-    'lastName',
-    'tokenVersion',
-    ],
+      where: isEmail
+        ? { email: identifier.toLowerCase() }
+        : { phone: identifier },
+      select: [
+        'id',
+        'email',
+        'username',
+        'phone',
+        'password',
+        'role',
+        'status',
+        'firstName',
+        'lastName',
+        'tokenVersion',
+      ],
     });
 
     if (!user) {
-    throw new UnauthorizedException(
-    'Invalid email/phone or password',
-    );
+      throw new UnauthorizedException(
+        'Invalid email/phone or password',
+      );
     }
 
     const passwordMatch = await bcrypt.compare(
-    dto.password,
-    user.password,
+      dto.password,
+      user.password,
     );
 
     if (!passwordMatch) {
-    throw new UnauthorizedException(
-    'Invalid email/phone or password',
-    );
+      throw new UnauthorizedException(
+        'Invalid email/phone or password',
+      );
     }
 
     if (
-    user.status === USER_STATUS.BLOCKED ||
-    user.status === USER_STATUS.INACTIVE
+      user.status === USER_STATUS.BLOCKED ||
+      user.status === USER_STATUS.INACTIVE
     ) {
-    throw new ForbiddenException(
-    'User is blocked or inactive',
-    );
+      throw new ForbiddenException(
+        'User is blocked or inactive',
+      );
     }
 
     const data = await this.issueAuthTokens(user);
 
     return {
-    message: 'Login successful',
-    ...data,
+      message: 'Login successful',
+      ...data,
     };
   }
 
@@ -438,7 +438,7 @@ export class AuthModuleService {
       // 6. Issue new tokens (rotation)
       const data = await this.issueAuthTokens(user);
       return data;
-    } catch (e:any) {
+    } catch (e: any) {
       throw new UnauthorizedException(e.message || 'Invalid refresh token');
     }
   }
@@ -486,15 +486,15 @@ export class AuthModuleService {
       technicianProfile:
         user.role === USER_ROLE.TECHNICIAN
           ? {
-              ...user.technicianProfile,
-              services: paginatedServices,
-              servicesPagination: {
-                total: allServices.length,
-                page,
-                limit,
-                totalPages: Math.ceil(allServices.length / limit),
-              },
-            }
+            ...user.technicianProfile,
+            services: paginatedServices,
+            servicesPagination: {
+              total: allServices.length,
+              page,
+              limit,
+              totalPages: Math.ceil(allServices.length / limit),
+            },
+          }
           : undefined,
     };
   }

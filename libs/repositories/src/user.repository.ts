@@ -136,8 +136,7 @@ export class UserRepository extends BaseRepository<User> {
   async findById(id: number) {
     return this.repo.findOne({
       where: {
-        id,
-        role: Not(USER_ROLE.ADMIN),
+        id
       },
       relations: {
         technicianProfile: {
@@ -165,7 +164,7 @@ export class UserRepository extends BaseRepository<User> {
       },
     });
   }
-  
+
   async updateUser(
     id: number,
     payload: Partial<User>,

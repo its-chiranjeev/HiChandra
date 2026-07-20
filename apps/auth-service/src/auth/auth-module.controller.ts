@@ -14,16 +14,18 @@ import {
 } from '@nestjs/common';
 import { AuthModuleService } from './auth-module.service';
 import { JwtAuthGuard } from '@hichandra/common';
-import { LoginDto, RegisterUserDto, VerifyOtpDto, ResetPasswordDto, ForgotPasswordDto} from '@hichandra/dtos';
+import { LoginDto, RegisterUserDto, VerifyOtpDto, ResetPasswordDto, ForgotPasswordDto } from '@hichandra/dtos';
 
 @Controller('auth')
 export class AuthModuleController {
-  constructor(private readonly authModuleService: AuthModuleService) {}
+  constructor(private readonly authModuleService: AuthModuleService) { }
 
   @Post('logout')
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
   async logout(@Req() req: any) {
+    console.log(req.user);
+    console.log(req.user.id);
     return this.authModuleService.logoutService(req.user.id);
   }
 
@@ -87,7 +89,7 @@ export class AuthModuleController {
     return this.authModuleService.forgotPasswordService(dto);
   }
 
-  
+
   @Patch('reset-password')
   @HttpCode(HttpStatus.OK)
   async resetPassword(

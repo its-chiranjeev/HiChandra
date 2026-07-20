@@ -1,18 +1,18 @@
-import {Booking, BOOKING_STATUS, BOOKING_PAYMENT_STATUS, Service, CustomerAddress, User, USER_ROLE, USER_STATUS, TECHNICIAN_STATUS, JOB_STATUS, TechnicianService, TechnicianLocation, Otp, PriceBreakdown, Payment, PAYMENT_STATUS, COMPLAINT_STATUS, TECHNICIAN_PAYOUT_STATUS, TechnicianProfile, TechnicianPayoutAccount} from '@hichandra/entities';
+import { Booking, BOOKING_STATUS, BOOKING_PAYMENT_STATUS, Service, CustomerAddress, User, USER_ROLE, USER_STATUS, TECHNICIAN_STATUS, JOB_STATUS, TechnicianService, TechnicianLocation, Otp, PriceBreakdown, Payment, PAYMENT_STATUS, COMPLAINT_STATUS, TECHNICIAN_PAYOUT_STATUS, TechnicianProfile, TechnicianPayoutAccount, Complaint, TechnicianPayout } from '@hichandra/entities';
 import { EmailService } from '@hichandra/email-services';
 import { PaymentService, RazorpayXService } from '@hichandra/payment';
-import { Injectable, NotFoundException, BadRequestException, UnprocessableEntityException , ForbiddenException, UnauthorizedException, Logger} from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, UnprocessableEntityException, ForbiddenException, UnauthorizedException, Logger } from '@nestjs/common';
 import { DataSource, Not } from 'typeorm';
-import { CreateBookingDto, UpdateBookingStatusDto,CreateBookingReviewDto, StartBookingDto, AssignBookingDto, CancelBookingDto, CreateComplaintDto, UpdateComplaintDto, CreateTechnicianPayoutDto, RescheduleBookingDto, RepeatBookingDto , TechnicianCancelBookingDto, AdminCreateBookingDto } from '@hichandra/dtos';
+import { CreateBookingDto, UpdateBookingStatusDto, CreateBookingReviewDto, StartBookingDto, AssignBookingDto, CancelBookingDto, CreateComplaintDto, UpdateComplaintDto, CreateTechnicianPayoutDto, RescheduleBookingDto, RepeatBookingDto, TechnicianCancelBookingDto, AdminCreateBookingDto } from '@hichandra/dtos';
 import { AssignmentService } from '../assignment/assignment.service';
 import { BookingRepository, UserRepository, ComplaintRepository, PaymentRepository, TechnicianPayoutRepository } from '@hichandra/repositories';
 import { randomUUID } from 'crypto';
-import {Cron, CronExpression} from '@nestjs/schedule';
+import { Cron, CronExpression } from '@nestjs/schedule';
 
 @Injectable()
 export class BookingService {
-    private readonly logger = new Logger(BookingService.name
-    );
+  private readonly logger = new Logger(BookingService.name
+  );
 
   constructor(
     private readonly dataSource: DataSource,
@@ -60,8 +60,8 @@ export class BookingService {
     customerId: number,
     dto: CreateBookingDto,
     userRole?: USER_ROLE,
-  // ): Promise<Booking> {
-    ): Promise<any> {
+    // ): Promise<Booking> {
+  ): Promise<any> {
     return this.dataSource.transaction(async (manager) => {
       const userRepo = manager.getRepository(User);
       const customer = await userRepo.findOne({
@@ -82,8 +82,8 @@ export class BookingService {
         .find({
           where: { serviceId: dto.serviceId },
         });
-      
-        
+
+
       // console.log(technicianServices);
       const allTechnicianWithService = await Promise.all(
         technicianServices.map(async (ts) => {
@@ -91,12 +91,12 @@ export class BookingService {
           const user = await manager.getRepository(User).findOne({ //add condition for technician should be available
             // where: { technicianProfileId: technicianProfileId },
             where: {
-            status: USER_STATUS.ACTIVE,
-            technicianProfile: {
-              id: technicianProfileId,
-              jobStatus: JOB_STATUS.AVAILABLE,
+              status: USER_STATUS.ACTIVE,
+              technicianProfile: {
+                id: technicianProfileId,
+                jobStatus: JOB_STATUS.AVAILABLE,
+              },
             },
-          },
             relations: ['technicianProfile', 'technicianProfile.locations'],
           });
           if (user?.technicianProfile?.locations) {
@@ -142,7 +142,7 @@ export class BookingService {
       // startOfDay.setHours(0, 0, 0, 0);
       // const endOfDay = new Date(targetDate);
       // endOfDay.setHours(23, 59, 59, 999);
-//added
+      //added
       const targetDate = dto.scheduledAt
         ? new Date(dto.scheduledAt)
         : new Date();
@@ -159,7 +159,7 @@ export class BookingService {
       // IST day range converted to UTC for DB query
       const startOfDay = new Date(`${istDateString}T00:00:00.000+05:30`);
       const endOfDay = new Date(`${istDateString}T23:59:59.999+05:30`);
-//
+      //
       const sameDayBooking = await bookingRepo
         .createQueryBuilder('booking')
         .where('booking.customerId = :customerId', { customerId })
@@ -293,7 +293,7 @@ export class BookingService {
 
       // let isPeakHour = false;
       // const hour = targetDate.getHours();
-//added
+      //added
       const { weekday, hour } = this.getIstDateParts(targetDate);
 
       const isWeekend = weekday === 'Sat' || weekday === 'Sun';
@@ -303,7 +303,7 @@ export class BookingService {
         : 1.0;
 
       let isPeakHour = false;
-//
+      //
       if (pricingRule.peakHours && Array.isArray(pricingRule.peakHours)) {
         for (const range of pricingRule.peakHours) {
           if (hour >= range.start && hour <= range.end) {
@@ -427,23 +427,23 @@ export class BookingService {
       );
 
       const matchedTechnicians =
-      await this.assignmentService.assignTechnician(
-        bookingWithRelations,
-        activeTechnicians,
-        address,
-        service,
-      );
-      
+        await this.assignmentService.assignTechnician(
+          bookingWithRelations,
+          activeTechnicians,
+          address,
+          service,
+        );
 
-    bookingWithRelations.filteredTechnicians =
-      matchedTechnicians.map((tech) => tech.id);
 
-    savedBooking = await bookingRepo.save(bookingWithRelations);
+      bookingWithRelations.filteredTechnicians =
+        matchedTechnicians.map((tech) => tech.id);
+
+      savedBooking = await bookingRepo.save(bookingWithRelations);
       //  throw new Error("hell");
       //     return savedBooking;
 
-    //return savedBooking;
-    return {
+      //return savedBooking;
+      return {
         ...savedBooking,
         scheduledAtIst: this.toIstString(savedBooking.scheduledAt),
         createdAtIst: this.toIstString(savedBooking.createdAt),
@@ -454,7 +454,7 @@ export class BookingService {
         updatedAtIst: string | null;
       };
     });
- }
+  }
 
   @Cron(
     CronExpression.EVERY_MINUTE,
@@ -483,18 +483,34 @@ export class BookingService {
     }
   }
 
-  async getBooking(customerId: number, bookingId: number): Promise<Booking> {
-    const bookingRepo = this.dataSource.getRepository(Booking);
-    const booking = await bookingRepo.findOne({
-      where: { id: bookingId, customerId },
-      relations: ['service', 'address'],
-    });
+  async getBooking(bookingId: number): Promise<any> {
+    const booking = await this.bookingRepository.findBookingById(bookingId);
 
     if (!booking) {
       throw new NotFoundException('Booking not found');
     }
 
-    return booking;
+    const payments = await this.dataSource.getRepository(Payment).find({
+      where: { bookingId },
+      order: { createdAt: 'DESC' },
+    });
+
+    const complaints = await this.dataSource.getRepository(Complaint).find({
+      where: { bookingId },
+      order: { createdAt: 'DESC' },
+    });
+
+    const payouts = await this.dataSource.getRepository(TechnicianPayout).find({
+      where: { bookingId },
+      order: { createdAt: 'DESC' },
+    });
+
+    return {
+      ...booking,
+      payments,
+      complaints,
+      payouts,
+    };
   }
 
   async getAllBookings(
@@ -543,17 +559,17 @@ export class BookingService {
       paymentStatus: booking.paymentStatus,
       service: booking.service
         ? {
-            id: booking.service.id,
-            name: booking.service.name,
-          }
+          id: booking.service.id,
+          name: booking.service.name,
+        }
         : null,
       address: booking.address
         ? {
-            fullAddress: booking.address.fullAddress,
-            city: booking.address.city,
-            state: booking.address.state,
-            pincode: booking.address.pincode,
-          }
+          fullAddress: booking.address.fullAddress,
+          city: booking.address.city,
+          state: booking.address.state,
+          pincode: booking.address.pincode,
+        }
         : null,
       // scheduledAt: booking.scheduledAt,
       // totalAmount: booking.totalAmount,
@@ -575,17 +591,17 @@ export class BookingService {
         ...commonData,
         customer: booking.customer
           ? {
-              id: booking.customer.id,
-              name: `${booking.customer.firstName} ${booking.customer.lastName}`,
-              phone: booking.customer.phone,
-            }
+            id: booking.customer.id,
+            name: `${booking.customer.firstName} ${booking.customer.lastName}`,
+            phone: booking.customer.phone,
+          }
           : null,
         technician: booking.technician
           ? {
-              id: booking.technician.id,
-              name: `${booking.technician.firstName} ${booking.technician.lastName}`,
-              phone: booking.technician.phone,
-            }
+            id: booking.technician.id,
+            name: `${booking.technician.firstName} ${booking.technician.lastName}`,
+            phone: booking.technician.phone,
+          }
           : null,
       };
     }
@@ -595,11 +611,11 @@ export class BookingService {
         ...commonData,
         technician: booking.technician
           ? {
-              id: booking.technician.id,
-              name: `${booking.technician.firstName} ${booking.technician.lastName}`,
-              phone: booking.technician.phone,
-              rating: booking.technician.overallRating,
-            }
+            id: booking.technician.id,
+            name: `${booking.technician.firstName} ${booking.technician.lastName}`,
+            phone: booking.technician.phone,
+            rating: booking.technician.overallRating,
+          }
           : null,
         myRating: booking.customerRating,
         myReview: booking.customerReview,
@@ -613,10 +629,10 @@ export class BookingService {
         ...commonData,
         customer: booking.customer
           ? {
-              id: booking.customer.id,
-              name: `${booking.customer.firstName} ${booking.customer.lastName}`,
-              phone: booking.customer.phone,
-            }
+            id: booking.customer.id,
+            name: `${booking.customer.firstName} ${booking.customer.lastName}`,
+            phone: booking.customer.phone,
+          }
           : null,
         technicianEarning:
           booking.priceBreakdown?.technicianEarning ?? null,
@@ -663,18 +679,18 @@ export class BookingService {
 
         createdBy: complaint.createdByUser
           ? {
-              id: complaint.createdByUser.id,
-              name: `${complaint.createdByUser.firstName ?? ''} ${complaint.createdByUser.lastName ?? ''}`.trim(),
-              username: complaint.createdByUser.username,
-              role: complaint.createdByUser.role,
-            }
+            id: complaint.createdByUser.id,
+            name: `${complaint.createdByUser.firstName ?? ''} ${complaint.createdByUser.lastName ?? ''}`.trim(),
+            username: complaint.createdByUser.username,
+            role: complaint.createdByUser.role,
+          }
           : null,
 
         booking: complaint.booking
           ? {
-              id: complaint.booking.id,
-              status: complaint.booking.status,
-            }
+            id: complaint.booking.id,
+            status: complaint.booking.status,
+          }
           : null,
 
         createdAt: complaint.createdAt,
@@ -775,8 +791,7 @@ export class BookingService {
   }
 
   async assignBookingManually(
-    dto: AssignBookingDto,)
-   {
+    dto: AssignBookingDto,) {
     const { bookingId, technicianId } = dto;
 
     // Validate booking
@@ -829,104 +844,104 @@ export class BookingService {
   }
 
   async cancelBooking(user: any, dto: CancelBookingDto) {
-      const { bookingId } = dto;
+    const { bookingId } = dto;
 
-      const booking = await this.bookingRepository.findBookingById(bookingId);
+    const booking = await this.bookingRepository.findBookingById(bookingId);
 
-      if (!booking) {
-        throw new NotFoundException('Booking not found');
-      }
+    if (!booking) {
+      throw new NotFoundException('Booking not found');
+    }
 
-      if (booking.status === BOOKING_STATUS.COMPLETED) {
-        throw new BadRequestException('Completed booking cannot be cancelled');
-      }
+    if (booking.status === BOOKING_STATUS.COMPLETED) {
+      throw new BadRequestException('Completed booking cannot be cancelled');
+    }
 
-      if (booking.status === BOOKING_STATUS.CANCELLED) {
-        throw new BadRequestException('Booking already cancelled');
-      }
+    if (booking.status === BOOKING_STATUS.CANCELLED) {
+      throw new BadRequestException('Booking already cancelled');
+    }
 
-      let updateData: Partial<Booking>;
+    let updateData: Partial<Booking>;
 
-      switch (user.role) {
-        case USER_ROLE.CUSTOMER: {
-          if (booking.customerId !== user.id) {
-            throw new ForbiddenException(
-              'You are not allowed to cancel this booking',
-            );
-          }
-
-          if (!dto.cancellationReason) {
-            throw new BadRequestException('Cancellation reason is required');
-          }
-
-          updateData = {
-            status: BOOKING_STATUS.CANCELLED,
-            cancelledBy: user.id,
-            cancellationReason: dto.cancellationReason,
-          };
-
-          break;
-        }
-
-        case USER_ROLE.TECHNICIAN: {
-          if (!booking.technician || booking.technician.id !== user.id) {
-            throw new ForbiddenException(
-              'You are not assigned to this booking',
-            );
-          }
-
-          if (booking.status !== BOOKING_STATUS.ACCEPTED) {
-            throw new BadRequestException(
-              'Only accepted booking can be cancelled by technician',
-            );
-          }
-
-          updateData = {
-            status: BOOKING_STATUS.PENDING,
-            technicianId: null as any,
-            cancelledBy: user.id,
-            cancellationReason: '',
-          };
-
-          break;
-        }
-
-        default:
+    switch (user.role) {
+      case USER_ROLE.CUSTOMER: {
+        if (booking.customerId !== user.id) {
           throw new ForbiddenException(
             'You are not allowed to cancel this booking',
           );
+        }
+
+        if (!dto.cancellationReason) {
+          throw new BadRequestException('Cancellation reason is required');
+        }
+
+        updateData = {
+          status: BOOKING_STATUS.CANCELLED,
+          cancelledBy: user.id,
+          cancellationReason: dto.cancellationReason,
+        };
+
+        break;
       }
 
-      const updated =
-        await this.bookingRepository.updateBookingCancelFields(
-          booking.id,
-          updateData,
+      case USER_ROLE.TECHNICIAN: {
+        if (!booking.technician || booking.technician.id !== user.id) {
+          throw new ForbiddenException(
+            'You are not assigned to this booking',
+          );
+        }
+
+        if (booking.status !== BOOKING_STATUS.ACCEPTED) {
+          throw new BadRequestException(
+            'Only accepted booking can be cancelled by technician',
+          );
+        }
+
+        updateData = {
+          status: BOOKING_STATUS.PENDING,
+          technicianId: null as any,
+          cancelledBy: user.id,
+          cancellationReason: '',
+        };
+
+        break;
+      }
+
+      default:
+        throw new ForbiddenException(
+          'You are not allowed to cancel this booking',
         );
-
-      if (!updated) {
-        throw new NotFoundException('Booking not found after update');
-      }
-
-      return {
-        message:
-          user.role === USER_ROLE.CUSTOMER
-            ? 'Booking cancelled successfully'
-            : 'Booking released successfully',
-
-        data: {
-          bookingId: updated.id,
-          status: updated.status,
-          technicianId: updated.technicianId ?? null,
-          cancelledBy: updated.cancelledBy,
-          cancelledByRole: user.role,
-          cancellationReason:
-            user.role === USER_ROLE.CUSTOMER
-              ? updated.cancellationReason
-              : '-',
-          updatedAt: updated.updatedAt,
-        },
-      };
     }
+
+    const updated =
+      await this.bookingRepository.updateBookingCancelFields(
+        booking.id,
+        updateData,
+      );
+
+    if (!updated) {
+      throw new NotFoundException('Booking not found after update');
+    }
+
+    return {
+      message:
+        user.role === USER_ROLE.CUSTOMER
+          ? 'Booking cancelled successfully'
+          : 'Booking released successfully',
+
+      data: {
+        bookingId: updated.id,
+        status: updated.status,
+        technicianId: updated.technicianId ?? null,
+        cancelledBy: updated.cancelledBy,
+        cancelledByRole: user.role,
+        cancellationReason:
+          user.role === USER_ROLE.CUSTOMER
+            ? updated.cancellationReason
+            : '-',
+        updatedAt: updated.updatedAt,
+      },
+    };
+  }
 
   async createComplaint(
     user: any,
@@ -1412,27 +1427,27 @@ export class BookingService {
 
     if (payment.status === PAYMENT_STATUS.SUCCESS) {
 
-    // const payout =
-    //   await this.technicianPayoutRepository.findByPaymentRecordId(
-    //     payment.id,
-    //   );
+      // const payout =
+      //   await this.technicianPayoutRepository.findByPaymentRecordId(
+      //     payment.id,
+      //   );
 
-    // if (
-    //   payout &&
-    //   payout.status !== PAYMENT_STATUS.SUCCESS
-    // ) {
-    //   payout.status = PAYMENT_STATUS.SUCCESS;
+      // if (
+      //   payout &&
+      //   payout.status !== PAYMENT_STATUS.SUCCESS
+      // ) {
+      //   payout.status = PAYMENT_STATUS.SUCCESS;
 
-    //   await this.technicianPayoutRepository.updatePayout(
-    //     payout,
-    //   );
-    // }
+      //   await this.technicianPayoutRepository.updatePayout(
+      //     payout,
+      //   );
+      // }
 
-    return {
-      success: true,
-      message: 'Payment already processed',
-    };
-  }
+      return {
+        success: true,
+        message: 'Payment already processed',
+      };
+    }
 
     payment.status =
       PAYMENT_STATUS.SUCCESS;
@@ -1650,7 +1665,7 @@ export class BookingService {
   //   };
   // }
 
-  
+
 
   async createTechnicianPayout(
     adminId: number,
@@ -1947,8 +1962,8 @@ export class BookingService {
   }
 
   async createBookingReview(
-  user: any,
-  dto: CreateBookingReviewDto,
+    user: any,
+    dto: CreateBookingReviewDto,
   ) {
     const booking =
       await this.bookingRepository.findBookingById(dto.bookingId);
@@ -1981,7 +1996,7 @@ export class BookingService {
         throw new BadRequestException(
           'You are not allowed to review this booking',
         );
-      } 
+      }
 
       if (
         booking.customerRating !== null ||
@@ -2069,8 +2084,8 @@ export class BookingService {
     };
   }
 
- async updateTechnicianOverallRating(
-  technicianId: number,
+  async updateTechnicianOverallRating(
+    technicianId: number,
   ) {
     const bookings =
       await this.bookingRepository.findTechnicianRatedBookings(
@@ -2162,11 +2177,11 @@ export class BookingService {
       data: {
         technician: technician
           ? {
-              id: technician.id,
-              name: `${technician.firstName} ${technician.lastName}`,
-              profileImage: technician.profileImage,
-              overallRating: technician.overallRating,
-            }
+            id: technician.id,
+            name: `${technician.firstName} ${technician.lastName}`,
+            profileImage: technician.profileImage,
+            overallRating: technician.overallRating,
+          }
           : null,
 
         reviews: reviews.map((booking) => ({
@@ -2223,21 +2238,21 @@ export class BookingService {
 
         service: booking.service
           ? {
-              id: booking.service.id,
-              name: booking.service.name,
-              description: booking.service.description,
-              iconUrl: booking.service.iconUrl,
-            }
+            id: booking.service.id,
+            name: booking.service.name,
+            description: booking.service.description,
+            iconUrl: booking.service.iconUrl,
+          }
           : null,
 
         address: booking.address
           ? {
-              fullAddress: booking.address.fullAddress,
-              city: booking.address.city,
-              state: booking.address.state,
-              pincode: booking.address.pincode,
-              label: booking.address.label,
-            }
+            fullAddress: booking.address.fullAddress,
+            city: booking.address.city,
+            state: booking.address.state,
+            pincode: booking.address.pincode,
+            label: booking.address.label,
+          }
           : null,
 
         // createdAt: booking.createdAt,
@@ -2255,11 +2270,11 @@ export class BookingService {
 
           technician: booking.technician
             ? {
-                id: booking.technician.id,
-                name: `${booking.technician.firstName} ${booking.technician.lastName}`,
-                profileImage: booking.technician.profileImage,
-                overallRating: booking.technician.overallRating,
-              }
+              id: booking.technician.id,
+              name: `${booking.technician.firstName} ${booking.technician.lastName}`,
+              profileImage: booking.technician.profileImage,
+              overallRating: booking.technician.overallRating,
+            }
             : null,
 
           customerRating: booking.customerRating,
@@ -2273,11 +2288,11 @@ export class BookingService {
 
           customer: booking.customer
             ? {
-                id: booking.customer.id,
-                name: `${booking.customer.firstName} ${booking.customer.lastName}`,
-                profileImage: booking.customer.profileImage,
-                phone: booking.customer.phone,
-              }
+              id: booking.customer.id,
+              name: `${booking.customer.firstName} ${booking.customer.lastName}`,
+              profileImage: booking.customer.profileImage,
+              phone: booking.customer.phone,
+            }
             : null,
 
           technicianRating: booking.technicianRating,
@@ -2306,13 +2321,13 @@ export class BookingService {
       user.role === USER_ROLE.ADMIN
         ? await this.bookingRepository.findAllReviews(page, limit)
         : await this.bookingRepository.findMyReviews(
-            user.id,
-            user.role,
-            page,
-            limit,
-          );
+          user.id,
+          user.role,
+          page,
+          limit,
+        );
 
-      const formattedReviews = reviews.map((booking) => {
+    const formattedReviews = reviews.map((booking) => {
       const isCustomer = user.role === USER_ROLE.CUSTOMER;
       const isAdmin = user.role === USER_ROLE.ADMIN;
 
@@ -2322,9 +2337,9 @@ export class BookingService {
 
           service: booking.service
             ? {
-                id: booking.service.id,
-                name: booking.service.name,
-              }
+              id: booking.service.id,
+              name: booking.service.name,
+            }
             : null,
 
           customerReview: {
@@ -2366,22 +2381,22 @@ export class BookingService {
 
         service: booking.service
           ? {
-              id: booking.service.id,
-              name: booking.service.name,
-            }
+            id: booking.service.id,
+            name: booking.service.name,
+          }
           : null,
 
         reviewer: isCustomer
           ? {
-              id: booking.technician?.id,
-              name: `${booking.technician?.firstName} ${booking.technician?.lastName}`,
-              profileImage: booking.technician?.profileImage,
-            }
+            id: booking.technician?.id,
+            name: `${booking.technician?.firstName} ${booking.technician?.lastName}`,
+            profileImage: booking.technician?.profileImage,
+          }
           : {
-              id: booking.customer?.id,
-              name: `${booking.customer?.firstName} ${booking.customer?.lastName}`,
-              profileImage: booking.customer?.profileImage,
-            },
+            id: booking.customer?.id,
+            name: `${booking.customer?.firstName} ${booking.customer?.lastName}`,
+            profileImage: booking.customer?.profileImage,
+          },
 
         rating: isCustomer
           ? booking.technicianRating

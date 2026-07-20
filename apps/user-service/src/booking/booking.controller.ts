@@ -239,11 +239,12 @@ export class BookingController {
   }
 
   @Get(':id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(USER_ROLE.CUSTOMER)
+  @UseGuards(JwtAuthGuard)
+  // @UseGuards(JwtAuthGuard, RolesGuard)
+  // @Roles(USER_ROLE.CUSTOMER)
   @HttpCode(HttpStatus.OK)
   async getBooking(@Req() req: any, @Param('id', ParseIntPipe) id: number) {
-    const booking = await this.bookingService.getBooking(req.user.id, id);
+    const booking = await this.bookingService.getBooking(id);
     return {
       success: true,
       message: 'Booking fetched successfully',

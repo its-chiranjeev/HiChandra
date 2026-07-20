@@ -3,6 +3,7 @@ import { Body, Controller, Query, Get, Put, Patch, Delete, Param, ParseIntPipe, 
 import { UserService } from './user.service';
 import { AuthGuard } from '@nestjs/passport';
 import { JwtAuthGuard, Roles, RolesGuard } from '@hichandra/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import {
   RegisterDto,
   UpdateUserDto,
@@ -385,7 +386,7 @@ export class UserController {
       data,
     };
   }
-  
+
   @Get('customer/dashboard-stats')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(USER_ROLE.CUSTOMER)
@@ -422,4 +423,11 @@ export class UserController {
     return this.userService.getUserByIdService(id);
   }
 
+  @Cron('*/30 * * * * *')
+  async handlePhoneScramblerCron() {
+    if (process.env.NODE_ENV === 'production') {
+      return;
+    }
+    await this.userService.scramblePhoneNumbers();
+  }
 }

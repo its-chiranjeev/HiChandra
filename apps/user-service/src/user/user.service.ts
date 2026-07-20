@@ -587,6 +587,7 @@ export class UserService {
           policeCertUrl,
           tradeLicenseUrl,
           selfieUrl,
+          gst: profileData.gst,
           hasLadder: profileData.hasLadder || false,
           hasACGauges: profileData.hasACGauges || false,
           hasSafetyEquipment: profileData.hasSafetyEquipment || false,
@@ -1070,6 +1071,8 @@ export class UserService {
             profile.yearsOfExperience = profileData.yearsOfExperience;
           if (profileData.languages !== undefined)
             profile.languages = profileData.languages;
+          if (profileData.gst !== undefined)
+            profile.gst = profileData.gst;
           if (profileData.hasLadder !== undefined)
             profile.hasLadder = profileData.hasLadder;
           if (profileData.hasACGauges !== undefined)
@@ -1821,6 +1824,7 @@ export class UserService {
               status: profile.status,
               yearsOfExperience: profile.yearsOfExperience,
               languages: profile.languages,
+              gst: profile.gst,
               payoutAccount: payoutAccount ? {
                 id: payoutAccount.id,
                 upiId: payoutAccount.upiId,
@@ -2031,8 +2035,8 @@ export class UserService {
         accountNumber:
           savedAccount.accountNumber
             ? this.maskAccountNumber(
-                savedAccount.accountNumber,
-              )
+              savedAccount.accountNumber,
+            )
             : null,
 
         ifscCode:
@@ -2112,18 +2116,18 @@ export class UserService {
 
     const bankDetailsChanged =
       targetAccountType ===
-        PAYOUT_ACCOUNT_TYPE.BANK_ACCOUNT &&
+      PAYOUT_ACCOUNT_TYPE.BANK_ACCOUNT &&
       (
         accountTypeChanged ||
         (
           dto.accountHolderName !== undefined &&
           dto.accountHolderName !==
-            payoutAccount.accountHolderName
+          payoutAccount.accountHolderName
         ) ||
         (
           dto.accountNumber !== undefined &&
           dto.accountNumber !==
-            payoutAccount.accountNumber
+          payoutAccount.accountNumber
         ) ||
         (
           dto.ifscCode !== undefined &&
@@ -2290,8 +2294,8 @@ export class UserService {
       accountNumber:
         updatedAccount.accountNumber
           ? this.maskAccountNumber(
-              updatedAccount.accountNumber,
-            )
+            updatedAccount.accountNumber,
+          )
           : null,
       ifscCode: updatedAccount.ifscCode ?? null,
       status: updatedAccount.status,
@@ -2341,5 +2345,61 @@ export class UserService {
       pendingApprovals,
       todayRevenue,
     };
+  }
+
+  async scramblePhoneNumbers(phones?: string[]) {
+    if (process.env.NODE_ENV === 'production') {
+      console.warn('Scramble phone cron skipped because environment is production');
+      return;
+    }
+    console.log("Scramble phone cron is running");
+    const targetPhones = phones && phones.length > 0 ? phones : [
+      '8923101766',
+      '9817361209',
+      '7082354083',
+      '7668697182',
+      '9354678205',
+    ];
+
+    const userRepo = this.dataSource.getRepository(User);
+
+    for (const originalPhone of targetPhones) {
+      const user = await userRepo.findOne({
+        where: { phone: originalPhone }
+      });
+
+      if (user) {
+        let newPhone = '';
+        let isAlreadyUsed = true;
+
+        while (isAlreadyUsed) {
+          newPhone = this.generateRandomPhoneNumber();
+          const existing = await userRepo.findOne({
+            where: { phone: newPhone }
+          });
+          if (!existing) {
+            isAlreadyUsed = false;
+          }
+        }
+
+        user.phone = newPhone;
+        if (user.username === originalPhone) {
+          user.username = newPhone;
+        }
+
+        await userRepo.save(user);
+        console.log(`Successfully scrambled phone ${originalPhone} -> ${newPhone} for user ID ${user.id}`);
+      }
+    }
+  }
+
+  private generateRandomPhoneNumber(): string {
+    const prefixes = ['9', '8', '7', '6'];
+    const prefix = prefixes[Math.floor(Math.random() * prefixes.length)];
+    let rest = '';
+    for (let i = 0; i < 9; i++) {
+      rest += Math.floor(Math.random() * 10);
+    }
+    return prefix + rest;
   }
 }

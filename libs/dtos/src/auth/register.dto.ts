@@ -100,6 +100,10 @@ export class TechnicianProfileDto {
   bankName?: string;
 
   @IsOptional()
+  @IsString()
+  gst?: string;
+
+  @IsOptional()
   @Transform(toBoolean)
   @IsBoolean()
   hasLadder?: boolean;

@@ -83,6 +83,9 @@ export class TechnicianProfile {
   @Column({ type: 'varchar', nullable: true })
   selfieUrl?: string;
 
+  @Column({ type: 'varchar', nullable: true })
+  gst?: string;
+
   // Tools & Equipment
 
   @Column({ default: false })

@@ -90,6 +90,10 @@ export class UpdateTechnicianProfileDetailsDto {
   @IsOptional()
   @IsString()
   bankName?: string;
+
+  @IsOptional()
+  @IsString()
+  gst?: string;
 }
 
 export class UpdateProfileDto {

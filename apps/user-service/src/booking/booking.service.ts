@@ -518,18 +518,43 @@ export class BookingService {
     page: number,
     limit: number,
     status?: BOOKING_STATUS,
+    sortById?: string,
+    sortByUpdatedAt?: string,
   ) {
+    let sortBy: 'id' | 'updatedAt' = 'id';
+    let finalSortOrder: 'ASC' | 'DESC' = 'DESC';
+
+    if (sortById) {
+      sortBy = 'id';
+      finalSortOrder = sortById.toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
+    } else if (sortByUpdatedAt) {
+      sortBy = 'updatedAt';
+      finalSortOrder = sortByUpdatedAt.toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
+    }
+
     const { bookings, total } =
       await this.bookingRepository.findAllBookings(
         user,
         page,
         limit,
         status,
+        sortBy,
+        finalSortOrder,
       );
 
-    const formattedBookings = bookings.map((booking: Booking) =>
-      this.formatBookingByRole(booking, user.role),
-    );
+    const formattedBookings = bookings.map((booking: Booking) => {
+      const cleanCustomer = this.cleanUser(booking.customer);
+      const cleanTechnician = this.cleanUser(booking.technician);
+
+      return {
+        ...booking,
+        scheduledAtIst: this.toIstString(booking.scheduledAt),
+        createdAtIst: this.toIstString(booking.createdAt),
+        updatedAtIst: this.toIstString(booking.updatedAt),
+        customer: cleanCustomer,
+        technician: cleanTechnician,
+      };
+    });
 
     return {
       success: true,
@@ -549,101 +574,10 @@ export class BookingService {
     };
   }
 
-  private formatBookingByRole(
-    booking: Booking,
-    role: USER_ROLE,
-  ) {
-    const commonData = {
-      bookingId: booking.id,
-      status: booking.status,
-      paymentStatus: booking.paymentStatus,
-      service: booking.service
-        ? {
-          id: booking.service.id,
-          name: booking.service.name,
-        }
-        : null,
-      address: booking.address
-        ? {
-          fullAddress: booking.address.fullAddress,
-          city: booking.address.city,
-          state: booking.address.state,
-          pincode: booking.address.pincode,
-        }
-        : null,
-      // scheduledAt: booking.scheduledAt,
-      // totalAmount: booking.totalAmount,
-      // isEmergency: booking.isEmergency,
-      // createdAt: booking.createdAt,
-
-      scheduledAt: booking.scheduledAt,
-      scheduledAtIst: this.toIstString(booking.scheduledAt),
-
-      totalAmount: booking.totalAmount,
-      isEmergency: booking.isEmergency,
-
-      createdAt: booking.createdAt,
-      createdAtIst: this.toIstString(booking.createdAt),
-    };
-
-    if (role === USER_ROLE.ADMIN) {
-      return {
-        ...commonData,
-        customer: booking.customer
-          ? {
-            id: booking.customer.id,
-            name: `${booking.customer.firstName} ${booking.customer.lastName}`,
-            phone: booking.customer.phone,
-          }
-          : null,
-        technician: booking.technician
-          ? {
-            id: booking.technician.id,
-            name: `${booking.technician.firstName} ${booking.technician.lastName}`,
-            phone: booking.technician.phone,
-          }
-          : null,
-      };
-    }
-
-    if (role === USER_ROLE.CUSTOMER) {
-      return {
-        ...commonData,
-        technician: booking.technician
-          ? {
-            id: booking.technician.id,
-            name: `${booking.technician.firstName} ${booking.technician.lastName}`,
-            phone: booking.technician.phone,
-            rating: booking.technician.overallRating,
-          }
-          : null,
-        myRating: booking.customerRating,
-        myReview: booking.customerReview,
-        technicianRating: booking.technicianRating,
-        technicianReview: booking.technicianReview,
-      };
-    }
-
-    if (role === USER_ROLE.TECHNICIAN) {
-      return {
-        ...commonData,
-        customer: booking.customer
-          ? {
-            id: booking.customer.id,
-            name: `${booking.customer.firstName} ${booking.customer.lastName}`,
-            phone: booking.customer.phone,
-          }
-          : null,
-        technicianEarning:
-          booking.priceBreakdown?.technicianEarning ?? null,
-        customerRating: booking.customerRating,
-        customerReview: booking.customerReview,
-        myRating: booking.technicianRating,
-        myReview: booking.technicianReview,
-      };
-    }
-
-    return commonData;
+  private cleanUser(user: any) {
+    if (!user) return null;
+    const { password, hashedRefreshToken, tokenVersion, ...safeUser } = user;
+    return safeUser;
   }
   //complaint 
   async getAllComplaints(
@@ -822,6 +756,17 @@ export class BookingService {
     if (!technician) {
       throw new UnprocessableEntityException(
         'Technician not found or inactive',
+      );
+    }
+
+    // Check if technician actually provides the booked service
+    const technicianProvidesService = technician.technicianProfile?.services?.some(
+      (ts) => ts.serviceId === booking.serviceId,
+    );
+
+    if (!technicianProvidesService) {
+      throw new BadRequestException(
+        `Technician does not provide the service requested in this booking`,
       );
     }
 
@@ -2463,6 +2408,14 @@ export class BookingService {
   }
 
   async adminCreateBooking(dto: AdminCreateBookingDto): Promise<any> {
+    const targetDate = new Date(dto.scheduledAt);
+    if (Number.isNaN(targetDate.getTime())) {
+      throw new BadRequestException('Invalid scheduledAt date');
+    }
+    if (targetDate.getTime() < Date.now()) {
+      throw new BadRequestException('Scheduled date and time cannot be in the past');
+    }
+
     return this.dataSource.transaction(async (manager) => {
       const customer = await manager.getRepository(User).findOne({
         where: { id: dto.customerId, role: USER_ROLE.CUSTOMER },
@@ -2472,17 +2425,17 @@ export class BookingService {
       }
 
       const technician = await manager.getRepository(User).findOne({
-          where: {
-            id: dto.technicianId,
-            role: USER_ROLE.TECHNICIAN,
-          },
-          relations: [
-            'technicianProfile',
-            'technicianProfile.services',
-            'technicianProfile.services.service',
-            'technicianProfile.services.service.specifications',
-          ],
-        });
+        where: {
+          id: dto.technicianId,
+          role: USER_ROLE.TECHNICIAN,
+        },
+        relations: [
+          'technicianProfile',
+          'technicianProfile.services',
+          'technicianProfile.services.service',
+          'technicianProfile.services.service.specifications',
+        ],
+      });
       if (!technician) {
         throw new NotFoundException('Technician not found or not a technician');
       }
@@ -2507,7 +2460,7 @@ export class BookingService {
 
       const technicianService =
         technician.technicianProfile.services?.find(
-          technicianService => 
+          technicianService =>
             technicianService.serviceId === dto.serviceId || technicianService.service?.id === dto.serviceId,
         );
       if (!technicianService) {

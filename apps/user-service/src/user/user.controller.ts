@@ -1,5 +1,5 @@
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
-import { Body, Controller, Query, Get, Put, Patch, Delete, Param, ParseIntPipe, HttpCode, HttpStatus, Post, Req, UnauthorizedException, UseGuards, UseInterceptors, ValidationPipe, UploadedFiles, UnprocessableEntityException, } from '@nestjs/common';
+import { Body, Controller, Query, Get, Put, Patch, Delete, Param, ParseIntPipe, HttpCode, HttpStatus, Post, Req, UnauthorizedException, UseGuards, UseInterceptors, ValidationPipe, UploadedFiles, UnprocessableEntityException, BadRequestException, } from '@nestjs/common';
 import { UserService } from './user.service';
 import { AuthGuard } from '@nestjs/passport';
 import { JwtAuthGuard, Roles, RolesGuard } from '@hichandra/common';
@@ -83,13 +83,20 @@ export class UserController {
     @Query('role') role?: USER_ROLE,
     @Query('status') status?: USER_STATUS,
     @Query('technicianProfileStatus') technicianProfileStatus?: TECHNICIAN_STATUS,
+    @Query('serviceId') serviceId?: string,
   ) {
+    if (serviceId && role !== USER_ROLE.TECHNICIAN) {
+      throw new BadRequestException(
+        'serviceId is only active for the technician role',
+      );
+    }
     return this.userService.getAllUsersService(
       Number(page),
       Number(limit),
       role,
       status,
       technicianProfileStatus,
+      serviceId ? Number(serviceId) : undefined,
     );
   }
 

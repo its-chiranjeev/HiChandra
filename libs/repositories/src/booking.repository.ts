@@ -15,6 +15,8 @@ export class BookingRepository {
     page = 1,
     limit = 10,
     status?: BOOKING_STATUS,
+    sortBy: 'id' | 'updatedAt' = 'updatedAt',
+    sortOrder: 'ASC' | 'DESC' = 'DESC',
   ) {
     const where: any = {};
 
@@ -37,15 +39,26 @@ export class BookingRepository {
     const [bookings, total] = await this.repo.findAndCount({
       where,
       relations: {
-        customer: true,
-        technician: true,
-        service: true,
+        customer: {
+          addresses: true,
+        },
+        technician: {
+          technicianProfile: {
+            services: true,
+            brandExpertise: true,
+            locations: true,
+          },
+        },
+        service: {
+          pricingRule: true,
+          specifications: true,
+        },
         address: true,
       },
       skip: (page - 1) * limit,
       take: limit,
       order: {
-        createdAt: 'DESC',
+        [sortBy]: sortOrder,
       },
     });
 
@@ -110,8 +123,8 @@ export class BookingRepository {
   }
 
   async updateReviewFields(
-  bookingId: number,
-  data: Partial<Booking>,
+    bookingId: number,
+    data: Partial<Booking>,
   ) {
     await this.repo.update(
       { id: bookingId },
@@ -122,7 +135,7 @@ export class BookingRepository {
   }
 
   async findTechnicianRatedBookings(
-  technicianId: number,
+    technicianId: number,
   ) {
     return this.repo.find({
       where: {
@@ -136,7 +149,7 @@ export class BookingRepository {
   }
 
   async findCustomerRatedBookings(
-  customerId: number,
+    customerId: number,
   ) {
     return this.repo.find({
       where: {
@@ -315,8 +328,8 @@ export class BookingRepository {
     );
 
     const result = await this.repo.createQueryBuilder().update(Booking).set({
-        isManualAssign: true,
-      })
+      isManualAssign: true,
+    })
       .where('status = :status', {
         status: BOOKING_STATUS.PENDING,
       })
@@ -340,7 +353,7 @@ export class BookingRepository {
     technicianId: number,
   ): Promise<number> {
     return this.repo.createQueryBuilder('booking')
-      .where('booking.status = :status', {status: BOOKING_STATUS.PENDING,})
+      .where('booking.status = :status', { status: BOOKING_STATUS.PENDING, })
       .andWhere('booking."technicianId" IS NULL')
       .andWhere('booking."isManualAssign" = false')
       .andWhere('booking."filteredTechnicians" @> :technicianFilter',
@@ -441,7 +454,8 @@ export class BookingRepository {
         `,
         'totalEarning',
       )
-      .setParameters({ technicianId,
+      .setParameters({
+        technicianId,
         technicianFilter: JSON.stringify([technicianId]),
         pendingStatus: BOOKING_STATUS.PENDING,
         completedStatus: BOOKING_STATUS.COMPLETED,

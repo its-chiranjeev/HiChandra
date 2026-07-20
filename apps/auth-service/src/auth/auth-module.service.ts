@@ -466,19 +466,17 @@ export class AuthModuleService {
     const startIndex = (page - 1) * limit;
     const paginatedServices = allServices.slice(startIndex, startIndex + limit);
 
+    const {
+      password,
+      hashedRefreshToken,
+      tokenVersion,
+      technicianProfile,
+      addresses,
+      ...safeUser
+    } = user;
+
     return {
-      id: user.id,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      email: user.email,
-      username: user.username,
-      phone: user.phone,
-      emergencyContact: user.emergencyContact,
-      profileImage: user.profileImage,
-      role: user.role,
-      status: user.status,
-      createdAt: user.createdAt,
-      lastLoginAt: user.lastLoginAt,
+      ...safeUser,
 
       addresses:
         user.role === USER_ROLE.CUSTOMER ? user.addresses : undefined,

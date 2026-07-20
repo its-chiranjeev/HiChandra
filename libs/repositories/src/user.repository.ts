@@ -83,6 +83,7 @@ export class UserRepository extends BaseRepository<User> {
     role?: USER_ROLE,
     status?: USER_STATUS,
     technicianProfileStatus?: TECHNICIAN_STATUS,
+    serviceId?: number,
   ) {
     const query = this.repo
       .createQueryBuilder('user')
@@ -101,6 +102,10 @@ export class UserRepository extends BaseRepository<User> {
 
     if (status) {
       query.andWhere('user.status = :status', { status });
+    }
+
+    if (serviceId) {
+      query.andWhere('services.serviceId = :serviceId', { serviceId });
     }
 
     if (technicianProfileStatus) {

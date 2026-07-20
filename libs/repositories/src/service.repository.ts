@@ -54,6 +54,7 @@ export class ServiceRepository extends BaseRepository<Service> {
       },
       relations: {
         pricingRule: true,
+        specifications: true,
       },
     });
   }

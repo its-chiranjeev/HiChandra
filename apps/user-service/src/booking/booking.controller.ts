@@ -124,12 +124,16 @@ export class BookingController {
     @Query('page') page = '1',
     @Query('limit') limit = '10',
     @Query('status') status?: BOOKING_STATUS,
+    @Query('sortById') sortById?: string,
+    @Query('sortByUpdatedAt') sortByUpdatedAt?: string,
   ) {
     return this.bookingService.getAllBookings(
       req.user,
       Number(page),
       Number(limit),
       status,
+      sortById,
+      sortByUpdatedAt,
     );
   }
 
@@ -319,6 +323,7 @@ export class BookingController {
       data: booking,
     };
   }
+
   @Post('admin/assign-booking')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(USER_ROLE.ADMIN)

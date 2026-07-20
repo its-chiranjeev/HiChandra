@@ -26,6 +26,8 @@ interface PaymentLinkPayload {
   reminder_enable: boolean;
   reference_id: string;
   notify?: NotifyData;
+  callback_url?: string;
+  callback_method?: string;
 }
 
 @Injectable()
@@ -77,6 +79,12 @@ export class PaymentService {
       reminder_enable: true,
       reference_id: referenceId,
     };
+
+    const callbackUrl = process.env.FRONTEND_PAYMENT_CALLBACK_URL;
+    if (callbackUrl && callbackUrl.trim() !== '') {
+      payload.callback_url = callbackUrl;
+      payload.callback_method = 'get';
+    }
 
     if (Object.keys(notifyData).length > 0) {
       payload.notify = notifyData;
@@ -136,6 +144,12 @@ export class PaymentService {
       reminder_enable: true,
       reference_id: referenceId,
     };
+
+    const callbackUrl = process.env.FRONTEND_PAYMENT_CALLBACK_URL;
+    if (callbackUrl && callbackUrl.trim() !== '') {
+      payload.callback_url = callbackUrl;
+      payload.callback_method = 'get';
+    }
 
     if (Object.keys(notifyData).length > 0) {
       payload.notify = notifyData;

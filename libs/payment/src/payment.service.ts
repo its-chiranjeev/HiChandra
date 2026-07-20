@@ -52,6 +52,7 @@ export class PaymentService {
     bookingId: number,
     customer: { name: string; email?: string; phone?: string },
     description?: string,
+    customCallbackUrl?: string,
   ) {
     const customerData: CustomerData = {
       name: customer.name,
@@ -80,7 +81,7 @@ export class PaymentService {
       reference_id: referenceId,
     };
 
-    const callbackUrl = process.env.FRONTEND_PAYMENT_CALLBACK_URL;
+    const callbackUrl = customCallbackUrl || process.env.FRONTEND_PAYMENT_CALLBACK_URL;
     if (callbackUrl && callbackUrl.trim() !== '') {
       payload.callback_url = callbackUrl;
       payload.callback_method = 'get';
@@ -119,6 +120,7 @@ export class PaymentService {
     amount: number,
     userId: number,
     customer: { name: string; email?: string; phone?: string },
+    customCallbackUrl?: string,
   ) {
     const customerData: CustomerData = {
       name: customer.name,
@@ -145,7 +147,7 @@ export class PaymentService {
       reference_id: referenceId,
     };
 
-    const callbackUrl = process.env.FRONTEND_PAYMENT_CALLBACK_URL;
+    const callbackUrl = customCallbackUrl || process.env.FRONTEND_PAYMENT_CALLBACK_URL;
     if (callbackUrl && callbackUrl.trim() !== '') {
       payload.callback_url = callbackUrl;
       payload.callback_method = 'get';

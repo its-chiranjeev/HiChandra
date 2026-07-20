@@ -312,8 +312,16 @@ export class UserController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(USER_ROLE.CUSTOMER)
   @HttpCode(HttpStatus.OK)
-  async createTokenPaymentLink(@Req() req: any) {
-    return this.userService.createTokenPaymentLinkService(req.user.id);
+  async createTokenPaymentLink(
+    @Req() req: any,
+    @Query('redirectUrl') redirectUrl?: string,
+    @Body('redirectUrl') bodyRedirectUrl?: string,
+  ) {
+    const callbackUrl = redirectUrl || bodyRedirectUrl;
+    return this.userService.createTokenPaymentLinkService(
+      req.user.id,
+      callbackUrl,
+    );
   }
 
   @Post('customer/address')

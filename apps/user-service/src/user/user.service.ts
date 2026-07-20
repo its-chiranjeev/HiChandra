@@ -1683,7 +1683,7 @@ export class UserService {
     };
   }
 
-  async createTokenPaymentLinkService(userId: number) {
+  async createTokenPaymentLinkService(userId: number, customCallbackUrl?: string) {
     const user = await this.userRepository.findOne({
       where: { id: userId },
     });
@@ -1714,6 +1714,7 @@ export class UserService {
         email: user.email || undefined,
         phone: user.phone || undefined,
       },
+      customCallbackUrl,
     );
 
     // Save a new pending payment record in DB

@@ -1245,6 +1245,7 @@ export class BookingService {
   async getPaymentUrl(
     userId: number,
     bookingId: number,
+    customCallbackUrl?: string,
   ): Promise<{ paymentUrl: string }> {
     return this.dataSource.transaction(async (manager) => {
       const bookingRepo = manager.getRepository(Booking);
@@ -1308,6 +1309,8 @@ export class BookingService {
           email: customerEmail,
           phone: customerPhone,
         },
+        undefined,
+        customCallbackUrl,
       );
 
       // Save a new pending payment record in DB

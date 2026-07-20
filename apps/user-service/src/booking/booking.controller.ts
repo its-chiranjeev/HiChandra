@@ -57,10 +57,12 @@ export class BookingController {
   async getPaymentUrl(
     @Req() req: any,
     @Param('bookingId', ParseIntPipe) bookingId: number,
+    @Query('redirectUrl') redirectUrl?: string,
   ) {
     const data = await this.bookingService.getPaymentUrl(
       req.user.id,
       bookingId,
+      redirectUrl,
     );
     return {
       success: true,

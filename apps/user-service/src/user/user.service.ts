@@ -1690,6 +1690,9 @@ export class UserService {
     if (!user) {
       throw new NotFoundException('User not found');
     }
+    if (user.isTokenPaid) {
+      throw new BadRequestException('Token payment has already been completed for this user');
+    }
 
     const setting = await this.platformSettingRepository.findOne({
       where: { key: 'CUSTOMER_TOKEN_AMOUNT' },
@@ -1746,11 +1749,12 @@ export class UserService {
     const existingUser = await this.userRepository.findOne({
       where: [
         { phone: dto.phone },
+        { username: dto.phone },
         ...(dto.email ? [{ email: dto.email }] : []),
       ],
     });
     if (existingUser) {
-      throw new ConflictException('A user with this phone or email already exists');
+      throw new ConflictException('A user with this phone, email, or username already exists');
     }
 
     const username = dto.phone;

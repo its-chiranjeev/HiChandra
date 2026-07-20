@@ -395,6 +395,31 @@ export class UserController {
     return this.userService.getCustomerDashboardStats(req.user.id);
   }
 
+  @Get('technician/dashboard-stats')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLE.TECHNICIAN)
+  @HttpCode(HttpStatus.OK)
+  async getTechnicianDashboardStats(
+    @Req() req: any,
+  ) {
+    const technicianId = Number(
+      req.user.id ?? req.user.sub,
+    );
+
+    const data =
+      await this.userService
+        .getTechnicianDashboardStats(
+          technicianId,
+        );
+
+    return {
+      success: true,
+      message:
+        'Technician dashboard stats fetched successfully',
+      data,
+    };
+  }
+
   @Post('favorite-technicians/:technicianId')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(USER_ROLE.CUSTOMER)

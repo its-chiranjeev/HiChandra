@@ -9,7 +9,6 @@ import { PlatformSettingRepository } from './platform-setting.repository';
 import { BookingRepository } from './booking.repository';
 import { ComplaintRepository } from './complaint.repository';
 import { PaymentRepository } from './payment.repository';
-import { TechnicianPayoutRepository } from './technician-payout.repository';
 import { FavoriteTechnicianRepository } from './favorite-technician.repository';
 import { TechnicianPayoutAccountRepository } from './technician-payout-account.repository';
 
@@ -25,7 +24,6 @@ import { TechnicianPayoutAccountRepository } from './technician-payout-account.r
     BookingRepository,
      ComplaintRepository,
     PaymentRepository,
-    TechnicianPayoutRepository,
     FavoriteTechnicianRepository,
     TechnicianPayoutAccountRepository,
   ],
@@ -39,7 +37,6 @@ import { TechnicianPayoutAccountRepository } from './technician-payout-account.r
     BookingRepository,
     ComplaintRepository,
     PaymentRepository,
-    TechnicianPayoutRepository,
     FavoriteTechnicianRepository,
     TechnicianPayoutAccountRepository,
   ],

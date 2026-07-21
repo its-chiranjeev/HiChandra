@@ -1,11 +1,11 @@
-import { Booking, BOOKING_STATUS, BOOKING_PAYMENT_STATUS, Service, CustomerAddress, User, USER_ROLE, USER_STATUS, TECHNICIAN_STATUS, JOB_STATUS, TechnicianService, TechnicianLocation, Otp, PriceBreakdown, Payment, PAYMENT_STATUS, COMPLAINT_STATUS, TECHNICIAN_PAYOUT_STATUS, TechnicianProfile, TechnicianPayoutAccount, Complaint, TechnicianPayout, REVIEW_STATUS } from '@hichandra/entities';
+import { Booking, BOOKING_STATUS, BOOKING_PAYMENT_STATUS, Service, CustomerAddress, User, USER_ROLE, USER_STATUS, TECHNICIAN_STATUS, JOB_STATUS, TechnicianService, TechnicianLocation, Otp, PriceBreakdown, Payment, PAYMENT_STATUS, COMPLAINT_STATUS, TechnicianProfile, TechnicianPayoutAccount, Complaint, REVIEW_STATUS, PAYMENT_TYPE } from '@hichandra/entities';
 import { EmailService } from '@hichandra/email-services';
 import { PaymentService, RazorpayXService } from '@hichandra/payment';
 import { Injectable, NotFoundException, BadRequestException, UnprocessableEntityException, ForbiddenException, UnauthorizedException, Logger } from '@nestjs/common';
-import { DataSource, Not } from 'typeorm';
+import { DataSource, Not, IsNull } from 'typeorm';
 import { CreateBookingDto, UpdateBookingStatusDto, CreateBookingReviewDto, StartBookingDto, AssignBookingDto, CancelBookingDto, CreateComplaintDto, UpdateComplaintDto, CreateTechnicianPayoutDto, RescheduleBookingDto, RepeatBookingDto, TechnicianCancelBookingDto, AdminCreateBookingDto, AdminUpdateBookingReviewDto } from '@hichandra/dtos';
 import { AssignmentService } from '../assignment/assignment.service';
-import { BookingRepository, UserRepository, ComplaintRepository, PaymentRepository, TechnicianPayoutRepository, ServiceRepository } from '@hichandra/repositories';
+import { BookingRepository, UserRepository, ComplaintRepository, PaymentRepository, ServiceRepository } from '@hichandra/repositories';
 import { S3Service } from '@hichandra/s3';
 import { randomUUID } from 'crypto';
 import { Cron, CronExpression } from '@nestjs/schedule';
@@ -25,7 +25,6 @@ export class BookingService {
     private readonly userRepository: UserRepository,
     private readonly complaintRepository: ComplaintRepository,
     private readonly paymentRepository: PaymentRepository,
-    private readonly technicianPayoutRepository: TechnicianPayoutRepository,
     private readonly s3Service: S3Service,
     private readonly serviceRepository: ServiceRepository,
   ) { }
@@ -503,8 +502,8 @@ export class BookingService {
       order: { createdAt: 'DESC' },
     });
 
-    const payouts = await this.dataSource.getRepository(TechnicianPayout).find({
-      where: { bookingId },
+    const payouts = await this.dataSource.getRepository(Payment).find({
+      where: { bookingId, payoutBy: Not(IsNull()) },
       order: { createdAt: 'DESC' },
     });
 
@@ -1377,6 +1376,7 @@ export class BookingService {
         bookingId: booking.id,
         customerId: booking.customerId,
         payBy: USER_ROLE.CUSTOMER,
+        paymentType: PAYMENT_TYPE.BOOKING_PAYMENT,
         amount,
         currency: 'INR',
         status: PAYMENT_STATUS.PENDING,
@@ -1392,7 +1392,6 @@ export class BookingService {
     payload: any,
     signature: string,
   ) {
-
     const isValid =
       this.paymentService.verifyWebhook(
         JSON.stringify(payload),
@@ -1405,6 +1404,58 @@ export class BookingService {
       );
     }
 
+    const event = payload?.event;
+
+    // Handle Payout Webhooks (RazorpayX)
+    if (event && event.startsWith('payout.')) {
+      const payoutEntity = payload?.payload?.payout?.entity;
+      const razorpayPayoutId = payoutEntity?.id;
+
+      if (!razorpayPayoutId) {
+        return { success: true, message: 'Payout event missing ID' };
+      }
+
+      const payment = await this.paymentRepository.findByRazorpayPayoutId(
+        razorpayPayoutId,
+      );
+
+      if (!payment) {
+        throw new NotFoundException('Payout record in payments not found');
+      }
+
+      if (event === 'payout.processed') {
+        payment.status = PAYMENT_STATUS.SUCCESS;
+        payment.utr = payoutEntity.utr || payment.utr;
+      } else if (event === 'payout.reversed' || event === 'payout.failed') {
+        payment.status =
+          event === 'payout.reversed'
+            ? PAYMENT_STATUS.REVERSED
+            : PAYMENT_STATUS.FAILED;
+        payment.errorMessage =
+          payoutEntity.status_details?.description ||
+          payoutEntity.failure_reason ||
+          `Payout ${event}`;
+      } else if (event === 'payout.updated') {
+        if (payoutEntity.status === 'processed') {
+          payment.status = PAYMENT_STATUS.SUCCESS;
+          payment.utr = payoutEntity.utr || payment.utr;
+        } else if (payoutEntity.status === 'reversed') {
+          payment.status = PAYMENT_STATUS.REVERSED;
+        } else if (payoutEntity.status === 'failed') {
+          payment.status = PAYMENT_STATUS.FAILED;
+        }
+      }
+
+      await this.paymentRepository.updatePayment(payment);
+
+      return {
+        success: true,
+        message: `Payout event ${event} processed successfully`,
+        data: payment,
+      };
+    }
+
+    // Handle Customer Payment Link Webhooks (Razorpay Standard)
     if (
       payload.event !==
       'payment_link.paid'
@@ -1433,23 +1484,6 @@ export class BookingService {
     }
 
     if (payment.status === PAYMENT_STATUS.SUCCESS) {
-
-      // const payout =
-      //   await this.technicianPayoutRepository.findByPaymentRecordId(
-      //     payment.id,
-      //   );
-
-      // if (
-      //   payout &&
-      //   payout.status !== PAYMENT_STATUS.SUCCESS
-      // ) {
-      //   payout.status = PAYMENT_STATUS.SUCCESS;
-
-      //   await this.technicianPayoutRepository.updatePayout(
-      //     payout,
-      //   );
-      // }
-
       return {
         success: true,
         message: 'Payment already processed',
@@ -1486,20 +1520,6 @@ export class BookingService {
         }
       }
     }
-
-    // const payout =
-    //   await this.technicianPayoutRepository.findByPaymentRecordId(
-    //     payment.id,
-    // );
-
-    // if (payout) {
-    //   payout.status =
-    //     PAYMENT_STATUS.SUCCESS;
-
-    //   await this.technicianPayoutRepository.updatePayout(
-    //     payout,
-    //   );
-    // }
 
     return {
       success: true,
@@ -1741,7 +1761,7 @@ export class BookingService {
     }
 
     const existingPayout =
-      await this.technicianPayoutRepository.findExistingPayout(
+      await this.paymentRepository.findExistingPayout(
         booking.id,
         technician.id,
       );
@@ -1749,9 +1769,9 @@ export class BookingService {
     if (
       existingPayout &&
       [
-        TECHNICIAN_PAYOUT_STATUS.PENDING,
-        TECHNICIAN_PAYOUT_STATUS.PROCESSING,
-        TECHNICIAN_PAYOUT_STATUS.SUCCESS,
+        PAYMENT_STATUS.PENDING,
+        PAYMENT_STATUS.PROCESSING,
+        PAYMENT_STATUS.SUCCESS,
       ].includes(existingPayout.status)
     ) {
       throw new BadRequestException(
@@ -1761,14 +1781,16 @@ export class BookingService {
 
     const idempotencyKey = randomUUID();
 
-    const payout = await this.technicianPayoutRepository.createPayout({
+    const payout = await this.paymentRepository.createPayment({
       bookingId: booking.id,
-      serviceId: booking.serviceId,
       technicianId: technician.id,
       payoutBy: adminId,
+      payBy: USER_ROLE.ADMIN,
+      paymentType: PAYMENT_TYPE.TECHNICIAN_PAYOUT,
       amount: payoutAmount,
+      currency: 'INR',
       idempotencyKey,
-      status: TECHNICIAN_PAYOUT_STATUS.PENDING,
+      status: PAYMENT_STATUS.PENDING,
     });
 
     try {
@@ -1785,18 +1807,18 @@ export class BookingService {
       payout.razorpayPayoutId = razorpayPayout.id;
 
       if (razorpayPayout.status === 'processed') {
-        payout.status = TECHNICIAN_PAYOUT_STATUS.SUCCESS;
-        payout.utr = razorpayPayout.utr || null;
+        payout.status = PAYMENT_STATUS.SUCCESS;
+        payout.utr = razorpayPayout.utr || undefined;
       } else if (razorpayPayout.status === 'failed') {
-        payout.status = TECHNICIAN_PAYOUT_STATUS.FAILED;
-        payout.failureReason =
+        payout.status = PAYMENT_STATUS.FAILED;
+        payout.errorMessage =
           razorpayPayout.status_details?.description ||
           'RazorpayX payout failed';
       } else {
-        payout.status = TECHNICIAN_PAYOUT_STATUS.PROCESSING;
+        payout.status = PAYMENT_STATUS.PROCESSING;
       }
 
-      await this.technicianPayoutRepository.updatePayout(payout);
+      await this.paymentRepository.updatePayment(payout);
 
       return {
         success: true,
@@ -1809,13 +1831,13 @@ export class BookingService {
         },
       };
     } catch (error) {
-      payout.status = TECHNICIAN_PAYOUT_STATUS.FAILED;
-      payout.failureReason =
+      payout.status = PAYMENT_STATUS.FAILED;
+      payout.errorMessage =
         error instanceof Error
           ? error.message
           : 'Failed to initiate technician payout';
 
-      await this.technicianPayoutRepository.updatePayout(payout);
+      await this.paymentRepository.updatePayment(payout);
 
       throw error;
     }

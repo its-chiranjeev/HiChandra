@@ -45,6 +45,7 @@ import {
   PAYOUT_ONBOARDING_STATUS,
   Payment,
   PAYMENT_STATUS,
+  PAYMENT_TYPE,
   Booking,
   BOOKING_STATUS,
 } from '@hichandra/entities';
@@ -1838,6 +1839,7 @@ export class UserService {
     const newPayment = paymentRepo.create({
       customerId: user.id,
       payBy: USER_ROLE.CUSTOMER,
+      paymentType: PAYMENT_TYPE.TOKEN_PAYMENT,
       amount,
       currency: 'INR',
       status: PAYMENT_STATUS.PENDING,

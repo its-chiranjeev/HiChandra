@@ -16,7 +16,6 @@ import { Booking } from './booking.entity';
 import { Payment } from './payment.entity';
 import { EntitiesService } from './entities.service';
 import { Complaint } from './complaint.entity';
-import { TechnicianPayout } from './technician-payout.entity';
 import { FavoriteTechnician } from './favorite-technician.entity';
 import { TechnicianPayoutAccount } from './technician-payout-account.entity';
 
@@ -38,7 +37,6 @@ import { TechnicianPayoutAccount } from './technician-payout-account.entity';
       Booking,
       Payment,
       Complaint,
-      TechnicianPayout,
       FavoriteTechnician,
       TechnicianPayoutAccount,
     ]),

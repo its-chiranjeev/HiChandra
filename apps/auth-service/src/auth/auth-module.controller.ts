@@ -66,6 +66,7 @@ export class AuthModuleController {
 
     return this.authModuleService.refreshToken(refreshToken);
   }
+
   @Get('profile')
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)

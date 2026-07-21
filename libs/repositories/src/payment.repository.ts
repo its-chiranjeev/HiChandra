@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Payment, PAYMENT_STATUS } from '@hichandra/entities';
-import { Repository } from 'typeorm';
+import { Repository, Not, IsNull } from 'typeorm';
 
 @Injectable()
 export class PaymentRepository {
@@ -20,6 +20,14 @@ export class PaymentRepository {
       .leftJoinAndSelect(
         'payment.customer',
         'customer',
+      )
+      .leftJoinAndSelect(
+        'payment.technician',
+        'technician',
+      )
+      .leftJoinAndSelect(
+        'payment.payoutByUser',
+        'payoutByUser',
       )
       .leftJoinAndSelect(
         'payment.booking',
@@ -60,6 +68,37 @@ export class PaymentRepository {
       relations: {
         booking: true,
         customer: true,
+        technician: true,
+      },
+    });
+  }
+
+  async findByRazorpayPayoutId(
+    razorpayPayoutId: string,
+  ) {
+    return this.repo.findOne({
+      where: { razorpayPayoutId },
+      relations: {
+        booking: true,
+        customer: true,
+        technician: true,
+        payoutByUser: true,
+      },
+    });
+  }
+
+  async findExistingPayout(
+    bookingId: number,
+    technicianId: number,
+  ) {
+    return this.repo.findOne({
+      where: {
+        bookingId,
+        technicianId,
+        payoutBy: Not(IsNull()),
+      },
+      order: {
+        createdAt: 'DESC',
       },
     });
   }
@@ -82,6 +121,8 @@ export class PaymentRepository {
       relations: {
         booking: true,
         customer: true,
+        technician: true,
+        payoutByUser: true,
       },
     });
   }

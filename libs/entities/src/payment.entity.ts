@@ -13,8 +13,18 @@ import { Booking } from './booking.entity';
 
 export enum PAYMENT_STATUS {
   PENDING = 'PENDING',
+  PROCESSING = 'PROCESSING',
   SUCCESS = 'SUCCESS',
   FAILED = 'FAILED',
+  REVERSED = 'REVERSED',
+}
+
+export enum PAYMENT_TYPE {
+  BOOKING_PAYMENT = 'BOOKING_PAYMENT',           // Customer -> Admin for Booking
+  TOKEN_PAYMENT = 'TOKEN_PAYMENT',               // Customer -> Admin for One-time Platform Fee
+  TECHNICIAN_PAYOUT = 'TECHNICIAN_PAYOUT',       // Admin -> Technician Payout
+  CUSTOMER_REFUND = 'CUSTOMER_REFUND',           // Admin -> Customer Refund
+  TECHNICIAN_PLATFORM_FEE = 'TECHNICIAN_PLATFORM_FEE', // Technician -> Admin
 }
 
 @Entity('payments')
@@ -55,6 +65,17 @@ export class Payment {
   @JoinColumn({ name: 'technicianId' })
   technician?: User;
 
+  @Index()
+  @Column({ type: 'int', nullable: true })
+  payoutBy?: number | null;
+
+  @ManyToOne(() => User, {
+    nullable: true,
+    onDelete: 'SET NULL',
+  })
+  @JoinColumn({ name: 'payoutBy' })
+  payoutByUser?: User | null;
+
   @Column({ type: 'decimal', precision: 10, scale: 2 })
   amount!: number;
 
@@ -74,12 +95,30 @@ export class Payment {
   })
   payBy!: USER_ROLE;
 
+  @Index()
+  @Column({
+    type: 'enum',
+    enum: PAYMENT_TYPE,
+    nullable: true,
+  })
+  paymentType?: PAYMENT_TYPE;
+
   @Index({ unique: true })
   @Column({ type: 'varchar', length: 100, nullable: true })
   paymentLinkId?: string;
 
   @Column({ type: 'varchar', length: 100, nullable: true })
   paymentId?: string;
+
+  @Index()
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  razorpayPayoutId?: string;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  idempotencyKey?: string;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  utr?: string;
 
   @Column({ type: 'varchar', length: 100, nullable: true })
   orderId?: string;

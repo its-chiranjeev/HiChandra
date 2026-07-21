@@ -8,6 +8,5 @@ export * from './platform-setting.repository';
 export * from './booking.repository';
 export * from './complaint.repository';
 export * from './payment.repository';
-export * from './technician-payout.repository';
 export * from './favorite-technician.repository';
 export * from './technician-payout-account.repository';

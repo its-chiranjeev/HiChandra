@@ -8,6 +8,7 @@ import { AssignmentModule } from '../assignment/assignment.module';
 import { EmailServicesModule } from '@hichandra/email-services';
 import { PaymentModule } from '@hichandra/payment';
 import { RepositoriesModule } from '@hichandra/repositories';
+import { S3Module } from '@hichandra/s3';
 
 @Module({
   imports: [
@@ -17,10 +18,11 @@ import { RepositoriesModule } from '@hichandra/repositories';
     AuthModuleModule,
     AssignmentModule,
     EmailServicesModule,
-    RepositoriesModule
+    RepositoriesModule,
+    S3Module,
   ],
   controllers: [BookingController],
   providers: [BookingService],
   exports: [BookingService],
 })
-export class BookingModule {}
+export class BookingModule { }

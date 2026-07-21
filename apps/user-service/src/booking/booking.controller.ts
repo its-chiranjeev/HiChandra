@@ -1,8 +1,8 @@
 import { Body, Controller, Get, Param, ParseIntPipe, HttpCode, Patch, HttpStatus, Query, Post, Req, Headers, UseGuards, ValidationPipe, Delete, StreamableFile } from '@nestjs/common';
 import { BookingService } from './booking.service';
 import { JwtAuthGuard, Roles, RolesGuard } from '@hichandra/common';
-import { StartBookingDto, CreateBookingDto, AssignBookingDto, CancelBookingDto, CreateComplaintDto, UpdateComplaintDto, UpdateBookingStatusDto, CreateTechnicianPayoutDto, RescheduleBookingDto, RepeatBookingDto, TechnicianCancelBookingDto, CreateBookingReviewDto, AdminCreateBookingDto } from '@hichandra/dtos';
-import { USER_ROLE, BOOKING_STATUS, COMPLAINT_STATUS, PAYMENT_STATUS, User } from '@hichandra/entities';
+import { StartBookingDto, CreateBookingDto, AssignBookingDto, CancelBookingDto, CreateComplaintDto, UpdateComplaintDto, UpdateBookingStatusDto, CreateTechnicianPayoutDto, RescheduleBookingDto, RepeatBookingDto, TechnicianCancelBookingDto, CreateBookingReviewDto, AdminCreateBookingDto, AdminUpdateBookingReviewDto } from '@hichandra/dtos';
+import { USER_ROLE, BOOKING_STATUS, COMPLAINT_STATUS, PAYMENT_STATUS, User, REVIEW_STATUS } from '@hichandra/entities';
 import type { Request } from 'express';
 import { PaymentService } from '@hichandra/payment';
 
@@ -128,6 +128,7 @@ export class BookingController {
     @Query('status') status?: BOOKING_STATUS,
     @Query('sortById') sortById?: string,
     @Query('sortByUpdatedAt') sortByUpdatedAt?: string,
+    @Query('reviewStatus') reviewStatus?: REVIEW_STATUS,
   ) {
     return this.bookingService.getAllBookings(
       req.user,
@@ -136,6 +137,7 @@ export class BookingController {
       status,
       sortById,
       sortByUpdatedAt,
+      reviewStatus,
     );
   }
 
@@ -156,6 +158,18 @@ export class BookingController {
       Number(limit),
       status,
     );
+  }
+
+  // Get Complaint by ID
+  @Get('complaint/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLE.ADMIN, USER_ROLE.CUSTOMER, USER_ROLE.TECHNICIAN)
+  @HttpCode(HttpStatus.OK)
+  async getComplaintById(
+    @Req() req: any,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.bookingService.getComplaintById(id, req.user);
   }
 
   // @Get('my-bookings')
@@ -189,17 +203,6 @@ export class BookingController {
     return this.bookingService.rescheduleBooking(id, dto, req.user);
   }
 
-  //Complaint By ID
-  @Get('admin/complaints/:id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(USER_ROLE.ADMIN)
-  @HttpCode(HttpStatus.OK)
-  async getComplaintById(
-    @Param('id', ParseIntPipe) id: number,
-  ) {
-    return this.bookingService.getComplaintById(id);
-  }
-
   //get payment
   @Get('admin/payments')
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -217,6 +220,23 @@ export class BookingController {
     );
   }
 
+  // Public API for fetching reviews (No Auth required)
+  @Get('public/reviews')
+  @HttpCode(HttpStatus.OK)
+  async getPublicReviews(
+    @Query('page') page: string = '1',
+    @Query('limit') limit: string = '10',
+    @Query('reviewStatus') reviewStatus?: REVIEW_STATUS,
+    @Query('serviceId') serviceId?: string,
+  ) {
+    return this.bookingService.getPublicReviews(
+      Number(page),
+      Number(limit),
+      reviewStatus,
+      serviceId ? Number(serviceId) : undefined,
+    );
+  }
+
   //Get Payments by ID
   @Get('admin/payments/:id')
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -226,6 +246,18 @@ export class BookingController {
     @Param('id', ParseIntPipe) id: number,
   ) {
     return this.bookingService.getPaymentById(id);
+  }
+
+  // Admin: Update booking ratings, reviews, and review status
+  @Patch('admin/review/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLE.ADMIN)
+  @HttpCode(HttpStatus.OK)
+  async adminUpdateBookingReview(
+    @Param('id', ParseIntPipe) id: number,
+    @Body(ValidationPipe) dto: AdminUpdateBookingReviewDto,
+  ) {
+    return this.bookingService.adminUpdateBookingReview(id, dto);
   }
 
   //My-Reviews For Users
@@ -404,6 +436,7 @@ export class BookingController {
       dto,
     );
   }
+
   //edit complaint
   @Patch('complaint/:id')
   @UseGuards(JwtAuthGuard)
@@ -479,27 +512,21 @@ export class BookingController {
     );
   }
 
-  // @Get('technician/active-booking')
-  // @UseGuards(JwtAuthGuard, RolesGuard)
-  // @Roles(USER_ROLE.TECHNICIAN)
-  // @HttpCode(HttpStatus.OK)
-  // async getActiveBookingForTechnician(
-  //   @Req() req: any,
-  // ) {
-  //   const technicianId =
-  //     req.user.id || req.user.sub;
+  @Get('technician/active-booking')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLE.TECHNICIAN)
+  @HttpCode(HttpStatus.OK)
+  async getActiveBookingForTechnician(
+    @Req() req: any,
+    @Query('page') page = 1,
+    @Query('limit') limit = 10,
+  ) {
+    const technicianId = req.user.id || req.user.sub;
 
-  //   const data =
-  //     await this.bookingService
-  //       .getActiveBookingForTechnician(
-  //         technicianId,
-  //       );
-
-  //   return {
-  //     success: true,
-  //     message:
-  //       'Active technician booking fetched successfully',
-  //     data,
-  //   };
-  // }
+    return this.bookingService.getActiveBookingForTechnician(
+      technicianId,
+      Number(page),
+      Number(limit),
+    );
+  }
 }

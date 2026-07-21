@@ -45,6 +45,8 @@ import {
   PAYOUT_ONBOARDING_STATUS,
   Payment,
   PAYMENT_STATUS,
+  Booking,
+  BOOKING_STATUS,
 } from '@hichandra/entities';
 import { AuthModuleService } from 'apps/auth-service/src/auth/auth-module.service';
 import { S3Service } from '@hichandra/s3';
@@ -253,11 +255,74 @@ export class UserService {
     };
   }
 
-  async getAllServices(page?: number, limit?: number) {
+  async getAllServices(
+    page?: number,
+    limit?: number,
+    isAdmin?: boolean,
+    search?: string,
+    status?: string,
+  ) {
     const { services, total } = await this.serviceRepository.findAllServices(
       page,
       limit,
+      isAdmin,
+      search,
+      status,
     );
+
+    const serviceIds = services.map((s) => s.id);
+    const statsMap = new Map<
+      number,
+      {
+        totalBookings: number;
+        pendingBookings: number;
+        acceptedBookings: number;
+        cancelledBookings: number;
+        completedBookings: number;
+      }
+    >();
+
+    if (serviceIds.length > 0) {
+      const bookingStats = await this.dataSource
+        .getRepository(Booking)
+        .createQueryBuilder('booking')
+        .select('booking.serviceId', 'serviceId')
+        .addSelect('booking.status', 'status')
+        .addSelect('COUNT(booking.id)', 'count')
+        .where('booking.serviceId IN (:...serviceIds)', { serviceIds })
+        .groupBy('booking.serviceId')
+        .addGroupBy('booking.status')
+        .getRawMany();
+
+      for (const row of bookingStats) {
+        const serviceId = Number(row.serviceId);
+        const count = Number(row.count);
+        const status = row.status;
+
+        if (!statsMap.has(serviceId)) {
+          statsMap.set(serviceId, {
+            totalBookings: 0,
+            pendingBookings: 0,
+            acceptedBookings: 0,
+            cancelledBookings: 0,
+            completedBookings: 0,
+          });
+        }
+
+        const stat = statsMap.get(serviceId)!;
+        stat.totalBookings += count;
+
+        if (status === BOOKING_STATUS.PENDING) {
+          stat.pendingBookings += count;
+        } else if (status === BOOKING_STATUS.ACCEPTED) {
+          stat.acceptedBookings += count;
+        } else if (status === BOOKING_STATUS.CANCELLED) {
+          stat.cancelledBookings += count;
+        } else if (status === BOOKING_STATUS.COMPLETED) {
+          stat.completedBookings += count;
+        }
+      }
+    }
 
     const formattedServices = await Promise.all(
       services.map(async (service) => {
@@ -268,9 +333,23 @@ export class UserService {
             service.iconUrl,
           );
         }
+
+        const stats = statsMap.get(service.id) || {
+          totalBookings: 0,
+          pendingBookings: 0,
+          acceptedBookings: 0,
+          cancelledBookings: 0,
+          completedBookings: 0,
+        };
+
         const serviceData = {
           ...service,
           iconDownloadUrl,
+          totalBookings: stats.totalBookings,
+          pendingBookings: stats.pendingBookings,
+          acceptedBookings: stats.acceptedBookings,
+          cancelledBookings: stats.cancelledBookings,
+          completedBookings: stats.completedBookings,
         };
 
         return serviceData;
@@ -305,16 +384,53 @@ export class UserService {
       throw new NotFoundException('Service not found');
     }
 
-    const serviceData = {
-      ...service,
+    const bookingStats = await this.dataSource
+      .getRepository(Booking)
+      .createQueryBuilder('booking')
+      .select('booking.status', 'status')
+      .addSelect('COUNT(booking.id)', 'count')
+      .where('booking.serviceId = :serviceId', { serviceId: id })
+      .groupBy('booking.status')
+      .getRawMany();
+
+    const stats = {
+      totalBookings: 0,
+      pendingBookings: 0,
+      acceptedBookings: 0,
+      cancelledBookings: 0,
+      completedBookings: 0,
     };
 
-    (serviceData as any).iconDownloadUrl = undefined;
-    if (service.iconUrl) {
-      // Generate download URL here
-      (serviceData as any).iconDownloadUrl =
-        await this.s3Service.getDownloadUrl(service.iconUrl);
+    for (const row of bookingStats) {
+      const count = Number(row.count);
+      const status = row.status;
+      stats.totalBookings += count;
+
+      if (status === BOOKING_STATUS.PENDING) {
+        stats.pendingBookings += count;
+      } else if (status === BOOKING_STATUS.ACCEPTED) {
+        stats.acceptedBookings += count;
+      } else if (status === BOOKING_STATUS.CANCELLED) {
+        stats.cancelledBookings += count;
+      } else if (status === BOOKING_STATUS.COMPLETED) {
+        stats.completedBookings += count;
+      }
     }
+
+    let iconDownloadUrl;
+    if (service.iconUrl) {
+      iconDownloadUrl = await this.s3Service.getDownloadUrl(service.iconUrl);
+    }
+
+    const serviceData = {
+      ...service,
+      iconDownloadUrl,
+      totalBookings: stats.totalBookings,
+      pendingBookings: stats.pendingBookings,
+      acceptedBookings: stats.acceptedBookings,
+      cancelledBookings: stats.cancelledBookings,
+      completedBookings: stats.completedBookings,
+    };
 
     return {
       success: true,

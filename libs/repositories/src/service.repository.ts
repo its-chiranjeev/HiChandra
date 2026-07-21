@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, IsNull } from 'typeorm';
+import { Repository, IsNull, ILike } from 'typeorm';
 
 import { Service, ServiceSpecification } from '@hichandra/entities';
 import { BaseRepository } from './baseDb.repository';
@@ -14,15 +14,39 @@ export class ServiceRepository extends BaseRepository<Service> {
     super(repo);
   }
 
-  async findAllServices(page?: number, limit?: number) {
+  async findAllServices(
+    page?: number,
+    limit?: number,
+    isAdmin?: boolean,
+    search?: string,
+    status?: string,
+  ) {
+    const whereCondition: any = {
+      deletedAt: IsNull(),
+    };
+
+    if (!isAdmin) {
+      whereCondition.isActive = true;
+    } else {
+      if (status !== undefined && status !== null && String(status).trim() !== '') {
+        const normalizedStatus = String(status).trim().toLowerCase();
+        if (normalizedStatus === 'true' || normalizedStatus === '1') {
+          whereCondition.isActive = true;
+        } else if (normalizedStatus === 'false' || normalizedStatus === '0') {
+          whereCondition.isActive = false;
+        }
+      }
+    }
+
+    if (search && search.trim() !== '') {
+      whereCondition.name = ILike(`%${search.trim()}%`);
+    }
+
     const queryOptions: any = {
-      where: {
-        isActive: true,
-        deletedAt: IsNull()
-      },
+      where: whereCondition,
       relations: {
         pricingRule: true,
-        specifications: true
+        specifications: true,
       },
       order: {
         createdAt: 'DESC',

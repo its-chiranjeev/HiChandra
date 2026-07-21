@@ -44,6 +44,15 @@ export class ComplaintRepository {
       where: {
         id: complaintId,
       },
+      relations: {
+        booking: {
+          customer: true,
+          technician: true,
+          service: true,
+          address: true,
+        },
+        createdByUser: true,
+      },
     });
   }
 
@@ -60,16 +69,28 @@ export class ComplaintRepository {
     const query = this.repo
       .createQueryBuilder('complaint')
       .leftJoinAndSelect('complaint.booking', 'booking')
+      .leftJoinAndSelect('booking.customer', 'customer')
+      .leftJoinAndSelect('booking.technician', 'technician')
+      .leftJoinAndSelect('booking.service', 'service')
+      .leftJoinAndSelect('service.pricingRule', 'pricingRule')
+      .leftJoinAndSelect('service.specifications', 'specifications')
+      .leftJoinAndSelect('booking.address', 'address')
       .leftJoinAndSelect('complaint.createdByUser', 'createdByUser');
 
     if (status) {
       query.andWhere('complaint.status = :status', { status });
     }
 
-    if (user.role !== USER_ROLE.ADMIN) {
-      query.andWhere('complaint.createdBy = :userId', {
-        userId: user.id,
-      });
+    if (user.role === USER_ROLE.CUSTOMER) {
+      query.andWhere(
+        '(complaint.createdBy = :userId OR booking.customerId = :userId)',
+        { userId: user.id },
+      );
+    } else if (user.role === USER_ROLE.TECHNICIAN) {
+      query.andWhere(
+        '(complaint.createdBy = :userId OR booking.technicianId = :userId)',
+        { userId: user.id },
+      );
     }
 
     query.orderBy('complaint.createdAt', 'DESC');

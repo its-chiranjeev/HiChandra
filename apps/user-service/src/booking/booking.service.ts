@@ -1,11 +1,12 @@
-import { Booking, BOOKING_STATUS, BOOKING_PAYMENT_STATUS, Service, CustomerAddress, User, USER_ROLE, USER_STATUS, TECHNICIAN_STATUS, JOB_STATUS, TechnicianService, TechnicianLocation, Otp, PriceBreakdown, Payment, PAYMENT_STATUS, COMPLAINT_STATUS, TECHNICIAN_PAYOUT_STATUS, TechnicianProfile, TechnicianPayoutAccount, Complaint, TechnicianPayout } from '@hichandra/entities';
+import { Booking, BOOKING_STATUS, BOOKING_PAYMENT_STATUS, Service, CustomerAddress, User, USER_ROLE, USER_STATUS, TECHNICIAN_STATUS, JOB_STATUS, TechnicianService, TechnicianLocation, Otp, PriceBreakdown, Payment, PAYMENT_STATUS, COMPLAINT_STATUS, TECHNICIAN_PAYOUT_STATUS, TechnicianProfile, TechnicianPayoutAccount, Complaint, TechnicianPayout, REVIEW_STATUS } from '@hichandra/entities';
 import { EmailService } from '@hichandra/email-services';
 import { PaymentService, RazorpayXService } from '@hichandra/payment';
 import { Injectable, NotFoundException, BadRequestException, UnprocessableEntityException, ForbiddenException, UnauthorizedException, Logger } from '@nestjs/common';
 import { DataSource, Not } from 'typeorm';
-import { CreateBookingDto, UpdateBookingStatusDto, CreateBookingReviewDto, StartBookingDto, AssignBookingDto, CancelBookingDto, CreateComplaintDto, UpdateComplaintDto, CreateTechnicianPayoutDto, RescheduleBookingDto, RepeatBookingDto, TechnicianCancelBookingDto, AdminCreateBookingDto } from '@hichandra/dtos';
+import { CreateBookingDto, UpdateBookingStatusDto, CreateBookingReviewDto, StartBookingDto, AssignBookingDto, CancelBookingDto, CreateComplaintDto, UpdateComplaintDto, CreateTechnicianPayoutDto, RescheduleBookingDto, RepeatBookingDto, TechnicianCancelBookingDto, AdminCreateBookingDto, AdminUpdateBookingReviewDto } from '@hichandra/dtos';
 import { AssignmentService } from '../assignment/assignment.service';
-import { BookingRepository, UserRepository, ComplaintRepository, PaymentRepository, TechnicianPayoutRepository } from '@hichandra/repositories';
+import { BookingRepository, UserRepository, ComplaintRepository, PaymentRepository, TechnicianPayoutRepository, ServiceRepository } from '@hichandra/repositories';
+import { S3Service } from '@hichandra/s3';
 import { randomUUID } from 'crypto';
 import { Cron, CronExpression } from '@nestjs/schedule';
 
@@ -25,6 +26,8 @@ export class BookingService {
     private readonly complaintRepository: ComplaintRepository,
     private readonly paymentRepository: PaymentRepository,
     private readonly technicianPayoutRepository: TechnicianPayoutRepository,
+    private readonly s3Service: S3Service,
+    private readonly serviceRepository: ServiceRepository,
   ) { }
 
   private getIstDateParts(date: Date) {
@@ -520,6 +523,7 @@ export class BookingService {
     status?: BOOKING_STATUS,
     sortById?: string,
     sortByUpdatedAt?: string,
+    reviewStatus?: REVIEW_STATUS,
   ) {
     let sortBy: 'id' | 'updatedAt' = 'id';
     let finalSortOrder: 'ASC' | 'DESC' = 'DESC';
@@ -540,6 +544,7 @@ export class BookingService {
         status,
         sortBy,
         finalSortOrder,
+        reviewStatus,
       );
 
     const formattedBookings = bookings.map((booking: Booking) => {
@@ -596,6 +601,72 @@ export class BookingService {
 
     const totalPages = Math.ceil(total / limit);
 
+    const formattedComplaints = await Promise.all(
+      complaints.map(async (complaint) => {
+        let iconDownloadUrl;
+        if (complaint.booking?.service?.iconUrl) {
+          iconDownloadUrl = await this.s3Service.getDownloadUrl(
+            complaint.booking.service.iconUrl,
+          );
+        }
+
+        const service = complaint.booking?.service
+          ? {
+            ...complaint.booking.service,
+            iconDownloadUrl,
+          }
+          : null;
+
+        const cleanCustomer = this.cleanUser(complaint.booking?.customer);
+        const cleanTechnician = this.cleanUser(complaint.booking?.technician);
+
+        return {
+          id: complaint.id,
+          title: complaint.title,
+          description: complaint.description,
+          status: complaint.status,
+
+          createdBy: complaint.createdByUser
+            ? {
+              id: complaint.createdByUser.id,
+              firstName: complaint.createdByUser.firstName,
+              lastName: complaint.createdByUser.lastName,
+              username: complaint.createdByUser.username,
+              role: complaint.createdByUser.role,
+            }
+            : null,
+
+          booking: complaint.booking
+            ? {
+              id: complaint.booking.id,
+              status: complaint.booking.status,
+              paymentStatus: complaint.booking.paymentStatus,
+              reviewStatus: complaint.booking.reviewStatus,
+              customerRating: complaint.booking.customerRating,
+              customerReview: complaint.booking.customerReview,
+              technicianRating: complaint.booking.technicianRating,
+              technicianReview: complaint.booking.technicianReview,
+              isEmergency: complaint.booking.isEmergency,
+              scheduledAt: complaint.booking.scheduledAt,
+              scheduledAtIst: this.toIstString(complaint.booking.scheduledAt),
+              totalAmount: complaint.booking.totalAmount,
+              priceBreakdown: complaint.booking.priceBreakdown,
+              customer: cleanCustomer,
+              technician: cleanTechnician,
+              address: complaint.booking.address ?? null,
+              createdAt: complaint.booking.createdAt,
+              createdAtIst: this.toIstString(complaint.booking.createdAt),
+            }
+            : null,
+
+          service,
+
+          createdAt: complaint.createdAt,
+          updatedAt: complaint.updatedAt,
+        };
+      }),
+    );
+
     return {
       success: true,
       message:
@@ -605,31 +676,7 @@ export class BookingService {
             : 'You have not raised any complaints yet.'
           : 'Complaints fetched successfully',
 
-      data: complaints.map((complaint) => ({
-        id: complaint.id,
-        title: complaint.title,
-        description: complaint.description,
-        status: complaint.status,
-
-        createdBy: complaint.createdByUser
-          ? {
-            id: complaint.createdByUser.id,
-            name: `${complaint.createdByUser.firstName ?? ''} ${complaint.createdByUser.lastName ?? ''}`.trim(),
-            username: complaint.createdByUser.username,
-            role: complaint.createdByUser.role,
-          }
-          : null,
-
-        booking: complaint.booking
-          ? {
-            id: complaint.booking.id,
-            status: complaint.booking.status,
-          }
-          : null,
-
-        createdAt: complaint.createdAt,
-        updatedAt: complaint.updatedAt,
-      })),
+      data: formattedComplaints,
 
       pagination: {
         total,
@@ -643,7 +690,7 @@ export class BookingService {
   }
 
   // Complaint By ID
-  async getComplaintById(id: number) {
+  async getComplaintById(id: number, user?: any) {
     const complaint =
       await this.complaintRepository.findComplaintById(
         id,
@@ -653,6 +700,18 @@ export class BookingService {
       throw new NotFoundException(
         'Complaint not found',
       );
+    }
+
+    if (user && user.role !== USER_ROLE.ADMIN) {
+      const isCreator = complaint.createdBy === user.id;
+      const isCustomer = complaint.booking?.customerId === user.id;
+      const isTechnician = complaint.booking?.technicianId === user.id;
+
+      if (!isCreator && !isCustomer && !isTechnician) {
+        throw new ForbiddenException(
+          'You are not authorized to view this complaint',
+        );
+      }
     }
 
     return {
@@ -2402,11 +2461,11 @@ export class BookingService {
       throw new NotFoundException('Complaint not found');
     }
 
-    await this.complaintRepository.softDeleteComplaint(id);
+    await this.complaintRepository.deleteComplaintById(id);
 
     return {
       success: true,
-      message: 'Complaint deleted successfully',
+      message: 'Complaint deleted permanently',
     };
   }
 
@@ -2590,58 +2649,200 @@ export class BookingService {
     });
   }
 
-  // async getActiveBookingForTechnician(
-  //   technicianId: number,
-  // ) {
-  //   const booking =
-  //     await this.bookingRepository
-  //       .findActiveBookingForTechnician(
-  //         technicianId,
-  //       );
+  async getActiveBookingForTechnician(
+    technicianId: number,
+    page: number = 1,
+    limit: number = 10,
+  ) {
+    const { bookings, total } =
+      await this.bookingRepository.findActiveBookingsForTechnician(
+        technicianId,
+        page,
+        limit,
+      );
 
-  //   if (!booking) {
-  //     throw new NotFoundException(
-  //       'No active pending booking found for technician',
-  //     );
-  //   }
+    const formattedBookings = bookings.map((booking) => ({
+      id: booking.id,
+      status: booking.status,
+      isManualAssign: booking.isManualAssign,
+      serviceId: booking.serviceId,
+      customerId: booking.customerId,
+      addressId: booking.addressId,
 
-  //   return {
-  //     id: booking.id,
-  //     status: booking.status,
-  //     isManualAssign: booking.isManualAssign,
+      customer: booking.customer
+        ? {
+          id: booking.customer.id,
+          firstName: booking.customer.firstName,
+          lastName: booking.customer.lastName,
+          email: booking.customer.email,
+          phone: booking.customer.phone,
+          profileImage: booking.customer.profileImage,
+        }
+        : null,
 
-  //     customer: booking.customer
-  //       ? {
-  //           id: booking.customer.id,
-  //           email: booking.customer.email,
-  //           phone: booking.customer.phone,
-  //         }
-  //       : null,
+      service: booking.service
+        ? {
+          id: booking.service.id,
+          name: booking.service.name,
+          iconUrl: booking.service.iconUrl,
+        }
+        : null,
 
-  //     service: booking.service
-  //       ? {
-  //           id: booking.service.id,
-  //           name: booking.service.name,
-  //         }
-  //       : null,
+      address: booking.address
+        ? {
+          id: booking.address.id,
+          fullAddress: booking.address.fullAddress,
+          city: booking.address.city,
+          state: booking.address.state,
+          pincode: booking.address.pincode,
+          latitude: booking.address.latitude,
+          longitude: booking.address.longitude,
+        }
+        : null,
 
-  //     address: booking.address
-  //       ? {
-  //           id: booking.address.id,
-  //           fullAddress:
-  //             booking.address.fullAddress,
-  //           city: booking.address.city,
-  //           state: booking.address.state,
-  //         }
-  //       : null,
+      scheduledAt: booking.scheduledAt ?? null,
+      totalAmount: booking.totalAmount ?? null,
+      priceBreakdown: booking.priceBreakdown ?? null,
+      serviceSpecifications: booking.serviceSpecifications ?? null,
+      createdAt: booking.createdAt,
+    }));
 
-  //     scheduledAt:
-  //       booking.scheduledAt ?? null,
+    return {
+      success: true,
+      message: 'Active technician bookings fetched successfully',
+      data: formattedBookings,
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
 
-  //     totalAmount:
-  //       booking.totalAmount ?? null,
+  async adminUpdateBookingReview(
+    bookingId: number,
+    dto: AdminUpdateBookingReviewDto,
+  ) {
+    const booking = await this.bookingRepository.findBookingById(bookingId);
 
-  //     createdAt: booking.createdAt,
-  //   };
-  // }
+    if (!booking) {
+      throw new NotFoundException('Booking not found');
+    }
+
+    const updateFields: any = {};
+
+    if (dto.customerRating !== undefined) {
+      updateFields.customerRating = dto.customerRating;
+    }
+
+    if (dto.customerReview !== undefined) {
+      updateFields.customerReview = dto.customerReview;
+    }
+
+    if (dto.technicianRating !== undefined) {
+      updateFields.technicianRating = dto.technicianRating;
+    }
+
+    if (dto.technicianReview !== undefined) {
+      updateFields.technicianReview = dto.technicianReview;
+    }
+
+    if (dto.reviewStatus !== undefined) {
+      updateFields.reviewStatus = dto.reviewStatus;
+    }
+
+    if (Object.keys(updateFields).length > 0) {
+      await this.dataSource
+        .getRepository(Booking)
+        .update(bookingId, updateFields);
+    }
+
+    const updatedBooking = await this.bookingRepository.findBookingById(
+      bookingId,
+    );
+
+    return {
+      success: true,
+      message: 'Booking review details updated successfully',
+      data: updatedBooking,
+    };
+  }
+
+  async getPublicReviews(
+    page = 1,
+    limit = 10,
+    reviewStatus?: REVIEW_STATUS,
+    serviceId?: number,
+  ) {
+    const { reviews, total } = await this.bookingRepository.findPublicReviews(
+      page,
+      limit,
+      reviewStatus,
+      serviceId,
+    );
+
+    const formattedReviews = await Promise.all(
+      reviews.map(async (booking) => {
+        let iconDownloadUrl;
+        if (booking.service?.iconUrl) {
+          iconDownloadUrl = await this.s3Service.getDownloadUrl(
+            booking.service.iconUrl,
+          );
+        }
+
+        return {
+          bookingId: booking.id,
+
+          service: booking.service
+            ? {
+              id: booking.service.id,
+              name: booking.service.name,
+              description: booking.service.description,
+              iconUrl: booking.service.iconUrl,
+              iconDownloadUrl,
+            }
+            : null,
+
+          customer: booking.customer
+            ? {
+              id: booking.customer.id,
+              firstName: booking.customer.firstName,
+              lastName: booking.customer.lastName,
+              profileImage: booking.customer.profileImage,
+            }
+            : null,
+
+          technician: booking.technician
+            ? {
+              id: booking.technician.id,
+              firstName: booking.technician.firstName,
+              lastName: booking.technician.lastName,
+              profileImage: booking.technician.profileImage,
+            }
+            : null,
+
+          customerRating: booking.customerRating ?? null,
+          customerReview: booking.customerReview ?? null,
+          technicianRating: booking.technicianRating ?? null,
+          technicianReview: booking.technicianReview ?? null,
+          reviewStatus: booking.reviewStatus,
+          createdAt: booking.createdAt,
+          updatedAt: booking.updatedAt,
+        };
+      }),
+    );
+
+    return {
+      success: true,
+      message: 'Public reviews fetched successfully',
+      data: formattedReviews,
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
 }

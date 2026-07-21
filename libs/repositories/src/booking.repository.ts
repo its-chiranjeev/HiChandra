@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Booking, BOOKING_STATUS, BOOKING_PAYMENT_STATUS, USER_ROLE } from '@hichandra/entities';
+import { Booking, BOOKING_STATUS, BOOKING_PAYMENT_STATUS, USER_ROLE, REVIEW_STATUS } from '@hichandra/entities';
 import { Repository, Not, IsNull } from 'typeorm';
 
 @Injectable()
@@ -17,11 +17,16 @@ export class BookingRepository {
     status?: BOOKING_STATUS,
     sortBy: 'id' | 'updatedAt' = 'updatedAt',
     sortOrder: 'ASC' | 'DESC' = 'DESC',
+    reviewStatus?: REVIEW_STATUS,
   ) {
     const where: any = {};
 
     if (status) {
       where.status = status;
+    }
+
+    if (reviewStatus) {
+      where.reviewStatus = reviewStatus;
     }
 
     if (user.role === USER_ROLE.CUSTOMER) {
@@ -251,6 +256,44 @@ export class BookingRepository {
     };
   }
 
+  async findPublicReviews(
+    page = 1,
+    limit = 10,
+    reviewStatus?: REVIEW_STATUS,
+    serviceId?: number,
+  ) {
+    const where: any = {};
+
+    if (reviewStatus) {
+      where.reviewStatus = reviewStatus;
+    }
+
+    if (serviceId) {
+      where.serviceId = serviceId;
+    }
+
+    where.customerRating = Not(IsNull());
+
+    const [reviews, total] = await this.repo.findAndCount({
+      where,
+      relations: {
+        customer: true,
+        technician: true,
+        service: true,
+      },
+      order: {
+        updatedAt: 'DESC',
+      },
+      skip: (page - 1) * limit,
+      take: limit,
+    });
+
+    return {
+      reviews,
+      total,
+    };
+  }
+
   async findMyBookings(
     userId: number,
     role: USER_ROLE,
@@ -302,25 +345,32 @@ export class BookingRepository {
     return this.findBookingById(bookingId);
   }
 
-  // async findActiveBookingForTechnician(
-  //   technicianId: number,
-  // ): Promise<Booking | null> {
-  //   return this.repo.findOne({
-  //     where: {
-  //       status: BOOKING_STATUS.PENDING,
-  //       isManualAssign: false,
-  //       filteredTechnicians: technicianId,
-  //     },
-  //     relations: {
-  //       customer: true,
-  //       service: true,
-  //       address: true,
-  //     },
-  //     order: {
-  //       createdAt: 'DESC',
-  //     },
-  //   });
-  // }
+  async findActiveBookingsForTechnician(
+    technicianId: number,
+    page: number = 1,
+    limit: number = 10,
+  ): Promise<{ bookings: Booking[]; total: number }> {
+    const skip = (page - 1) * limit;
+
+    const [bookings, total] = await this.repo
+      .createQueryBuilder('booking')
+      .leftJoinAndSelect('booking.customer', 'customer')
+      .leftJoinAndSelect('booking.service', 'service')
+      .leftJoinAndSelect('booking.address', 'address')
+      .where('booking.status = :status', { status: BOOKING_STATUS.PENDING })
+      .andWhere('booking.isManualAssign = :isManualAssign', {
+        isManualAssign: false,
+      })
+      .andWhere('booking.filteredTechnicians @> :technicianId', {
+        technicianId: JSON.stringify([technicianId]),
+      })
+      .orderBy('booking.createdAt', 'DESC')
+      .skip(skip)
+      .take(limit)
+      .getManyAndCount();
+
+    return { bookings, total };
+  }
 
   async markExpiredAsManual(): Promise<number> {
     const fiveMinutesAgo = new Date(

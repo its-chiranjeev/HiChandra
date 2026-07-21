@@ -41,6 +41,11 @@ export enum BOOKING_PAYMENT_STATUS {
   FAILED = 'FAILED',
 }
 
+export enum REVIEW_STATUS {
+  DRAFT = 'DRAFT',
+  PUBLISHED = 'PUBLISHED',
+}
+
 @Entity('bookings')
 export class Booking {
   @PrimaryGeneratedColumn()
@@ -135,6 +140,13 @@ export class Booking {
 
   @Column({ type: 'text', nullable: true })
   technicianReview?: string;
+
+  @Column({
+    type: 'enum',
+    enum: REVIEW_STATUS,
+    default: REVIEW_STATUS.DRAFT,
+  })
+  reviewStatus!: REVIEW_STATUS;
 
   @CreateDateColumn()
   createdAt!: Date;

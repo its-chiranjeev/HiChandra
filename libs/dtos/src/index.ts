@@ -28,3 +28,4 @@ export * from './user/admin-create-technician.dto';
 export * from './booking/admin-create-booking.dto';
 export * from './user/create-technician-payout-account.dto';
 export * from './user/update-technician-payout-account.dto';
+export * from './booking/admin-update-booking-review.dto';

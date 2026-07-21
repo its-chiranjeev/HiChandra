@@ -1,6 +1,7 @@
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { Body, Controller, Query, Get, Put, Patch, Delete, Param, ParseIntPipe, HttpCode, HttpStatus, Post, Req, UnauthorizedException, UseGuards, UseInterceptors, ValidationPipe, UploadedFiles, UnprocessableEntityException, BadRequestException, } from '@nestjs/common';
 import { UserService } from './user.service';
+import * as jwt from 'jsonwebtoken';
 import { AuthGuard } from '@nestjs/passport';
 import { JwtAuthGuard, Roles, RolesGuard } from '@hichandra/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
@@ -119,12 +120,37 @@ export class UserController {
 
   @Get('service/all')
   async getAllServices(
+    @Req() req: any,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
+    @Query('search') search?: string,
+    @Query('status') status?: string,
   ) {
+    let isAdmin = req.user?.role === USER_ROLE.ADMIN;
+    if (!isAdmin) {
+      const authHeader = req.headers?.authorization;
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        try {
+          const token = authHeader.split(' ')[1];
+          const decoded: any = jwt.decode(token);
+          if (
+            decoded &&
+            (decoded.role === USER_ROLE.ADMIN ||
+              decoded.role?.toUpperCase() === 'ADMIN')
+          ) {
+            isAdmin = true;
+          }
+        } catch (e) { }
+      }
+    }
+    console.log(status);
+    console.log(typeof status);
     return this.userService.getAllServices(
       page ? Number(page) : undefined,
       limit ? Number(limit) : undefined,
+      isAdmin,
+      search,
+      status,
     );
   }
 

@@ -72,13 +72,9 @@ export class AuthModuleController {
   @HttpCode(HttpStatus.OK)
   async getProfile(
     @Req() req: any,
-    @Query('page') page: string = '1',
-    @Query('limit') limit: string = '10',
   ) {
     return this.authModuleService.getProfileService(
       req.user.sub || req.user.id,
-      Number(page),
-      Number(limit),
     );
   }
 

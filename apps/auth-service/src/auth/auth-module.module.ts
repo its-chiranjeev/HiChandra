@@ -6,6 +6,7 @@ import { RepositoriesModule } from '@hichandra/repositories';
 import { CommonAuthModule } from '@hichandra/common';
 import { EmailServicesModule } from '@hichandra/email-services';
 import { SmsServicesModule } from '@hichandra/sms-services';
+import { S3Module } from '@hichandra/s3';
 
 import { ScheduleModule } from '@nestjs/schedule';
 @Module({
@@ -15,6 +16,7 @@ import { ScheduleModule } from '@nestjs/schedule';
     CommonAuthModule,
     EmailServicesModule,
     SmsServicesModule,
+    S3Module,
     ScheduleModule.forRoot(),
   ],
   controllers: [AuthModuleController],

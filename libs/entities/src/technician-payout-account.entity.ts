@@ -4,7 +4,7 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
-  OneToOne,
+  ManyToOne,
   JoinColumn,
   Index,
 } from 'typeorm';
@@ -26,13 +26,13 @@ export class TechnicianPayoutAccount {
   @PrimaryGeneratedColumn()
   id!: number;
 
-  @Index({ unique: true })
+  @Index()
   @Column({
     type: 'int',
   })
   technicianId!: number;
 
-  @OneToOne(() => User, {
+  @ManyToOne(() => User, {
     onDelete: 'CASCADE',
   })
   @JoinColumn({

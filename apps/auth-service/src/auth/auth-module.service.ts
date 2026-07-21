@@ -10,7 +10,7 @@ import {
 } from '@nestjs/common';
 import { UserRepository, OtpRepository } from '@hichandra/repositories';
 import * as bcrypt from 'bcryptjs';
-import { User, USER_STATUS, USER_ROLE, TechnicianService } from '@hichandra/entities';
+import { User, USER_STATUS, USER_ROLE, TechnicianService, TechnicianPayoutAccount } from '@hichandra/entities';
 import { ConfigService } from '@nestjs/config';
 import { createHmac } from 'crypto';
 import { Cron } from '@nestjs/schedule';
@@ -26,6 +26,7 @@ import { DataSource, Repository, LessThan } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { EmailService } from '@hichandra/email-services';
 import { SmsService } from '@hichandra/sms-services';
+import { S3Service } from '@hichandra/s3';
 
 @Injectable()
 export class AuthModuleService {
@@ -39,6 +40,7 @@ export class AuthModuleService {
     //private readonly emailService: EmailService,
     private readonly smsService: SmsService,
     private readonly emailService: EmailService,
+    private readonly s3Service: S3Service,
   ) { }
 
   async issueAuthTokens(user: User) {
@@ -443,7 +445,7 @@ export class AuthModuleService {
     }
   }
 
-  async getProfileService(userId: number, page = 1, limit = 10) {
+  async getProfileService(userId: number) {
     const user = await this.userRepository.findOne({
       where: { id: userId },
       relations: [
@@ -462,9 +464,58 @@ export class AuthModuleService {
       throw new NotFoundException('User not found');
     }
 
-    const allServices = user.technicianProfile?.services || [];
-    const startIndex = (page - 1) * limit;
-    const paginatedServices = allServices.slice(startIndex, startIndex + limit);
+    if (user.profileImage) {
+      try {
+        user.profileImage = await this.s3Service.getDownloadUrl(user.profileImage);
+      } catch (error) {
+        this.logger.error(`Failed to get presigned URL for user profileImage`, error);
+      }
+    }
+
+    let formattedTechnicianProfile: any = null;
+
+    if (user.technicianProfile) {
+      formattedTechnicianProfile = { ...user.technicianProfile };
+
+      const documentFields = [
+        'panUrl',
+        'policeCertUrl',
+        'tradeLicenseUrl',
+        'selfieUrl',
+        'aadharUrl',
+      ];
+
+      for (const field of documentFields) {
+        const urlValue = formattedTechnicianProfile[field];
+        if (typeof urlValue === 'string' && urlValue.trim() !== '') {
+          try {
+            formattedTechnicianProfile[field] =
+              await this.s3Service.getDownloadUrl(urlValue);
+          } catch (error) {
+            this.logger.error(`Failed to get download URL for technicianProfile.${field}`, error);
+          }
+        }
+      }
+
+      if (formattedTechnicianProfile.services && Array.isArray(formattedTechnicianProfile.services)) {
+        for (const techService of formattedTechnicianProfile.services) {
+          if (techService?.service?.iconUrl) {
+            try {
+              techService.service.iconUrl =
+                await this.s3Service.getDownloadUrl(techService.service.iconUrl);
+            } catch (error) {
+              this.logger.error(`Failed to get icon download URL for service ${techService.service.id}`, error);
+            }
+          }
+        }
+      }
+
+      const payoutAccounts = await this.dataSource
+        .getRepository(TechnicianPayoutAccount)
+        .find({ where: { technicianId: user.id } });
+
+      formattedTechnicianProfile.payoutAccounts = payoutAccounts || [];
+    }
 
     const {
       password,
@@ -477,23 +528,8 @@ export class AuthModuleService {
 
     return {
       ...safeUser,
-
-      addresses:
-        user.role === USER_ROLE.CUSTOMER ? user.addresses : undefined,
-
-      technicianProfile:
-        user.role === USER_ROLE.TECHNICIAN
-          ? {
-            ...user.technicianProfile,
-            services: paginatedServices,
-            servicesPagination: {
-              total: allServices.length,
-              page,
-              limit,
-              totalPages: Math.ceil(allServices.length / limit),
-            },
-          }
-          : undefined,
+      addresses: user.addresses || [],
+      technicianProfile: formattedTechnicianProfile,
     };
   }
 

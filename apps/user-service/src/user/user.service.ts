@@ -5,6 +5,7 @@ import {
   InternalServerErrorException,
   NotFoundException,
   UnprocessableEntityException,
+  Logger,
 } from '@nestjs/common';
 import { BadRequestException } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
@@ -70,6 +71,8 @@ import { SmsService } from '@hichandra/sms-services';
 
 @Injectable()
 export class UserService {
+  private readonly logger = new Logger(UserService.name);
+
   constructor(
     private readonly userRepository: UserRepository,
     private readonly otpRepository: OtpRepository,
@@ -209,14 +212,91 @@ export class UserService {
   }
 
   async getUserByIdService(id: number) {
-    const user = await this.userRepository.findById(id);
+    const user = await this.userRepository.findOne({
+      where: { id },
+      relations: [
+        'addresses',
+        'technicianProfile',
+        'technicianProfile.services',
+        'technicianProfile.services.service',
+        'technicianProfile.services.service.specifications',
+        'technicianProfile.services.service.pricingRule',
+        'technicianProfile.brandExpertise',
+        'technicianProfile.locations',
+      ],
+    });
 
     if (!user) {
       throw new NotFoundException('User not found');
     }
 
-    const { password, hashedRefreshToken, tokenVersion, ...safeUser } = user;
-    const formattedUser = await this.presignUserS3Urls(safeUser);
+    if (user.profileImage) {
+      try {
+        user.profileImage = await this.s3Service.getDownloadUrl(user.profileImage);
+      } catch (error) {
+        this.logger.error(`Failed to get presigned URL for user profileImage`, error);
+      }
+    }
+
+    let formattedTechnicianProfile: any = null;
+
+    if (user.technicianProfile) {
+      formattedTechnicianProfile = { ...user.technicianProfile };
+
+      const documentFields = [
+        'panUrl',
+        'policeCertUrl',
+        'tradeLicenseUrl',
+        'selfieUrl',
+        'aadharUrl',
+      ];
+
+      for (const field of documentFields) {
+        const urlValue = formattedTechnicianProfile[field];
+        if (typeof urlValue === 'string' && urlValue.trim() !== '') {
+          try {
+            formattedTechnicianProfile[field] =
+              await this.s3Service.getDownloadUrl(urlValue);
+          } catch (error) {
+            this.logger.error(`Failed to get download URL for technicianProfile.${field}`, error);
+          }
+        }
+      }
+
+      if (formattedTechnicianProfile.services && Array.isArray(formattedTechnicianProfile.services)) {
+        for (const techService of formattedTechnicianProfile.services) {
+          if (techService?.service?.iconUrl) {
+            try {
+              techService.service.iconUrl =
+                await this.s3Service.getDownloadUrl(techService.service.iconUrl);
+            } catch (error) {
+              this.logger.error(`Failed to get icon download URL for service ${techService.service.id}`, error);
+            }
+          }
+        }
+      }
+
+      const payoutAccounts = await this.dataSource
+        .getRepository(TechnicianPayoutAccount)
+        .find({ where: { technicianId: user.id } });
+
+      formattedTechnicianProfile.payoutAccounts = payoutAccounts || [];
+    }
+
+    const {
+      password,
+      hashedRefreshToken,
+      tokenVersion,
+      technicianProfile,
+      addresses,
+      ...safeUser
+    } = user;
+
+    const formattedUser = {
+      ...safeUser,
+      addresses: user.addresses || [],
+      technicianProfile: formattedTechnicianProfile,
+    };
 
     return {
       success: true,
@@ -582,18 +662,21 @@ export class UserService {
       );
       const customerAddressRepository = manager.getRepository(CustomerAddress);
 
-      // const existingUserByEmail = await userRepository.findOne({
-      //   where: { email: dto.email },
-      // });
-      // if (existingUserByEmail) {
-      //   throw new ConflictException('Email already in use');
-      // }
-      if (dto.email) {
+      if (dto.phone) {
         const existingUserByPhone = await userRepository.findOne({
           where: { phone: dto.phone },
         });
         if (existingUserByPhone) {
           throw new ConflictException('Phone number already in use');
+        }
+      }
+
+      if (dto.email) {
+        const existingUserByEmail = await userRepository.findOne({
+          where: { email: dto.email },
+        });
+        if (existingUserByEmail) {
+          throw new ConflictException('Email already in use');
         }
       }
 

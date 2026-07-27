@@ -301,7 +301,7 @@ export class BookingController {
   }
 
 
-  @Post(':id/accept')
+  @Patch(':id/accept')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(USER_ROLE.TECHNICIAN)
   @HttpCode(HttpStatus.OK)
@@ -336,7 +336,7 @@ export class BookingController {
     };
   }
 
-  @Post(':id/start')
+  @Patch(':id/verify-otp')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(USER_ROLE.TECHNICIAN)
   @HttpCode(HttpStatus.OK)
@@ -356,6 +356,20 @@ export class BookingController {
       message: 'Booking started successfully',
       data: booking,
     };
+  }
+
+  @Post(':id/resend-otp')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLE.TECHNICIAN)
+  @HttpCode(HttpStatus.OK)
+  async resendBookingOtp(
+    @Req() req: any,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.bookingService.resendBookingOtp(
+      req.user.id,
+      id,
+    );
   }
 
   @Post('admin/assign-booking')
@@ -520,6 +534,7 @@ export class BookingController {
     @Req() req: any,
     @Query('page') page = 1,
     @Query('limit') limit = 10,
+    @Query('search') search?: string,
   ) {
     const technicianId = req.user.id || req.user.sub;
 
@@ -527,6 +542,7 @@ export class BookingController {
       technicianId,
       Number(page),
       Number(limit),
+      search,
     );
   }
 }

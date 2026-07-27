@@ -349,10 +349,12 @@ export class BookingRepository {
     technicianId: number,
     page: number = 1,
     limit: number = 10,
+    search?: string,
   ): Promise<{ bookings: Booking[]; total: number }> {
     const skip = (page - 1) * limit;
+    console.log(technicianId);
 
-    const [bookings, total] = await this.repo
+    const query = this.repo
       .createQueryBuilder('booking')
       .leftJoinAndSelect('booking.customer', 'customer')
       .leftJoinAndSelect('booking.service', 'service')
@@ -364,6 +366,13 @@ export class BookingRepository {
       .andWhere('booking.filteredTechnicians @> :technicianId', {
         technicianId: JSON.stringify([technicianId]),
       })
+      .andWhere('booking.technicianId IS NULL');
+
+    if (search) {
+      query.andWhere('service.name ILIKE :search', { search: `%${search}%` });
+    }
+
+    const [bookings, total] = await query
       .orderBy('booking.createdAt', 'DESC')
       .skip(skip)
       .take(limit)
@@ -373,26 +382,45 @@ export class BookingRepository {
   }
 
   async markExpiredAsManual(): Promise<number> {
-    const fiveMinutesAgo = new Date(
-      Date.now() - 5 * 60 * 1000,
-    );
-
-    const result = await this.repo.createQueryBuilder().update(Booking).set({
-      isManualAssign: true,
-    })
-      .where('status = :status', {
+    const bookings = await this.repo.find({
+      where: {
         status: BOOKING_STATUS.PENDING,
-      })
-      .andWhere('"technicianId" IS NULL')
-      .andWhere('"isManualAssign" = :isManualAssign', {
+        technicianId: IsNull(),
         isManualAssign: false,
-      })
-      .andWhere('"createdAt" <= :fiveMinutesAgo', {
-        fiveMinutesAgo,
-      })
-      .execute();
+      },
+    });
 
-    return result.affected ?? 0;
+    const now = Date.now();
+    const expiredBookingIds: number[] = [];
+    for (const booking of bookings) {
+      if (booking.createdAt) {
+        const d = booking.createdAt;
+        const utcTime = Date.UTC(
+          d.getFullYear(),
+          d.getMonth(),
+          d.getDate(),
+          d.getHours(),
+          d.getMinutes(),
+          d.getSeconds(),
+          d.getMilliseconds()
+        );
+        console.log(utcTime);
+        const diffMs = now - utcTime;
+        if (diffMs > 5 * 60 * 1000) {
+          expiredBookingIds.push(booking.id);
+        }
+      }
+    }
+
+    if (expiredBookingIds.length > 0) {
+      await this.repo.createQueryBuilder()
+        .update(Booking)
+        .set({ isManualAssign: true })
+        .whereInIds(expiredBookingIds)
+        .execute();
+    }
+
+    return expiredBookingIds.length;
   }
 
   async countAllBookings(): Promise<number> {

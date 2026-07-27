@@ -12,7 +12,7 @@ import { BookingGateway } from '@hichandra/gateway';
 export class AssignmentService {
   private readonly logger = new Logger(AssignmentService.name);
 
-  constructor(private readonly bookingGateway: BookingGateway) {}
+  constructor(private readonly bookingGateway: BookingGateway) { }
 
   async assignTechnician(
     booking: Booking,
@@ -44,7 +44,6 @@ export class AssignmentService {
     this.logger.log(
       `Found ${matchedTechnicians.length} technicians within radius.`,
     );
-    console.log(matchedTechnicians);
     // Send notifications to filtered technicians
     await this.sendNotificationsToTechnicians(
       booking,
@@ -71,9 +70,9 @@ export class AssignmentService {
       const a =
         Math.sin(dLat / 2) * Math.sin(dLat / 2) +
         Math.cos(lat1 * (Math.PI / 180)) *
-          Math.cos(lat2 * (Math.PI / 180)) *
-          Math.sin(dLon / 2) *
-          Math.sin(dLon / 2);
+        Math.cos(lat2 * (Math.PI / 180)) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2);
       const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
       return R * c;
     };
@@ -88,75 +87,75 @@ export class AssignmentService {
     return distance <= Number(technicianLocation.serviceRadiusKm);
   }
 
-//   private async sendNotificationsToTechnicians(
-//     booking: Booking,
-//     technicians: User[],
-//     service: Service,
-//     customerAddress: CustomerAddress, //added
-//   ): Promise<void> {
-//     for (const tech of technicians) {
-//       this.logger.log(
-//         `Sending booking notification to technician ID ${tech.id} (${tech.email}) for Booking ID ${booking.id} (Service: ${service.name})`,
-//       );
+  //   private async sendNotificationsToTechnicians(
+  //     booking: Booking,
+  //     technicians: User[],
+  //     service: Service,
+  //     customerAddress: CustomerAddress, //added
+  //   ): Promise<void> {
+  //     for (const tech of technicians) {
+  //       this.logger.log(
+  //         `Sending booking notification to technician ID ${tech.id} (${tech.email}) for Booking ID ${booking.id} (Service: ${service.name})`,
+  //       );
 
-//       // const isOnline = this.bookingGateway.notifyUser(tech.id, {
-//       //   bookingId: booking.id,
-//       //   //added
-//       //    bookingInfo: {
-//       //     id: booking.id,
-//       //     status: booking.status,
-//       //     scheduledAt: booking.scheduledAt,
-//       //     isEmergency: booking.isEmergency,
-//       //     totalAmount: booking.totalAmount,
-//       //   },
+  //       // const isOnline = this.bookingGateway.notifyUser(tech.id, {
+  //       //   bookingId: booking.id,
+  //       //   //added
+  //       //    bookingInfo: {
+  //       //     id: booking.id,
+  //       //     status: booking.status,
+  //       //     scheduledAt: booking.scheduledAt,
+  //       //     isEmergency: booking.isEmergency,
+  //       //     totalAmount: booking.totalAmount,
+  //       //   },
 
-//       //   service: service.name,
-//       //   scheduledAt: booking.scheduledAt,
-//       //   isEmergency: booking.isEmergency,
-//       // });
+  //       //   service: service.name,
+  //       //   scheduledAt: booking.scheduledAt,
+  //       //   isEmergency: booking.isEmergency,
+  //       // });
 
-    private async sendNotificationsToTechnicians(
-      booking: Booking,
-      technicians: User[],
-      service: Service,
-      customerAddress: CustomerAddress,
-    ): Promise<void> {
-      for (const tech of technicians) {
-        this.logger.log(
-          `Sending booking notification to technician ID ${tech.id} (${tech.email}) for Booking ID ${booking.id} (Service: ${service.name})`,
-        );
+  private async sendNotificationsToTechnicians(
+    booking: Booking,
+    technicians: User[],
+    service: Service,
+    customerAddress: CustomerAddress,
+  ): Promise<void> {
+    for (const tech of technicians) {
+      this.logger.log(
+        `Sending booking notification to technician ID ${tech.id} (${tech.email}) for Booking ID ${booking.id} (Service: ${service.name})`,
+      );
 
-        const {
-          password,
-          hashedRefreshToken,
-          ...safeCustomer
-        } = booking.customer || {};
+      const {
+        password,
+        hashedRefreshToken,
+        ...safeCustomer
+      } = booking.customer || {};
 
-        const isOnline = this.bookingGateway.notifyUser(tech.id, {
-          bookingId: booking.id,
+      const isOnline = this.bookingGateway.notifyUser(tech.id, {
+        bookingId: booking.id,
 
-          bookingInfo: {
-            ...booking,
-            customer: undefined,
-            service: undefined,
-            address: undefined,
-            technician: undefined,
-          },
+        bookingInfo: {
+          ...booking,
+          customer: undefined,
+          service: undefined,
+          address: undefined,
+          technician: undefined,
+        },
 
-          serviceInfo: {
-            ...service,
-          },
+        serviceInfo: {
+          ...service,
+        },
 
-          customerInfo: {
-            ...safeCustomer,
-            name: `${safeCustomer.firstName || ''} ${safeCustomer.lastName || ''}`.trim(),
-          },
+        customerInfo: {
+          ...safeCustomer,
+          name: `${safeCustomer.firstName || ''} ${safeCustomer.lastName || ''}`.trim(),
+        },
 
-          addressInfo: {
-            ...customerAddress,
-          },
-        });
-  
+        addressInfo: {
+          ...customerAddress,
+        },
+      });
+
       this.logger.log(
         `Technician notification status for ID ${tech.id}: ${isOnline ? 'Online/Delivered' : 'Offline'}`,
       );

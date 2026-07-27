@@ -3,7 +3,7 @@ import Razorpay from 'razorpay';
 import * as crypto from 'crypto';
 import puppeteer from 'puppeteer';
 import { paymentInvoiceTemplate } from './templates/invoice.template';
-import { User } from '@hichandra/entities';
+import { User, BOOKING_STATUS, BOOKING_PAYMENT_STATUS } from '@hichandra/entities';
 import { BookingRepository, PaymentRepository } from '@hichandra/repositories';
 
 
@@ -239,6 +239,18 @@ export class PaymentService {
     if (booking.customerId !== user.id) {
       throw new ForbiddenException(
         'You are not allowed to download this invoice',
+      );
+    }
+
+    if (booking.status !== BOOKING_STATUS.COMPLETED) {
+      throw new BadRequestException(
+        'Invoice can only be generated for completed bookings',
+      );
+    }
+
+    if (booking.paymentStatus !== BOOKING_PAYMENT_STATUS.PAID) {
+      throw new BadRequestException(
+        'Invoice can only be generated for paid bookings',
       );
     }
 

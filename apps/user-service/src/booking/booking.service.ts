@@ -7,13 +7,13 @@ import { CreateBookingDto, UpdateBookingStatusDto, CreateBookingReviewDto, Start
 import { AssignmentService } from '../assignment/assignment.service';
 import { BookingRepository, UserRepository, ComplaintRepository, PaymentRepository, ServiceRepository } from '@hichandra/repositories';
 import { S3Service } from '@hichandra/s3';
+import { SmsService } from '@hichandra/sms-services';
 import { randomUUID } from 'crypto';
 import { Cron, CronExpression } from '@nestjs/schedule';
 
 @Injectable()
 export class BookingService {
-  private readonly logger = new Logger(BookingService.name
-  );
+  private readonly logger = new Logger(BookingService.name);
 
   constructor(
     private readonly dataSource: DataSource,
@@ -27,6 +27,7 @@ export class BookingService {
     private readonly paymentRepository: PaymentRepository,
     private readonly s3Service: S3Service,
     private readonly serviceRepository: ServiceRepository,
+    private readonly smsService: SmsService,
   ) { }
 
   private getIstDateParts(date: Date) {
@@ -72,9 +73,9 @@ export class BookingService {
       if (!customer) {
         throw new NotFoundException('Customer not found');
       }
-      if (userRole !== USER_ROLE.ADMIN && !customer.isTokenPaid) {
-        throw new BadRequestException('Token payment is required before booking');
-      }
+      // if (userRole !== USER_ROLE.ADMIN && !customer.isTokenPaid) {
+      //   throw new BadRequestException('Token payment is required before booking');
+      // }
 
       const serviceRepo = manager.getRepository(Service);
       const addressRepo = manager.getRepository(CustomerAddress);
@@ -385,6 +386,8 @@ export class BookingService {
         platformEarning,
       };
 
+      const customerOtp = Math.floor(100000 + Math.random() * 900000).toString();
+
       const booking = bookingRepo.create({
         customerId,
         serviceId: dto.serviceId,
@@ -395,6 +398,7 @@ export class BookingService {
         status: BOOKING_STATUS.PENDING,
         totalAmount,
         priceBreakdown,
+        customerOtp,
       });
 
       // const savedBooking = await bookingRepo.save(booking);
@@ -422,7 +426,6 @@ export class BookingService {
       if (!bookingWithRelations) {
         throw new NotFoundException('Booking not found after creation');
       }
-
       // Filter technician list based on availability and send notifications
       const activeTechnicians = allTechnicianWithService.filter(
         (u): u is User => !!u,
@@ -436,35 +439,38 @@ export class BookingService {
           service,
         );
 
-
+      // console.log(matchedTechnicians);
       bookingWithRelations.filteredTechnicians =
         matchedTechnicians.map((tech) => tech.id);
 
       savedBooking = await bookingRepo.save(bookingWithRelations);
-      //  throw new Error("hell");
-      //     return savedBooking;
 
-      //return savedBooking;
+      const finalBooking = await bookingRepo.findOne({
+        where: { id: savedBooking.id },
+        relations: ['customer', 'service', 'address'],
+      });
+
+      if (!finalBooking) {
+        throw new NotFoundException('Booking not found after save');
+      }
+
       return {
-        ...savedBooking,
-        scheduledAtIst: this.toIstString(savedBooking.scheduledAt),
-        createdAtIst: this.toIstString(savedBooking.createdAt),
-        updatedAtIst: this.toIstString(savedBooking.updatedAt),
-      } as Booking & {
-        scheduledAtIst: string | null;
-        createdAtIst: string | null;
-        updatedAtIst: string | null;
+        ...finalBooking,
+        scheduledAtIst: this.toIstString(finalBooking.scheduledAt),
+        createdAtIst: this.toIstString(finalBooking.createdAt),
+        updatedAtIst: this.toIstString(finalBooking.updatedAt),
       };
     });
   }
 
   @Cron(
-    CronExpression.EVERY_MINUTE,
+    '*/4 * * * *',
     {
       name: 'mark-expired-bookings-manual',
     },
   )
   async markExpiredBookingsManual(): Promise<void> {
+    this.logger.log('Marking expired bookings for manual assignment...');
     try {
       const updatedCount =
         await this.bookingRepository
@@ -507,8 +513,10 @@ export class BookingService {
       order: { createdAt: 'DESC' },
     });
 
+    const { customerOtp, ...bookingWithoutOtp } = booking;
+
     return {
-      ...booking,
+      ...bookingWithoutOtp,
       payments,
       complaints,
       payouts,
@@ -549,9 +557,10 @@ export class BookingService {
     const formattedBookings = bookings.map((booking: Booking) => {
       const cleanCustomer = this.cleanUser(booking.customer);
       const cleanTechnician = this.cleanUser(booking.technician);
+      const { customerOtp, ...bookingWithoutOtp } = booking;
 
       return {
-        ...booking,
+        ...bookingWithoutOtp,
         scheduledAtIst: this.toIstString(booking.scheduledAt),
         createdAtIst: this.toIstString(booking.createdAt),
         updatedAtIst: this.toIstString(booking.updatedAt),
@@ -730,10 +739,12 @@ export class BookingService {
       );
     }
 
+    const { customerOtp, ...bookingWithoutOtp } = booking;
+
     return {
       success: true,
       message: 'Booking fetched successfully',
-      data: booking,
+      data: bookingWithoutOtp,
     };
   }
 
@@ -1194,40 +1205,27 @@ export class BookingService {
       }
 
       if (dto.status === BOOKING_STATUS.ARRIVED) {
-        if (!booking.customer || !booking.customer.email) {
+        if (!booking.customer || !booking.customer.phone) {
           throw new BadRequestException(
-            'Customer does not have a registered email address',
+            'Customer does not have a registered phone number',
           );
         }
 
-        // Generate 6-digit OTP
-        const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+        let otpToSend = booking.customerOtp;
+        if (!otpToSend) {
+          otpToSend = Math.floor(100000 + Math.random() * 900000).toString();
+          booking.customerOtp = otpToSend;
+          await bookingRepo.save(booking);
+        }
 
-        // Send Email
-        await this.emailService.sendOtpEmail(
-          booking.customer.email,
-          otpCode,
-          booking.customer.firstName,
-        );
-
-        // Delete previous unverified OTPs for the customer's email
-        await otpRepo.delete({
-          email: booking.customer.email,
-          isVerified: false,
-        });
-
-        // Save new OTP
-        const expiresAt = new Date();
-        expiresAt.setMinutes(expiresAt.getMinutes() + 10); // OTP expires in 10 minutes
-
-        const newOtp = otpRepo.create({
-          email: booking.customer.email,
-          otp: otpCode,
-          expiresAt,
-          role: USER_ROLE.CUSTOMER,
-          isVerified: false,
-        });
-        await otpRepo.save(newOtp);
+        try {
+          await this.smsService.sendOtpSms(booking.customer.phone, otpToSend);
+        } catch (error: any) {
+          this.logger.error(
+            `Failed to send OTP SMS to customer ${booking.customer.phone}`,
+            error instanceof Error ? error.stack : String(error),
+          );
+        }
       }
 
       return updatedBooking;
@@ -1262,42 +1260,72 @@ export class BookingService {
         );
       }
 
-      if (!booking.customer || !booking.customer.email) {
+      if (!booking.customerOtp) {
         throw new BadRequestException(
-          'Customer does not have a registered email address',
+          'No active OTP found for this booking.',
         );
       }
 
-      // Verify the latest unverified OTP
-      const latestOtp = await otpRepo.findOne({
-        where: { email: booking.customer.email, isVerified: false },
-        order: { createdAt: 'DESC' },
-      });
-
-      if (!latestOtp) {
-        throw new BadRequestException(
-          'No active OTP found for this customer. Please send it again.',
-        );
-      }
-
-      if (latestOtp.otp !== dto.otp) {
+      if (booking.customerOtp !== dto.otp) {
         throw new BadRequestException('Invalid OTP');
       }
-
-      if (latestOtp.expiresAt < new Date()) {
-        throw new BadRequestException('OTP has expired');
-      }
-
-      // Delete the verified OTP to prevent reuse and clean up
-      await otpRepo.remove(latestOtp);
 
       // Transition booking to ONGOING and record startedAt time
       booking.status = BOOKING_STATUS.ONGOING;
       booking.startedAt = new Date();
+      booking.customerOtp = undefined; // Clear OTP once verified
       const updatedBooking = await bookingRepo.save(booking);
 
       return updatedBooking;
     });
+  }
+
+  async resendBookingOtp(
+    technicianId: number,
+    bookingId: number,
+  ): Promise<{ success: boolean; message: string }> {
+    const booking = await this.bookingRepository.findBookingById(bookingId);
+
+    if (!booking) {
+      throw new NotFoundException('Booking not found');
+    }
+
+    if (booking.technicianId !== technicianId) {
+      throw new ForbiddenException('You are not assigned to this booking');
+    }
+
+    if (booking.status !== BOOKING_STATUS.ARRIVED) {
+      throw new BadRequestException(
+        'OTP can only be resent when booking status is ARRIVED',
+      );
+    }
+
+    if (!booking.customer || !booking.customer.phone) {
+      throw new BadRequestException(
+        'Customer does not have a registered phone number',
+      );
+    }
+
+    const newOtp = Math.floor(100000 + Math.random() * 900000).toString();
+    booking.customerOtp = newOtp;
+    await this.dataSource.getRepository(Booking).save(booking);
+
+    try {
+      await this.smsService.sendOtpSms(booking.customer.phone, newOtp);
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to send OTP SMS to customer ${booking.customer.phone}`,
+        error instanceof Error ? error.stack : String(error),
+      );
+      throw new BadRequestException(
+        'Failed to send OTP SMS. Please try again.',
+      );
+    }
+
+    return {
+      success: true,
+      message: 'OTP resent successfully',
+    };
   }
 
   async getPaymentUrl(
@@ -2653,6 +2681,8 @@ export class BookingService {
         platformEarning,
       };
 
+      const customerOtp = Math.floor(100000 + Math.random() * 900000).toString();
+
       const booking = manager.getRepository(Booking).create({
         customerId: dto.customerId,
         technicianId: dto.technicianId,
@@ -2665,6 +2695,7 @@ export class BookingService {
         totalAmount,
         priceBreakdown,
         isManualAssign: true,
+        customerOtp,
       });
 
       return manager.getRepository(Booking).save(booking);
@@ -2675,59 +2706,85 @@ export class BookingService {
     technicianId: number,
     page: number = 1,
     limit: number = 10,
+    search?: string,
   ) {
     const { bookings, total } =
       await this.bookingRepository.findActiveBookingsForTechnician(
         technicianId,
         page,
         limit,
+        search,
       );
-
-    const formattedBookings = bookings.map((booking) => ({
-      id: booking.id,
-      status: booking.status,
-      isManualAssign: booking.isManualAssign,
-      serviceId: booking.serviceId,
-      customerId: booking.customerId,
-      addressId: booking.addressId,
-
-      customer: booking.customer
-        ? {
-          id: booking.customer.id,
-          firstName: booking.customer.firstName,
-          lastName: booking.customer.lastName,
-          email: booking.customer.email,
-          phone: booking.customer.phone,
-          profileImage: booking.customer.profileImage,
+    const formattedBookings = await Promise.all(
+      bookings.map(async (booking) => {
+        let customerProfileImageUrl: string | null = null;
+        if (booking.customer?.profileImage) {
+          try {
+            customerProfileImageUrl = await this.s3Service.getDownloadUrl(booking.customer.profileImage);
+          } catch (error) {
+            this.logger.error('Failed to get download URL for customer profileImage', error);
+          }
         }
-        : null,
 
-      service: booking.service
-        ? {
-          id: booking.service.id,
-          name: booking.service.name,
-          iconUrl: booking.service.iconUrl,
+        let serviceIconUrl: string | null = null;
+        if (booking.service?.iconUrl) {
+          try {
+            serviceIconUrl = await this.s3Service.getDownloadUrl(booking.service.iconUrl);
+          } catch (error) {
+            this.logger.error('Failed to get download URL for service iconUrl', error);
+          }
         }
-        : null,
 
-      address: booking.address
-        ? {
-          id: booking.address.id,
-          fullAddress: booking.address.fullAddress,
-          city: booking.address.city,
-          state: booking.address.state,
-          pincode: booking.address.pincode,
-          latitude: booking.address.latitude,
-          longitude: booking.address.longitude,
-        }
-        : null,
+        const addressObj = booking.address
+          ? {
+            id: booking.address.id,
+            fullAddress: booking.address.fullAddress,
+            city: booking.address.city,
+            state: booking.address.state,
+            pincode: booking.address.pincode,
+            latitude: booking.address.latitude,
+            longitude: booking.address.longitude,
+          }
+          : null;
 
-      scheduledAt: booking.scheduledAt ?? null,
-      totalAmount: booking.totalAmount ?? null,
-      priceBreakdown: booking.priceBreakdown ?? null,
-      serviceSpecifications: booking.serviceSpecifications ?? null,
-      createdAt: booking.createdAt,
-    }));
+        return {
+          id: booking.id,
+          status: booking.status,
+          isManualAssign: booking.isManualAssign,
+          serviceId: booking.serviceId,
+          customerId: booking.customerId,
+          addressId: booking.addressId,
+
+          customer: booking.customer
+            ? {
+              id: booking.customer.id,
+              firstName: booking.customer.firstName,
+              lastName: booking.customer.lastName,
+              email: booking.customer.email,
+              phone: booking.customer.phone,
+              profileImage: customerProfileImageUrl,
+              address: addressObj,
+            }
+            : null,
+
+          service: booking.service
+            ? {
+              id: booking.service.id,
+              name: booking.service.name,
+              iconUrl: serviceIconUrl,
+              specifications: booking.serviceSpecifications ?? null,
+            }
+            : null,
+
+          address: addressObj,
+          scheduledAt: booking.scheduledAt ?? null,
+          totalAmount: booking.totalAmount ?? null,
+          priceBreakdown: booking.priceBreakdown ?? null,
+          serviceSpecifications: booking.serviceSpecifications ?? null,
+          createdAt: booking.createdAt,
+        };
+      }),
+    );
 
     return {
       success: true,

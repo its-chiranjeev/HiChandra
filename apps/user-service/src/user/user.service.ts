@@ -994,6 +994,13 @@ export class UserService {
         isSurgeEnabled: dto.isSurgeEnabled ?? false,
         platformFee: dto.platformFee ?? 0,
         gst: dto.gst ?? 0,
+        isGstApplied: dto.isGstApplied ?? false,
+        isDistanceKmApplied: dto.isDistanceKmApplied ?? false,
+        isWeekendApplied: dto.isWeekendApplied ?? false,
+        isPeakHourApplied: dto.isPeakHourApplied ?? false,
+        isEmergencyApplied: dto.isEmergencyApplied ?? false,
+        isPlatformFeeApplied: dto.isPlatformFeeApplied ?? false,
+        isPerHourRateApplied: dto.isPerHourRateApplied ?? false,
       });
       const savedPricingRule = await pricingRuleRepository.save(pricingRule);
 
@@ -2565,7 +2572,7 @@ export class UserService {
       '8923101766',
       '9817361209',
       '7082354083',
-      '7668697182',
+      // '7668697182',
       '9354678205',
     ];
 

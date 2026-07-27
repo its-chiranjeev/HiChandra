@@ -54,26 +54,56 @@ export class CreateServiceDto {
   description?: string;
 
   @IsOptional()
+  @Transform(({ value }) => {
+    if (value === 'true' || value === true) return true;
+    if (value === 'false' || value === false) return false;
+    return value;
+  })
   @IsBoolean()
   isActive?: boolean;
 
   @IsOptional()
+  @Transform(({ value }) => {
+    if (value === undefined || value === null || value === '') return value;
+    const num = Number(value);
+    return isNaN(num) ? value : num;
+  })
   @IsNumber()
   serviceBasePrice?: number;
 
   @IsOptional()
+  @Transform(({ value }) => {
+    if (value === undefined || value === null || value === '') return value;
+    const num = Number(value);
+    return isNaN(num) ? value : num;
+  })
   @IsNumber()
   perHourRate?: number;
 
   @IsOptional()
+  @Transform(({ value }) => {
+    if (value === undefined || value === null || value === '') return value;
+    const num = Number(value);
+    return isNaN(num) ? value : num;
+  })
   @IsNumber()
   perKmRate?: number;
 
   @IsOptional()
+  @Transform(({ value }) => {
+    if (value === undefined || value === null || value === '') return value;
+    const num = Number(value);
+    return isNaN(num) ? value : num;
+  })
   @IsNumber()
   weekendMultiplier?: number;
 
   @IsOptional()
+  @Transform(({ value }) => {
+    if (value === undefined || value === null || value === '') return value;
+    const num = Number(value);
+    return isNaN(num) ? value : num;
+  })
   @IsNumber()
   peakHourMultiplier?: number;
 
@@ -94,32 +124,130 @@ export class CreateServiceDto {
   peakHours?: PeakHourDto[];
 
   @IsOptional()
+  @Transform(({ value }) => {
+    if (value === undefined || value === null || value === '') return value;
+    const num = Number(value);
+    return isNaN(num) ? value : num;
+  })
   @IsNumber()
   emergencyCharge?: number;
 
   @IsOptional()
+  @Transform(({ value }) => {
+    if (value === undefined || value === null || value === '') return value;
+    const num = Number(value);
+    return isNaN(num) ? value : num;
+  })
   @IsNumber()
   freeDistanceKm?: number;
 
   @IsOptional()
+  @Transform(({ value }) => {
+    if (value === undefined || value === null || value === '') return value;
+    const num = Number(value);
+    return isNaN(num) ? value : num;
+  })
   @IsNumber()
   distanceChargePerKm?: number;
 
   @IsOptional()
+  @Transform(({ value }) => {
+    if (value === undefined || value === null || value === '') return value;
+    const num = Number(value);
+    return isNaN(num) ? value : num;
+  })
   @IsNumber()
   surgeFactor?: number;
 
   @IsOptional()
+  @Transform(({ value }) => {
+    if (value === 'true' || value === true) return true;
+    if (value === 'false' || value === false) return false;
+    return value;
+  })
   @IsBoolean()
   isSurgeEnabled?: boolean;
 
   @IsOptional()
+  @Transform(({ value }) => {
+    if (value === undefined || value === null || value === '') return value;
+    const num = Number(value);
+    return isNaN(num) ? value : num;
+  })
   @IsNumber()
   platformFee?: number;
 
   @IsOptional()
+  @Transform(({ value }) => {
+    if (value === undefined || value === null || value === '') return value;
+    const num = Number(value);
+    return isNaN(num) ? value : num;
+  })
   @IsNumber()
   gst?: number;
+
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (value === 'true' || value === true) return true;
+    if (value === 'false' || value === false) return false;
+    return value;
+  })
+  @IsBoolean()
+  isGstApplied?: boolean;
+
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (value === 'true' || value === true) return true;
+    if (value === 'false' || value === false) return false;
+    return value;
+  })
+  @IsBoolean()
+  isDistanceKmApplied?: boolean;
+
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (value === 'true' || value === true) return true;
+    if (value === 'false' || value === false) return false;
+    return value;
+  })
+  @IsBoolean()
+  isWeekendApplied?: boolean;
+
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (value === 'true' || value === true) return true;
+    if (value === 'false' || value === false) return false;
+    return value;
+  })
+  @IsBoolean()
+  isPeakHourApplied?: boolean;
+
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (value === 'true' || value === true) return true;
+    if (value === 'false' || value === false) return false;
+    return value;
+  })
+  @IsBoolean()
+  isEmergencyApplied?: boolean;
+
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (value === 'true' || value === true) return true;
+    if (value === 'false' || value === false) return false;
+    return value;
+  })
+  @IsBoolean()
+  isPlatformFeeApplied?: boolean;
+
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (value === 'true' || value === true) return true;
+    if (value === 'false' || value === false) return false;
+    return value;
+  })
+  @IsBoolean()
+  isPerHourRateApplied?: boolean;
 
   @IsOptional()
   @IsString()

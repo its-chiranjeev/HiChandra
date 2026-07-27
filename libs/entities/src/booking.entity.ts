@@ -148,6 +148,9 @@ export class Booking {
   })
   reviewStatus!: REVIEW_STATUS;
 
+  @Column({ type: 'varchar', length: 6, nullable: true })
+  customerOtp?: string;
+
   @CreateDateColumn()
   createdAt!: Date;
 

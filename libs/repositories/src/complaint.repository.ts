@@ -26,12 +26,12 @@ export class ComplaintRepository {
 
   async findPendingComplaint(
     bookingId: number,
-    serviceId: number,
+    serviceId?: number,
   ): Promise<Complaint | null> {
     return this.repo.findOne({
       where: {
         bookingId,
-        serviceId,
+        ...(serviceId !== undefined ? { serviceId } : {}),
         status: COMPLAINT_STATUS.PENDING,
       },
     });

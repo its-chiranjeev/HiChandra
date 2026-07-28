@@ -18,6 +18,8 @@ export class BookingRepository {
     sortBy: 'id' | 'updatedAt' = 'updatedAt',
     sortOrder: 'ASC' | 'DESC' = 'DESC',
     reviewStatus?: REVIEW_STATUS,
+    technicianPayoutStatus?: BOOKING_PAYMENT_STATUS,
+    bookingPaymentStatus?: BOOKING_PAYMENT_STATUS,
   ) {
     const where: any = {};
 
@@ -27,6 +29,14 @@ export class BookingRepository {
 
     if (reviewStatus) {
       where.reviewStatus = reviewStatus;
+    }
+
+    if (technicianPayoutStatus) {
+      where.technicianPayoutStatus = technicianPayoutStatus;
+    }
+
+    if (bookingPaymentStatus) {
+      where.bookingPaymentStatus = bookingPaymentStatus;
     }
 
     if (user.role === USER_ROLE.CUSTOMER) {
@@ -59,6 +69,7 @@ export class BookingRepository {
           specifications: true,
         },
         address: true,
+        payments: true,
       },
       skip: (page - 1) * limit,
       take: limit,
@@ -84,6 +95,7 @@ export class BookingRepository {
           specifications: true,
         },
         address: true,
+        payments: true,
       },
     });
   }
@@ -147,7 +159,7 @@ export class BookingRepository {
         technicianId,
         status:
           BOOKING_STATUS.COMPLETED,
-        paymentStatus:
+        bookingPaymentStatus:
           BOOKING_PAYMENT_STATUS.PAID,
       },
     });
@@ -160,7 +172,7 @@ export class BookingRepository {
       where: {
         customerId,
         status: BOOKING_STATUS.COMPLETED,
-        paymentStatus: BOOKING_PAYMENT_STATUS.PAID,
+        bookingPaymentStatus: BOOKING_PAYMENT_STATUS.PAID,
       },
     });
   }
@@ -173,7 +185,7 @@ export class BookingRepository {
       where: {
         technicianId,
         status: BOOKING_STATUS.COMPLETED,
-        paymentStatus: BOOKING_PAYMENT_STATUS.PAID,
+        bookingPaymentStatus: BOOKING_PAYMENT_STATUS.PAID,
         customerRating: Not(IsNull()),
       },
       relations: {
@@ -202,7 +214,7 @@ export class BookingRepository {
   ) {
     const where: any = {
       status: BOOKING_STATUS.COMPLETED,
-      paymentStatus: BOOKING_PAYMENT_STATUS.PAID,
+      bookingPaymentStatus: BOOKING_PAYMENT_STATUS.PAID,
     };
 
     if (role === USER_ROLE.CUSTOMER) {
@@ -322,6 +334,7 @@ export class BookingRepository {
         technician: true,
         service: true,
         address: true,
+        payments: true,
       },
       order: {
         createdAt: 'DESC',
@@ -358,6 +371,8 @@ export class BookingRepository {
       .createQueryBuilder('booking')
       .leftJoinAndSelect('booking.customer', 'customer')
       .leftJoinAndSelect('booking.service', 'service')
+      .leftJoinAndSelect('service.pricingRule', 'pricingRule')
+      .leftJoinAndSelect('service.specifications', 'specifications')
       .leftJoinAndSelect('booking.address', 'address')
       .where('booking.status = :status', { status: BOOKING_STATUS.PENDING })
       .andWhere('booking.isManualAssign = :isManualAssign', {

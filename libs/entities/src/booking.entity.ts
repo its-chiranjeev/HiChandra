@@ -7,10 +7,12 @@ import {
   Index,
   ManyToOne,
   JoinColumn,
+  OneToMany,
 } from 'typeorm';
 import { User } from './user.entity';
 import { Service } from './service.entity';
 import { CustomerAddress } from './customer-address.entity';
+import { Payment } from './payment.entity';
 
 export interface PriceBreakdown {
   serviceBasePrice: number;
@@ -33,6 +35,7 @@ export enum BOOKING_STATUS {
   ONGOING = 'ONGOING', // work started
   COMPLETED = 'COMPLETED', // work done
   CANCELLED = 'CANCELLED', // cancelled by technician
+  REJECTED = 'REJECTED', // rejected by admin
 }
 
 export enum BOOKING_PAYMENT_STATUS {
@@ -100,7 +103,20 @@ export class Booking {
     enum: BOOKING_PAYMENT_STATUS,
     default: BOOKING_PAYMENT_STATUS.PENDING,
   })
-  paymentStatus!: BOOKING_PAYMENT_STATUS;
+  bookingPaymentStatus!: BOOKING_PAYMENT_STATUS;
+
+  @Column({
+    type: 'enum',
+    enum: BOOKING_PAYMENT_STATUS,
+    default: BOOKING_PAYMENT_STATUS.PENDING,
+  })
+  technicianPayoutStatus!: BOOKING_PAYMENT_STATUS;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  bookingPaymentId?: string | null;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  technicianPayoutId?: string | null;
 
   @Column({ type: 'boolean', default: false })
   isEmergency!: boolean;
@@ -150,6 +166,9 @@ export class Booking {
 
   @Column({ type: 'varchar', length: 6, nullable: true })
   customerOtp?: string;
+
+  @OneToMany(() => Payment, (payment) => payment.booking)
+  payments?: Payment[];
 
   @CreateDateColumn()
   createdAt!: Date;

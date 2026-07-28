@@ -85,6 +85,9 @@ export class PricingRule {
   @Column({ type: 'boolean', default: false })
   isPerHourRateApplied!: boolean;
 
+  @Column({ type: 'boolean', default: true })
+  isServiceBasePriceApplied!: boolean;
+
   @CreateDateColumn()
   createdAt!: Date;
 

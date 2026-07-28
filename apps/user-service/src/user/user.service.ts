@@ -666,7 +666,7 @@ export class UserService {
         const existingUserByPhone = await userRepository.findOne({
           where: { phone: dto.phone },
         });
-        if (existingUserByPhone) {
+        if (existingUserByPhone && (!dto.technicianId || existingUserByPhone.id !== Number(dto.technicianId))) {
           throw new ConflictException('Phone number already in use');
         }
       }
@@ -675,7 +675,7 @@ export class UserService {
         const existingUserByEmail = await userRepository.findOne({
           where: { email: dto.email },
         });
-        if (existingUserByEmail) {
+        if (existingUserByEmail && (!dto.technicianId || existingUserByEmail.id !== Number(dto.technicianId))) {
           throw new ConflictException('Email already in use');
         }
       }
@@ -684,7 +684,7 @@ export class UserService {
         const existingUserByUsername = await userRepository.findOne({
           where: { username: dto.username },
         });
-        if (existingUserByUsername) {
+        if (existingUserByUsername && (!dto.technicianId || existingUserByUsername.id !== Number(dto.technicianId))) {
           throw new ConflictException('Username already in use');
         }
       }
@@ -716,21 +716,38 @@ export class UserService {
 
       const hashedPassword = await bcrypt.hash(dto.password, 10);
 
-      const newUser = userRepository.create({
-        email: dto.email,
-        username: dto.username,
-        phone: dto.phone,
-        firstName: dto.firstName,
-        lastName: dto.lastName,
-        password: hashedPassword,
-        role: otpRecord.role || USER_ROLE.CUSTOMER,
-        // status:
-        //   otpRecord.role === USER_ROLE.TECHNICIAN
-        //     ? USER_STATUS.PENDING
-        //     : USER_STATUS.ACTIVE,
-      });
+      let savedUser: User;
 
-      let savedUser = await userRepository.save(newUser);
+      if (dto.technicianId) {
+        const existingTechnician = await userRepository.findOne({
+          where: { id: Number(dto.technicianId) },
+        });
+        if (!existingTechnician) {
+          throw new NotFoundException('Technician user not found');
+        }
+
+        existingTechnician.email = dto.email;
+        existingTechnician.username = dto.username;
+        existingTechnician.phone = dto.phone;
+        existingTechnician.firstName = dto.firstName;
+        existingTechnician.lastName = dto.lastName;
+        existingTechnician.password = hashedPassword;
+        existingTechnician.role = otpRecord.role || USER_ROLE.CUSTOMER;
+
+        savedUser = await userRepository.save(existingTechnician);
+      } else {
+        const newUser = userRepository.create({
+          email: dto.email,
+          username: dto.username,
+          phone: dto.phone,
+          firstName: dto.firstName,
+          lastName: dto.lastName,
+          password: hashedPassword,
+          role: otpRecord.role || USER_ROLE.CUSTOMER,
+        });
+
+        savedUser = await userRepository.save(newUser);
+      }
 
       if (savedUser.role === USER_ROLE.TECHNICIAN) {
         const profileData = dto.technicianProfile || {};
@@ -778,24 +795,56 @@ export class UserService {
 
         const technicianPayoutAccountRepository = manager.getRepository(TechnicianPayoutAccount);
 
-        const newProfile = technicianProfileRepository.create({
-          userId: savedUser.id,
-          yearsOfExperience: profileData.yearsOfExperience,
-          languages: profileData.languages,
-          status: TECHNICIAN_STATUS.PENDING_APPROVAL,
-          jobStatus: JOB_STATUS.OFFLINE,
-          aadharUrl,
-          panUrl,
-          policeCertUrl,
-          tradeLicenseUrl,
-          selfieUrl,
-          gst: profileData.gst,
-          hasLadder: profileData.hasLadder || false,
-          hasACGauges: profileData.hasACGauges || false,
-          hasSafetyEquipment: profileData.hasSafetyEquipment || false,
-          hasVehicle: profileData.hasVehicle || false,
+        let existingProfile = await technicianProfileRepository.findOne({
+          where: { userId: savedUser.id },
         });
-        const savedProfile = await technicianProfileRepository.save(newProfile);
+
+        let savedProfile: TechnicianProfile;
+
+        if (existingProfile) {
+          // Clean up old relations to prevent constraint duplicates or stale mappings
+          await locationRepository.delete({ technicianId: existingProfile.id });
+          await technicianServiceRepository.delete({ technicianProfileId: existingProfile.id });
+          await technicianBrandExpertiseRepository.delete({ technicianProfileId: existingProfile.id });
+          await technicianPayoutAccountRepository.delete({ technicianId: savedUser.id });
+
+          existingProfile.yearsOfExperience = profileData.yearsOfExperience;
+          existingProfile.languages = profileData.languages;
+          existingProfile.status = TECHNICIAN_STATUS.PENDING_APPROVAL;
+          existingProfile.jobStatus = JOB_STATUS.OFFLINE;
+          if (aadharUrl) existingProfile.aadharUrl = aadharUrl;
+          if (panUrl) existingProfile.panUrl = panUrl;
+          if (policeCertUrl) existingProfile.policeCertUrl = policeCertUrl;
+          if (tradeLicenseUrl) existingProfile.tradeLicenseUrl = tradeLicenseUrl;
+          if (selfieUrl) existingProfile.selfieUrl = selfieUrl;
+          existingProfile.gst = profileData.gst;
+          existingProfile.hasLadder = profileData.hasLadder || false;
+          existingProfile.hasACGauges = profileData.hasACGauges || false;
+          existingProfile.hasSafetyEquipment = profileData.hasSafetyEquipment || false;
+          existingProfile.hasVehicle = profileData.hasVehicle || false;
+
+          savedProfile = await technicianProfileRepository.save(existingProfile);
+        } else {
+          const newProfile = technicianProfileRepository.create({
+            userId: savedUser.id,
+            yearsOfExperience: profileData.yearsOfExperience,
+            languages: profileData.languages,
+            status: TECHNICIAN_STATUS.PENDING_APPROVAL,
+            jobStatus: JOB_STATUS.OFFLINE,
+            aadharUrl,
+            panUrl,
+            policeCertUrl,
+            tradeLicenseUrl,
+            selfieUrl,
+            gst: profileData.gst,
+            hasLadder: profileData.hasLadder || false,
+            hasACGauges: profileData.hasACGauges || false,
+            hasSafetyEquipment: profileData.hasSafetyEquipment || false,
+            hasVehicle: profileData.hasVehicle || false,
+          });
+
+          savedProfile = await technicianProfileRepository.save(newProfile);
+        }
 
         if (
           profileData.upiId ||
@@ -1001,6 +1050,7 @@ export class UserService {
         isEmergencyApplied: dto.isEmergencyApplied ?? false,
         isPlatformFeeApplied: dto.isPlatformFeeApplied ?? false,
         isPerHourRateApplied: dto.isPerHourRateApplied ?? false,
+        isServiceBasePriceApplied: dto.isServiceBasePriceApplied ?? true,
       });
       const savedPricingRule = await pricingRuleRepository.save(pricingRule);
 
@@ -1466,7 +1516,7 @@ export class UserService {
       const pricingRuleRepo = manager.getRepository(PricingRule);
       const specRepo = manager.getRepository(ServiceSpecification);
 
-      // Get Service
+      // Get Service 
       const service = await serviceRepo.findOne({
         where: { id },
         relations: ['pricingRule', 'specifications'],
@@ -1511,62 +1561,40 @@ export class UserService {
       }
 
       // Update PricingRule table
-      if (dto.serviceBasePrice !== undefined) {
-        pricingRule.serviceBasePrice = dto.serviceBasePrice;
-      }
+      const pricingRuleKeys: (keyof UpdateServiceDto)[] = [
+        'serviceBasePrice',
+        'perHourRate',
+        'perKmRate',
+        'weekendMultiplier',
+        'peakHourMultiplier',
+        'peakHours',
+        'emergencyCharge',
+        'freeDistanceKm',
+        'distanceChargePerKm',
+        'surgeFactor',
+        'isSurgeEnabled',
+        'platformFee',
+        'gst',
+        'isServiceBasePriceApplied',
+        'isGstApplied',
+        'isDistanceKmApplied',
+        'isWeekendApplied',
+        'isPeakHourApplied',
+        'isEmergencyApplied',
+        'isPlatformFeeApplied',
+        'isPerHourRateApplied',
+      ];
 
-      if (dto.perHourRate !== undefined) {
-        pricingRule.perHourRate = dto.perHourRate;
-      }
-
-      if (dto.perKmRate !== undefined) {
-        pricingRule.perKmRate = dto.perKmRate;
-      }
-
-      if (dto.weekendMultiplier !== undefined) {
-        pricingRule.weekendMultiplier = dto.weekendMultiplier;
-      }
-
-      if (dto.peakHourMultiplier !== undefined) {
-        pricingRule.peakHourMultiplier = dto.peakHourMultiplier;
-      }
-
-      if (dto.peakHours !== undefined) {
-        pricingRule.peakHours = dto.peakHours;
-      }
-
-      if (dto.emergencyCharge !== undefined) {
-        pricingRule.emergencyCharge = dto.emergencyCharge;
-      }
-
-      if (dto.freeDistanceKm !== undefined) {
-        pricingRule.freeDistanceKm = dto.freeDistanceKm;
-      }
-
-      if (dto.distanceChargePerKm !== undefined) {
-        pricingRule.distanceChargePerKm = dto.distanceChargePerKm;
-      }
-
-      if (dto.surgeFactor !== undefined) {
-        pricingRule.surgeFactor = dto.surgeFactor;
-      }
-
-      if (dto.isSurgeEnabled !== undefined) {
-        pricingRule.isSurgeEnabled = dto.isSurgeEnabled;
-      }
-
-      if (dto.platformFee !== undefined) {
-        pricingRule.platformFee = dto.platformFee;
-      }
-
-      if (dto.gst !== undefined) {
-        pricingRule.gst = dto.gst;
+      for (const key of pricingRuleKeys) {
+        if (dto[key] !== undefined) {
+          (pricingRule as any)[key] = dto[key];
+        }
       }
 
       await pricingRuleRepo.save(pricingRule);
 
       // Update Specifications
-      if (dto.specifications) {
+      if (dto.specifications !== undefined && dto.specifications !== null) {
         await specRepo.delete({ serviceId: id });
 
         const specs = dto.specifications.map((spec) =>
@@ -2542,23 +2570,75 @@ export class UserService {
   }
 
   async getAdminDashboardStats() {
-    const [
-      totalBookings,
-      activeTechnicians,
-      pendingApprovals,
-      todayRevenue,
-    ] = await Promise.all([
-      this.bookingRepository.countAllBookings(),
-      this.technicianProfileRepository.countActiveTechnicians(),
-      this.technicianProfileRepository.countPendingApprovals(),
-      this.paymentRepository.getTodayRevenue(),
-    ]);
+    const paymentRepo = this.dataSource.getRepository(Payment);
+
+    // 1. Total revenue: sum of payment.amount where status = SUCCESS and paymentType = BOOKING_PAYMENT
+    const totalRevenueRes = await paymentRepo
+      .createQueryBuilder('payment')
+      .select('SUM(payment.amount)', 'sum')
+      .where('payment.status = :status', { status: PAYMENT_STATUS.SUCCESS })
+      .andWhere('payment.paymentType = :type', { type: PAYMENT_TYPE.BOOKING_PAYMENT })
+      .getRawOne();
+    const totalRevenue = parseFloat(totalRevenueRes?.sum || '0');
+
+    // 2. Total technician payout: sum of payment.amount where status = SUCCESS and paymentType = TECHNICIAN_PAYOUT
+    const totalTechnicianPayoutRes = await paymentRepo
+      .createQueryBuilder('payment')
+      .select('SUM(payment.amount)', 'sum')
+      .where('payment.status = :status', { status: PAYMENT_STATUS.SUCCESS })
+      .andWhere('payment.paymentType = :type', { type: PAYMENT_TYPE.TECHNICIAN_PAYOUT })
+      .getRawOne();
+    const totalTechnicianPayout = parseFloat(totalTechnicianPayoutRes?.sum || '0');
+
+    // 2.1 Total customer refund: sum of payment.amount where status = SUCCESS and paymentType = CUSTOMER_REFUND
+    const totalCustomerRefundRes = await paymentRepo
+      .createQueryBuilder('payment')
+      .select('SUM(payment.amount)', 'sum')
+      .where('payment.status = :status', { status: PAYMENT_STATUS.SUCCESS })
+      .andWhere('payment.paymentType = :type', { type: PAYMENT_TYPE.CUSTOMER_REFUND })
+      .getRawOne();
+    const totalCustomerRefund = parseFloat(totalCustomerRefundRes?.sum || '0');
+
+    // 3. Total number of transaction success and pending
+    const successTransactionCount = await paymentRepo.count({
+      where: { status: PAYMENT_STATUS.SUCCESS },
+    });
+    const pendingTransactionCount = await paymentRepo.count({
+      where: { status: PAYMENT_STATUS.PENDING },
+    });
+
+    // 4. Total number of transactions with success TECHNICIAN_PAYOUT, BOOKING_PAYMENT, and CUSTOMER_REFUND
+    const successTechnicianPayoutCount = await paymentRepo.count({
+      where: {
+        status: PAYMENT_STATUS.SUCCESS,
+        paymentType: PAYMENT_TYPE.TECHNICIAN_PAYOUT,
+      },
+    });
+    const successBookingPaymentCount = await paymentRepo.count({
+      where: {
+        status: PAYMENT_STATUS.SUCCESS,
+        paymentType: PAYMENT_TYPE.BOOKING_PAYMENT,
+      },
+    });
+    const successCustomerRefundCount = await paymentRepo.count({
+      where: {
+        status: PAYMENT_STATUS.SUCCESS,
+        paymentType: PAYMENT_TYPE.CUSTOMER_REFUND,
+      },
+    });
+
+    const successPayoutAndBookingCount = successTechnicianPayoutCount + successBookingPaymentCount;
 
     return {
-      totalBookings,
-      activeTechnicians,
-      pendingApprovals,
-      todayRevenue,
+      totalRevenue,
+      totalTechnicianPayout,
+      totalCustomerRefund,
+      successTransactionCount,
+      pendingTransactionCount,
+      successTechnicianPayoutCount,
+      successBookingPaymentCount,
+      successCustomerRefundCount,
+      successPayoutAndBookingCount,
     };
   }
 
@@ -2569,7 +2649,7 @@ export class UserService {
     }
     console.log("Scramble phone cron is running");
     const targetPhones = phones && phones.length > 0 ? phones : [
-      '8923101766',
+      // '8923101766',
       '9817361209',
       '7082354083',
       // '7668697182',

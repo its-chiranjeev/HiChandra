@@ -248,7 +248,7 @@ export class PaymentService {
       );
     }
 
-    if (booking.paymentStatus !== BOOKING_PAYMENT_STATUS.PAID) {
+    if (booking.bookingPaymentStatus !== BOOKING_PAYMENT_STATUS.PAID) {
       throw new BadRequestException(
         'Invoice can only be generated for paid bookings',
       );

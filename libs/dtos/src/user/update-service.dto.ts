@@ -7,7 +7,14 @@ import {
   ValidateNested,
   IsEnum,
 } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Type, Transform } from 'class-transformer';
+
+const toBoolean = ({ obj, key }: any) => {
+  const value = obj[key];
+  if (value === 'true' || value === true) return true;
+  if (value === 'false' || value === false) return false;
+  return value;
+};
 
 export enum ServiceSpecType {
   TEXT = 'text',
@@ -33,10 +40,12 @@ export class UpdateServiceSpecificationDto {
   values?: string[] | number[];
 
   @IsOptional()
+  @Transform(toBoolean)
   @IsBoolean()
   isRequired?: boolean;
 
   @IsOptional()
+  @Transform(toBoolean)
   @IsBoolean()
   isActive?: boolean;
 }
@@ -51,6 +60,7 @@ export class UpdateServiceDto {
   description?: string;
 
   @IsOptional()
+  @Transform(toBoolean)
   @IsBoolean()
   isActive?: boolean;
 
@@ -96,6 +106,7 @@ export class UpdateServiceDto {
   surgeFactor?: number;
 
   @IsOptional()
+  @Transform(toBoolean)
   @IsBoolean()
   isSurgeEnabled?: boolean;
 
@@ -112,8 +123,58 @@ export class UpdateServiceDto {
   iconUrl?: string;
 
   @IsOptional()
+  @Transform(toBoolean)
+  @IsBoolean()
+  isServiceBasePriceApplied?: boolean;
+
+  @IsOptional()
+  @Transform(toBoolean)
+  @IsBoolean()
+  isGstApplied?: boolean;
+
+  @IsOptional()
+  @Transform(toBoolean)
+  @IsBoolean()
+  isDistanceKmApplied?: boolean;
+
+  @IsOptional()
+  @Transform(toBoolean)
+  @IsBoolean()
+  isWeekendApplied?: boolean;
+
+  @IsOptional()
+  @Transform(toBoolean)
+  @IsBoolean()
+  isPeakHourApplied?: boolean;
+
+  @IsOptional()
+  @Transform(toBoolean)
+  @IsBoolean()
+  isEmergencyApplied?: boolean;
+
+  @IsOptional()
+  @Transform(toBoolean)
+  @IsBoolean()
+  isPlatformFeeApplied?: boolean;
+
+  @IsOptional()
+  @Transform(toBoolean)
+  @IsBoolean()
+  isPerHourRateApplied?: boolean;
+
+  @IsOptional()
   @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => UpdateServiceSpecificationDto)
+  @Transform(({ value }) => {
+    if (typeof value === 'string') {
+      try {
+        return JSON.parse(value);
+      } catch {
+        return value;
+      }
+    }
+    return value;
+  })
+  // @ValidateNested({ each: true })
+  // @Type(() => UpdateServiceSpecificationDto)
   specifications?: UpdateServiceSpecificationDto[];
 }

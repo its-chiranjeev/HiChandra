@@ -228,6 +228,11 @@ export class RegisterDto {
   @ValidateNested()
   technicianProfile?: TechnicianProfileDto;
 
+  @IsOptional()
+  @IsString()
+  @Transform(({ value }) => value?.trim())
+  technicianId?: string;
+
   // @IsOptional()
   // @Transform(({ value }) => {
   //   if (typeof value === 'string') {

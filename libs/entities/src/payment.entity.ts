@@ -24,7 +24,6 @@ export enum PAYMENT_TYPE {
   TOKEN_PAYMENT = 'TOKEN_PAYMENT',               // Customer -> Admin for One-time Platform Fee
   TECHNICIAN_PAYOUT = 'TECHNICIAN_PAYOUT',       // Admin -> Technician Payout
   CUSTOMER_REFUND = 'CUSTOMER_REFUND',           // Admin -> Customer Refund
-  TECHNICIAN_PLATFORM_FEE = 'TECHNICIAN_PLATFORM_FEE', // Technician -> Admin
 }
 
 @Entity('payments')
@@ -49,8 +48,8 @@ export class Payment {
   // customer!: User;
 
   @ManyToOne(() => User, {
-  nullable: true,
-  onDelete: 'SET NULL',
+    nullable: true,
+    onDelete: 'SET NULL',
   })
   customer?: User | null;
 
@@ -89,8 +88,8 @@ export class Payment {
   })
   status!: PAYMENT_STATUS;
 
-  @Column({ 
-    type: 'enum', nullable:true,
+  @Column({
+    type: 'enum', nullable: true,
     enum: USER_ROLE,
   })
   payBy!: USER_ROLE;

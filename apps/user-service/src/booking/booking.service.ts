@@ -1,14 +1,14 @@
+import { randomUUID } from 'crypto';
 import { Booking, BOOKING_STATUS, BOOKING_PAYMENT_STATUS, Service, CustomerAddress, User, USER_ROLE, USER_STATUS, TECHNICIAN_STATUS, JOB_STATUS, TechnicianService, TechnicianLocation, Otp, PriceBreakdown, Payment, PAYMENT_STATUS, COMPLAINT_STATUS, TechnicianProfile, TechnicianPayoutAccount, Complaint, REVIEW_STATUS, PAYMENT_TYPE } from '@hichandra/entities';
 import { EmailService } from '@hichandra/email-services';
 import { PaymentService, RazorpayXService } from '@hichandra/payment';
 import { Injectable, NotFoundException, BadRequestException, UnprocessableEntityException, ForbiddenException, UnauthorizedException, Logger } from '@nestjs/common';
 import { DataSource, Not, IsNull } from 'typeorm';
-import { CreateBookingDto, UpdateBookingStatusDto, CreateBookingReviewDto, StartBookingDto, AssignBookingDto, CancelBookingDto, CreateComplaintDto, UpdateComplaintDto, CreateTechnicianPayoutDto, RescheduleBookingDto, RepeatBookingDto, TechnicianCancelBookingDto, AdminCreateBookingDto, AdminUpdateBookingReviewDto } from '@hichandra/dtos';
+import { CreateBookingDto, UpdateBookingStatusDto, CreateBookingReviewDto, StartBookingDto, AssignBookingDto, CancelBookingDto, CreateComplaintDto, UpdateComplaintDto, CreateTechnicianPayoutDto, RescheduleBookingDto, RepeatBookingDto, TechnicianCancelBookingDto, AdminCreateBookingDto, AdminUpdateBookingReviewDto, AdminCreatePayoutDto } from '@hichandra/dtos';
 import { AssignmentService } from '../assignment/assignment.service';
 import { BookingRepository, UserRepository, ComplaintRepository, PaymentRepository, ServiceRepository } from '@hichandra/repositories';
 import { S3Service } from '@hichandra/s3';
 import { SmsService } from '@hichandra/sms-services';
-import { randomUUID } from 'crypto';
 import { Cron, CronExpression } from '@nestjs/schedule';
 
 @Injectable()
@@ -97,7 +97,7 @@ export class BookingService {
               status: USER_STATUS.ACTIVE,
               technicianProfile: {
                 id: technicianProfileId,
-                jobStatus: JOB_STATUS.AVAILABLE,
+                // jobStatus: JOB_STATUS.AVAILABLE,
               },
             },
             relations: ['technicianProfile', 'technicianProfile.locations'],
@@ -339,8 +339,12 @@ export class BookingService {
           : 0;
       const distanceCharge = 0; // Calculated dynamically if isDistanceKmApplied is true during assignment/completion
 
+      const appliedBasePrice = pricingRule.isServiceBasePriceApplied !== false
+        ? serviceBasePrice
+        : 0;
+
       const subtotal =
-        serviceBasePrice +
+        appliedBasePrice +
         weekendCharge +
         peakHourCharge +
         surgeCharge +
@@ -357,8 +361,8 @@ export class BookingService {
 
       const totalAmount = Number((subtotal + platformFee + gst).toFixed(2));
 
-      // Make validation that totalAmount is greater than serviceBasePrice
-      if (totalAmount < serviceBasePrice) {
+      // Make validation that totalAmount is greater than appliedBasePrice
+      if (totalAmount < appliedBasePrice) {
         throw new BadRequestException(
           'Calculation error: Total amount must be greater than the service base price.',
         );
@@ -531,6 +535,8 @@ export class BookingService {
     sortById?: string,
     sortByUpdatedAt?: string,
     reviewStatus?: REVIEW_STATUS,
+    technicianPayoutStatus?: BOOKING_PAYMENT_STATUS,
+    bookingPaymentStatus?: BOOKING_PAYMENT_STATUS,
   ) {
     let sortBy: 'id' | 'updatedAt' = 'id';
     let finalSortOrder: 'ASC' | 'DESC' = 'DESC';
@@ -552,15 +558,33 @@ export class BookingService {
         sortBy,
         finalSortOrder,
         reviewStatus,
+        technicianPayoutStatus,
+        bookingPaymentStatus,
       );
 
     const formattedBookings = bookings.map((booking: Booking) => {
       const cleanCustomer = this.cleanUser(booking.customer);
       const cleanTechnician = this.cleanUser(booking.technician);
-      const { customerOtp, ...bookingWithoutOtp } = booking;
+
+      const payments = booking.payments || [];
+      const bookingPayment = payments.find(
+        (p) =>
+          (booking.bookingPaymentId && (p.paymentId === booking.bookingPaymentId || p.paymentLinkId === booking.bookingPaymentId)) ||
+          p.paymentType === PAYMENT_TYPE.BOOKING_PAYMENT ||
+          p.paymentType === PAYMENT_TYPE.TOKEN_PAYMENT
+      ) || null;
+      const technicianPayout = payments.find(
+        (p) =>
+          (booking.technicianPayoutId && (p.paymentId === booking.technicianPayoutId || p.razorpayPayoutId === booking.technicianPayoutId || p.utr === booking.technicianPayoutId)) ||
+          p.paymentType === PAYMENT_TYPE.TECHNICIAN_PAYOUT
+      ) || null;
+
+      const { customerOtp, payments: _, ...bookingWithoutOtp } = booking;
 
       return {
         ...bookingWithoutOtp,
+        bookingPayment,
+        technicianPayout,
         scheduledAtIst: this.toIstString(booking.scheduledAt),
         createdAtIst: this.toIstString(booking.createdAt),
         updatedAtIst: this.toIstString(booking.updatedAt),
@@ -648,7 +672,11 @@ export class BookingService {
             ? {
               id: complaint.booking.id,
               status: complaint.booking.status,
-              paymentStatus: complaint.booking.paymentStatus,
+              paymentStatus: complaint.booking.bookingPaymentStatus,
+              bookingPaymentStatus: complaint.booking.bookingPaymentStatus,
+              technicianPayoutStatus: complaint.booking.technicianPayoutStatus,
+              bookingPaymentId: complaint.booking.bookingPaymentId,
+              technicianPayoutId: complaint.booking.technicianPayoutId,
               reviewStatus: complaint.booking.reviewStatus,
               customerRating: complaint.booking.customerRating,
               customerReview: complaint.booking.customerReview,
@@ -739,12 +767,29 @@ export class BookingService {
       );
     }
 
-    const { customerOtp, ...bookingWithoutOtp } = booking;
+    const payments = booking.payments || [];
+    const bookingPayment = payments.find(
+      (p) =>
+        (booking.bookingPaymentId && (p.paymentId === booking.bookingPaymentId || p.paymentLinkId === booking.bookingPaymentId)) ||
+        p.paymentType === PAYMENT_TYPE.BOOKING_PAYMENT ||
+        p.paymentType === PAYMENT_TYPE.TOKEN_PAYMENT
+    ) || null;
+    const technicianPayout = payments.find(
+      (p) =>
+        (booking.technicianPayoutId && (p.paymentId === booking.technicianPayoutId || p.razorpayPayoutId === booking.technicianPayoutId || p.utr === booking.technicianPayoutId)) ||
+        p.paymentType === PAYMENT_TYPE.TECHNICIAN_PAYOUT
+    ) || null;
+
+    const { customerOtp, payments: _, ...bookingWithoutOtp } = booking;
 
     return {
       success: true,
       message: 'Booking fetched successfully',
-      data: bookingWithoutOtp,
+      data: {
+        ...bookingWithoutOtp,
+        bookingPayment,
+        technicianPayout,
+      },
     };
   }
 
@@ -913,8 +958,8 @@ export class BookingService {
         updateData = {
           status: BOOKING_STATUS.PENDING,
           technicianId: null as any,
-          cancelledBy: user.id,
-          cancellationReason: '',
+          isManualAssign: false,
+          createdAt: new Date(),
         };
 
         break;
@@ -961,63 +1006,72 @@ export class BookingService {
     user: any,
     dto: CreateComplaintDto,
   ) {
-    const booking =
-      await this.bookingRepository.findBookingById(
-        dto.bookingId,
-      );
-
-    if (!booking) {
-      throw new NotFoundException(
-        'Booking not found',
-      );
-    }
     if (!user?.id) {
       throw new UnauthorizedException(
         'Invalid user',
       );
     }
 
-    if (booking.serviceId !== dto.serviceId) {
-      throw new BadRequestException(
-        'Invalid service for this booking',
-      );
-    }
-
-    if (user.role === USER_ROLE.CUSTOMER) {
-      if (booking.customerId !== user.id) {
-        throw new BadRequestException(
-          'This booking does not belong to you',
-        );
-      }
-    } else if (
-      user.role === USER_ROLE.TECHNICIAN
+    if (
+      user.role !== USER_ROLE.CUSTOMER &&
+      user.role !== USER_ROLE.TECHNICIAN
     ) {
-      if (booking.technicianId !== user.id) {
-        throw new BadRequestException(
-          'This booking is not assigned to you',
-        );
-      }
-    } else {
       throw new BadRequestException(
         'Invalid role for complaint creation',
       );
     }
-    const pendingComplaint =
-      await this.complaintRepository.findPendingComplaint(
-        dto.bookingId,
-        dto.serviceId,
-      );
 
-    if (pendingComplaint) {
-      throw new BadRequestException(
-        'A complaint is already pending for this booking',
-      );
+    if (dto.bookingId) {
+      const booking =
+        await this.bookingRepository.findBookingById(
+          dto.bookingId,
+        );
+
+      if (!booking) {
+        throw new NotFoundException(
+          'Booking not found',
+        );
+      }
+
+      if (dto.serviceId && booking.serviceId !== dto.serviceId) {
+        throw new BadRequestException(
+          'Invalid service for this booking',
+        );
+      }
+
+      if (user.role === USER_ROLE.CUSTOMER) {
+        if (booking.customerId !== user.id) {
+          throw new BadRequestException(
+            'This booking does not belong to you',
+          );
+        }
+      } else if (
+        user.role === USER_ROLE.TECHNICIAN
+      ) {
+        if (booking.technicianId !== user.id) {
+          throw new BadRequestException(
+            'This booking is not assigned to you',
+          );
+        }
+      }
+
+      const pendingComplaint =
+        await this.complaintRepository.findPendingComplaint(
+          dto.bookingId,
+          dto.serviceId,
+        );
+
+      if (pendingComplaint) {
+        throw new BadRequestException(
+          'A complaint is already pending for this booking',
+        );
+      }
     }
 
     const complaint =
       await this.complaintRepository.createComplaint({
-        bookingId: dto.bookingId,
-        serviceId: dto.serviceId,
+        bookingId: dto.bookingId ?? null,
+        serviceId: dto.serviceId ?? null,
         title: dto.title,
         description: dto.description,
         createdBy: user.id,
@@ -1109,7 +1163,8 @@ export class BookingService {
   }
 
   async updateBookingStatus(
-    technicianId: number,
+    userId: number,
+    role: USER_ROLE,
     bookingId: number,
     dto: UpdateBookingStatusDto,
   ): Promise<Booking> {
@@ -1127,7 +1182,22 @@ export class BookingService {
         throw new NotFoundException('Booking not found');
       }
 
-      if (booking.technicianId !== technicianId) {
+      if (role === USER_ROLE.ADMIN) {
+        if (dto.status !== BOOKING_STATUS.REJECTED) {
+          throw new BadRequestException('Admin can only update the booking status to REJECTED');
+        }
+        if (booking.status !== BOOKING_STATUS.PENDING) {
+          throw new BadRequestException('Booking can only be rejected if its current status is PENDING');
+        }
+        if (dto.cancellationReason) {
+          booking.cancellationReason = dto.cancellationReason;
+        }
+        booking.status = dto.status;
+        const updatedBooking = await bookingRepo.save(booking);
+        return updatedBooking;
+      }
+
+      if (booking.technicianId !== userId) {
         throw new BadRequestException('You are not assigned to this booking');
       }
 
@@ -1170,7 +1240,7 @@ export class BookingService {
         }
         if (dto.cancellationReason) {
           booking.cancellationReason = dto.cancellationReason;
-          booking.cancelledBy = technicianId;
+          booking.cancelledBy = userId;
         }
       }
 
@@ -1189,7 +1259,7 @@ export class BookingService {
 
       if (dto.status === BOOKING_STATUS.ENROUTE) {
         await technicianProfileRepo.update(
-          { userId: technicianId },
+          { userId: userId },
           { jobStatus: JOB_STATUS.BUSY },
         );
       }
@@ -1199,7 +1269,7 @@ export class BookingService {
         dto.status === BOOKING_STATUS.CANCELLED
       ) {
         await technicianProfileRepo.update(
-          { userId: technicianId },
+          { userId: userId },
           { jobStatus: JOB_STATUS.AVAILABLE },
         );
       }
@@ -1346,7 +1416,7 @@ export class BookingService {
         throw new NotFoundException('Booking not found');
       }
 
-      if (booking.customerId !== userId) {
+      if (booking.customerId !== userId && booking.technicianId !== userId) {
         throw new BadRequestException(
           'You do not have permission to generate a payment link for this booking',
         );
@@ -1476,6 +1546,12 @@ export class BookingService {
 
       await this.paymentRepository.updatePayment(payment);
 
+      if (payment.status === PAYMENT_STATUS.SUCCESS && payment.booking) {
+        payment.booking.technicianPayoutStatus = BOOKING_PAYMENT_STATUS.PAID;
+        payment.booking.technicianPayoutId = payment.paymentId || payment.razorpayPayoutId || payment.utr || razorpayPayoutId;
+        await this.bookingRepository.saveBooking(payment.booking);
+      }
+
       return {
         success: true,
         message: `Payout event ${event} processed successfully`,
@@ -1529,8 +1605,8 @@ export class BookingService {
     );
 
     if (payment.booking) {
-      payment.booking.paymentStatus =
-        BOOKING_PAYMENT_STATUS.PAID;
+      payment.booking.bookingPaymentStatus = BOOKING_PAYMENT_STATUS.PAID;
+      payment.booking.bookingPaymentId = payment.paymentId || paymentId;
 
       await this.bookingRepository.saveBooking(
         payment.booking,
@@ -1738,9 +1814,9 @@ export class BookingService {
       throw new BadRequestException('Booking is not completed yet');
     }
 
-    if (booking.paymentStatus !== BOOKING_PAYMENT_STATUS.PAID) {
+    if (booking.bookingPaymentStatus !== BOOKING_PAYMENT_STATUS.PAID) {
       throw new BadRequestException(
-        'Customer payment is not completed yet',
+        'Booking payment is not completed yet',
       );
     }
 
@@ -1871,21 +1947,88 @@ export class BookingService {
     }
   }
 
+  async adminRecordTechnicianPayout(
+    adminId: number,
+    dto: AdminCreatePayoutDto,
+  ) {
+    const booking = await this.bookingRepository.findBookingById(dto.bookingId);
+    if (!booking) {
+      throw new NotFoundException('Booking not found');
+    }
+
+    const technician = await this.userRepository.findOne({
+      where: {
+        id: dto.technicianId,
+        role: USER_ROLE.TECHNICIAN,
+      },
+    });
+
+    if (!technician) {
+      throw new NotFoundException('Technician not found');
+    }
+
+    const paymentId = 'pay_manual_' + randomUUID().replace(/-/g, '').substring(0, 14);
+
+    const payout = await this.paymentRepository.createPayment({
+      bookingId: booking.id,
+      technicianId: technician.id,
+      customerId: booking.customerId,
+      payoutBy: adminId,
+      payBy: USER_ROLE.ADMIN,
+      paymentType: PAYMENT_TYPE.TECHNICIAN_PAYOUT,
+      amount: dto.amount,
+      currency: 'INR',
+      status: PAYMENT_STATUS.SUCCESS,
+      paymentId,
+    });
+
+    // Update booking payout details
+    booking.technicianPayoutStatus = BOOKING_PAYMENT_STATUS.PAID;
+    booking.technicianPayoutId = paymentId;
+    await this.bookingRepository.saveBooking(booking);
+
+    return {
+      success: true,
+      message: 'Technician payout recorded successfully as SUCCESS',
+      data: payout,
+    };
+  }
+
   //payment
   async getAllPayments(
+    user: any,
     page: number,
     limit: number,
     status?: PAYMENT_STATUS,
+    paymentType?: PAYMENT_TYPE,
   ) {
+    let finalStatus = status;
+    let finalPaymentType = paymentType;
+    let technicianId: number | undefined;
+    let customerId: number | undefined;
+
+    if (user.role === USER_ROLE.TECHNICIAN) {
+      finalStatus = PAYMENT_STATUS.SUCCESS;
+      finalPaymentType = PAYMENT_TYPE.TECHNICIAN_PAYOUT;
+      technicianId = user.id;
+    } else if (user.role === USER_ROLE.CUSTOMER) {
+      finalStatus = undefined;
+      finalPaymentType = undefined;
+      customerId = user.id;
+    }
+
     return this.paymentRepository.findAllPayments(
       page,
       limit,
-      status,
+      finalStatus,
+      finalPaymentType,
+      technicianId,
+      customerId,
     );
   }
 
   //Get Paymwents By ID 
-  async getPaymentById(id: number) {
+  async getPaymentById(id: number, user?: any) {
     const payment =
       await this.paymentRepository.findPaymentById(id);
 
@@ -1895,10 +2038,92 @@ export class BookingService {
       );
     }
 
+    if (user && user.role !== USER_ROLE.ADMIN) {
+      if (user.role === USER_ROLE.TECHNICIAN && payment.technicianId !== user.id) {
+        throw new ForbiddenException('Access denied');
+      }
+      if (user.role === USER_ROLE.CUSTOMER && payment.customerId !== user.id) {
+        throw new ForbiddenException('Access denied');
+      }
+    }
+
+    let formattedBooking: any = null;
+    if (payment.booking) {
+      const { service, serviceSpecifications, ...bookingDetails } = payment.booking;
+
+      formattedBooking = {
+        ...bookingDetails,
+        service: service ? {
+          id: service.id,
+          name: service.name,
+          description: service.description,
+          iconUrl: service.iconUrl,
+          isActive: service.isActive,
+          pricingRule: service.pricingRule,
+          chosenSpecifications: serviceSpecifications || [],
+          masterSpecifications: service.specifications || [],
+        } : null,
+      };
+    }
+
+    const { booking, ...paymentDetails } = payment;
+
     return {
       success: true,
       message: 'Payment fetched successfully',
-      data: payment,
+      data: {
+        ...paymentDetails,
+        booking: formattedBooking,
+      },
+    };
+  }
+
+  async getTechnicianPayoutStats(technicianId: number) {
+    const payments = await this.dataSource.getRepository(Payment).find({
+      where: {
+        technicianId,
+        status: PAYMENT_STATUS.SUCCESS,
+        paymentType: PAYMENT_TYPE.TECHNICIAN_PAYOUT,
+      },
+    });
+
+    const now = new Date();
+
+    // Start of week (Monday)
+    const startOfWeek = new Date(now);
+    const day = startOfWeek.getDay();
+    const diff = startOfWeek.getDate() - day + (day === 0 ? -6 : 1);
+    startOfWeek.setDate(diff);
+    startOfWeek.setHours(0, 0, 0, 0);
+
+    // Start of month
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    startOfMonth.setHours(0, 0, 0, 0);
+
+    let totalEarning = 0;
+    let thisWeekPayout = 0;
+    let thisMonthPayout = 0;
+
+    for (const payment of payments) {
+      const amount = Number(payment.amount);
+      totalEarning += amount;
+
+      const paymentDate = new Date(payment.createdAt);
+      if (paymentDate >= startOfWeek) {
+        thisWeekPayout += amount;
+      }
+      if (paymentDate >= startOfMonth) {
+        thisMonthPayout += amount;
+      }
+    }
+
+    return {
+      success: true,
+      data: {
+        totalEarning: Number(totalEarning.toFixed(2)),
+        thisWeekPayout: Number(thisWeekPayout.toFixed(2)),
+        thisMonthPayout: Number(thisMonthPayout.toFixed(2)),
+      },
     };
   }
 
@@ -2033,7 +2258,7 @@ export class BookingService {
       throw new BadRequestException('Booking is not completed');
     }
 
-    if (booking.paymentStatus !== BOOKING_PAYMENT_STATUS.PAID) {
+    if (booking.bookingPaymentStatus !== BOOKING_PAYMENT_STATUS.PAID) {
       throw new BadRequestException('Payment is not completed');
     }
 
@@ -2283,10 +2508,29 @@ export class BookingService {
       );
 
     const data = bookings.map((booking) => {
+      const payments = booking.payments || [];
+      const bookingPayment = payments.find(
+        (p) =>
+          (booking.bookingPaymentId && (p.paymentId === booking.bookingPaymentId || p.paymentLinkId === booking.bookingPaymentId)) ||
+          p.paymentType === PAYMENT_TYPE.BOOKING_PAYMENT ||
+          p.paymentType === PAYMENT_TYPE.TOKEN_PAYMENT
+      ) || null;
+      const technicianPayout = payments.find(
+        (p) =>
+          (booking.technicianPayoutId && (p.paymentId === booking.technicianPayoutId || p.razorpayPayoutId === booking.technicianPayoutId || p.utr === booking.technicianPayoutId)) ||
+          p.paymentType === PAYMENT_TYPE.TECHNICIAN_PAYOUT
+      ) || null;
+
       const commonData = {
         bookingId: booking.id,
         status: booking.status,
-        paymentStatus: booking.paymentStatus,
+        paymentStatus: booking.bookingPaymentStatus,
+        bookingPaymentStatus: booking.bookingPaymentStatus,
+        technicianPayoutStatus: booking.technicianPayoutStatus,
+        bookingPaymentId: booking.bookingPaymentId,
+        technicianPayoutId: booking.technicianPayoutId,
+        bookingPayment,
+        technicianPayout,
         scheduledAt: booking.scheduledAt,
         scheduledAtIst: this.toIstString(booking.scheduledAt),
         totalAmount: booking.totalAmount,
@@ -2653,13 +2897,17 @@ export class BookingService {
         : 0;
       const distanceCharge = 0;
 
-      const subtotal = serviceBasePrice + weekendCharge + peakHourCharge + surgeCharge + emergencyCharge + distanceCharge;
+      const appliedBasePrice = pricingRule.isServiceBasePriceApplied !== false
+        ? serviceBasePrice
+        : 0;
+
+      const subtotal = appliedBasePrice + weekendCharge + peakHourCharge + surgeCharge + emergencyCharge + distanceCharge;
       const platformFee = pricingRule.isPlatformFeeApplied ? Number(pricingRule.platformFee) : 0;
       const gstRate = Number(pricingRule.gst) / 100;
       const gst = pricingRule.isGstApplied ? Number(((subtotal + platformFee) * gstRate).toFixed(2)) : 0;
 
       const totalAmount = Number((subtotal + platformFee + gst).toFixed(2));
-      if (totalAmount < serviceBasePrice) {
+      if (totalAmount < appliedBasePrice) {
         throw new BadRequestException('Calculation error: Total amount must be greater than base price.');
       }
 
@@ -2669,7 +2917,7 @@ export class BookingService {
       const technicianEarning = Number((subtotal - platformCommission).toFixed(2));
 
       const priceBreakdown: PriceBreakdown = {
-        serviceBasePrice,
+        serviceBasePrice: appliedBasePrice,
         distanceCharge,
         emergencyCharge,
         peakHourCharge,
@@ -2772,7 +3020,8 @@ export class BookingService {
               id: booking.service.id,
               name: booking.service.name,
               iconUrl: serviceIconUrl,
-              specifications: booking.serviceSpecifications ?? null,
+              pricingRule: booking.service.pricingRule ?? null,
+              specifications: booking.service.specifications ?? null,
             }
             : null,
 

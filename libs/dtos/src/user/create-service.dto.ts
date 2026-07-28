@@ -10,6 +10,13 @@ import {
   IsEnum,
 } from 'class-validator';
 
+const toBoolean = ({ obj, key }: any) => {
+  const value = obj[key];
+  if (value === 'true' || value === true) return true;
+  if (value === 'false' || value === false) return false;
+  return value;
+};
+
 export class PeakHourDto {
   @IsNumber()
   @IsNotEmpty()
@@ -34,10 +41,12 @@ export class CreateServiceSpecificationDto {
   values?: string[] | number[];
 
   @IsOptional()
+  @Transform(toBoolean)
   @IsBoolean()
   isRequired?: boolean;
 
   @IsOptional()
+  @Transform(toBoolean)
   @IsBoolean()
   isActive?: boolean;
 }
@@ -54,11 +63,7 @@ export class CreateServiceDto {
   description?: string;
 
   @IsOptional()
-  @Transform(({ value }) => {
-    if (value === 'true' || value === true) return true;
-    if (value === 'false' || value === false) return false;
-    return value;
-  })
+  @Transform(toBoolean)
   @IsBoolean()
   isActive?: boolean;
 
@@ -187,67 +192,44 @@ export class CreateServiceDto {
   gst?: number;
 
   @IsOptional()
-  @Transform(({ value }) => {
-    if (value === 'true' || value === true) return true;
-    if (value === 'false' || value === false) return false;
-    return value;
-  })
+  @Transform(toBoolean)
   @IsBoolean()
   isGstApplied?: boolean;
 
   @IsOptional()
-  @Transform(({ value }) => {
-    if (value === 'true' || value === true) return true;
-    if (value === 'false' || value === false) return false;
-    return value;
-  })
+  @Transform(toBoolean)
   @IsBoolean()
   isDistanceKmApplied?: boolean;
 
   @IsOptional()
-  @Transform(({ value }) => {
-    if (value === 'true' || value === true) return true;
-    if (value === 'false' || value === false) return false;
-    return value;
-  })
+  @Transform(toBoolean)
   @IsBoolean()
   isWeekendApplied?: boolean;
 
   @IsOptional()
-  @Transform(({ value }) => {
-    if (value === 'true' || value === true) return true;
-    if (value === 'false' || value === false) return false;
-    return value;
-  })
+  @Transform(toBoolean)
   @IsBoolean()
   isPeakHourApplied?: boolean;
 
   @IsOptional()
-  @Transform(({ value }) => {
-    if (value === 'true' || value === true) return true;
-    if (value === 'false' || value === false) return false;
-    return value;
-  })
+  @Transform(toBoolean)
   @IsBoolean()
   isEmergencyApplied?: boolean;
 
   @IsOptional()
-  @Transform(({ value }) => {
-    if (value === 'true' || value === true) return true;
-    if (value === 'false' || value === false) return false;
-    return value;
-  })
+  @Transform(toBoolean)
   @IsBoolean()
   isPlatformFeeApplied?: boolean;
 
   @IsOptional()
-  @Transform(({ value }) => {
-    if (value === 'true' || value === true) return true;
-    if (value === 'false' || value === false) return false;
-    return value;
-  })
+  @Transform(toBoolean)
   @IsBoolean()
   isPerHourRateApplied?: boolean;
+
+  @IsOptional()
+  @Transform(toBoolean)
+  @IsBoolean()
+  isServiceBasePriceApplied?: boolean;
 
   @IsOptional()
   @IsString()

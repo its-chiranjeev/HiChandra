@@ -1,8 +1,8 @@
 import { Body, Controller, Get, Param, ParseIntPipe, HttpCode, Patch, HttpStatus, Query, Post, Req, Headers, UseGuards, ValidationPipe, Delete, StreamableFile } from '@nestjs/common';
 import { BookingService } from './booking.service';
 import { JwtAuthGuard, Roles, RolesGuard } from '@hichandra/common';
-import { StartBookingDto, CreateBookingDto, AssignBookingDto, CancelBookingDto, CreateComplaintDto, UpdateComplaintDto, UpdateBookingStatusDto, CreateTechnicianPayoutDto, RescheduleBookingDto, RepeatBookingDto, TechnicianCancelBookingDto, CreateBookingReviewDto, AdminCreateBookingDto, AdminUpdateBookingReviewDto } from '@hichandra/dtos';
-import { USER_ROLE, BOOKING_STATUS, COMPLAINT_STATUS, PAYMENT_STATUS, User, REVIEW_STATUS } from '@hichandra/entities';
+import { StartBookingDto, CreateBookingDto, AssignBookingDto, CancelBookingDto, CreateComplaintDto, UpdateComplaintDto, UpdateBookingStatusDto, CreateTechnicianPayoutDto, RescheduleBookingDto, RepeatBookingDto, TechnicianCancelBookingDto, CreateBookingReviewDto, AdminCreateBookingDto, AdminUpdateBookingReviewDto, AdminCreatePayoutDto } from '@hichandra/dtos';
+import { USER_ROLE, BOOKING_STATUS, COMPLAINT_STATUS, PAYMENT_STATUS, User, REVIEW_STATUS, PAYMENT_TYPE, BOOKING_PAYMENT_STATUS } from '@hichandra/entities';
 import type { Request } from 'express';
 import { PaymentService } from '@hichandra/payment';
 
@@ -52,7 +52,7 @@ export class BookingController {
 
   @Get(':bookingId/payment')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(USER_ROLE.CUSTOMER)
+  @Roles(USER_ROLE.CUSTOMER, USER_ROLE.TECHNICIAN)
   @HttpCode(HttpStatus.OK)
   async getPaymentUrl(
     @Req() req: any,
@@ -104,6 +104,26 @@ export class BookingController {
     );
   }
 
+  @Post('admin/payout/manual')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLE.ADMIN)
+  @HttpCode(HttpStatus.CREATED)
+  async recordManualPayout(
+    @Req() req: any,
+    @Body(
+      new ValidationPipe({
+        whitelist: true,
+        transform: true,
+      }),
+    )
+    dto: AdminCreatePayoutDto,
+  ) {
+    return this.bookingService.adminRecordTechnicianPayout(
+      req.user.id,
+      dto,
+    );
+  }
+
   @Get(':bookingId/invoice')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(USER_ROLE.CUSTOMER)
@@ -129,6 +149,8 @@ export class BookingController {
     @Query('sortById') sortById?: string,
     @Query('sortByUpdatedAt') sortByUpdatedAt?: string,
     @Query('reviewStatus') reviewStatus?: REVIEW_STATUS,
+    @Query('technicianPayoutStatus') technicianPayoutStatus?: BOOKING_PAYMENT_STATUS,
+    @Query('bookingPaymentStatus') bookingPaymentStatus?: BOOKING_PAYMENT_STATUS,
   ) {
     return this.bookingService.getAllBookings(
       req.user,
@@ -138,6 +160,8 @@ export class BookingController {
       sortById,
       sortByUpdatedAt,
       reviewStatus,
+      technicianPayoutStatus,
+      bookingPaymentStatus,
     );
   }
 
@@ -204,19 +228,23 @@ export class BookingController {
   }
 
   //get payment
-  @Get('admin/payments')
+  @Get('payments/all')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(USER_ROLE.ADMIN)
+  @Roles(USER_ROLE.ADMIN, USER_ROLE.TECHNICIAN, USER_ROLE.CUSTOMER)
   @HttpCode(HttpStatus.OK)
   async getAllPayments(
+    @Req() req: any,
     @Query('page') page = 1,
     @Query('limit') limit = 10,
     @Query('status') status?: PAYMENT_STATUS,
+    @Query('paymentType') paymentType?: PAYMENT_TYPE,
   ) {
     return this.bookingService.getAllPayments(
+      req.user,
       Number(page),
       Number(limit),
       status,
+      paymentType,
     );
   }
 
@@ -246,6 +274,17 @@ export class BookingController {
     @Param('id', ParseIntPipe) id: number,
   ) {
     return this.bookingService.getPaymentById(id);
+  }
+
+  @Get('payments/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLE.ADMIN, USER_ROLE.TECHNICIAN, USER_ROLE.CUSTOMER)
+  @HttpCode(HttpStatus.OK)
+  async getPaymentByIdGeneral(
+    @Req() req: any,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.bookingService.getPaymentById(id, req.user);
   }
 
   // Admin: Update booking ratings, reviews, and review status
@@ -316,7 +355,7 @@ export class BookingController {
 
   @Patch(':id/status')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(USER_ROLE.TECHNICIAN)
+  @Roles(USER_ROLE.TECHNICIAN, USER_ROLE.ADMIN)
   @HttpCode(HttpStatus.OK)
   async updateBookingStatus(
     @Req() req: any,
@@ -326,6 +365,7 @@ export class BookingController {
   ) {
     const booking = await this.bookingService.updateBookingStatus(
       req.user.id,
+      req.user.role,
       id,
       dto,
     );
@@ -544,5 +584,14 @@ export class BookingController {
       Number(limit),
       search,
     );
+  }
+
+  @Get('technician/payout-stats')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLE.TECHNICIAN)
+  @HttpCode(HttpStatus.OK)
+  async getTechnicianPayoutStats(@Req() req: any) {
+    const technicianId = req.user.id || req.user.sub;
+    return this.bookingService.getTechnicianPayoutStats(technicianId);
   }
 }

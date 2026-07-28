@@ -23,16 +23,16 @@ export class Complaint {
   id!: number;
 
   @Index()
-  @Column({ type: 'int' })
-  serviceId!: number;
+  @Column({ type: 'int', nullable: true })
+  serviceId?: number | null;
 
   @Index()
-  @Column({ type: 'int' })
-  bookingId!: number;
+  @Column({ type: 'int', nullable: true })
+  bookingId?: number | null;
 
-  @ManyToOne(() => Booking, { onDelete: 'CASCADE' })
+  @ManyToOne(() => Booking, { onDelete: 'CASCADE', nullable: true })
   @JoinColumn({ name: 'bookingId' })
-  booking!: Booking;
+  booking?: Booking | null;
 
   @Column({ type: 'varchar', length: 255 })
   title!: string;

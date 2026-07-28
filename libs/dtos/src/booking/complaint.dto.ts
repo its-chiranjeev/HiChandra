@@ -1,12 +1,13 @@
-import { IsInt, IsString, IsNotEmpty, IsNumber } from 'class-validator';
+import { IsInt, IsString, IsNotEmpty, IsNumber, IsOptional } from 'class-validator';
 
 export class CreateComplaintDto {
+  @IsOptional()
   @IsInt()
-  bookingId!: number;
+  bookingId?: number;
 
+  @IsOptional()
   @IsNumber()
-  @IsNotEmpty()
-  serviceId!: number;
+  serviceId?: number;
 
   @IsString()
   @IsNotEmpty()
@@ -15,5 +16,4 @@ export class CreateComplaintDto {
   @IsString()
   @IsNotEmpty()
   description!: string;
-
 }

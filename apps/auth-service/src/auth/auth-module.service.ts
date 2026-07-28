@@ -10,7 +10,7 @@ import {
 } from '@nestjs/common';
 import { UserRepository, OtpRepository } from '@hichandra/repositories';
 import * as bcrypt from 'bcryptjs';
-import { User, USER_STATUS, USER_ROLE, TechnicianService, TechnicianPayoutAccount } from '@hichandra/entities';
+import { User, USER_STATUS, USER_ROLE, TechnicianService, TechnicianPayoutAccount, TechnicianProfile, JOB_STATUS } from '@hichandra/entities';
 import { ConfigService } from '@nestjs/config';
 import { createHmac } from 'crypto';
 import { Cron } from '@nestjs/schedule';
@@ -226,6 +226,13 @@ export class AuthModuleService {
     user.hashedRefreshToken = null;
     user.tokenVersion += 1;
     await this.userRepository.saveUser(user);
+
+    if (user.role === USER_ROLE.TECHNICIAN) {
+      await this.dataSource
+        .getRepository(TechnicianProfile)
+        .update({ userId: user.id }, { jobStatus: JOB_STATUS.OFFLINE });
+    }
+
     return {
       message: 'Logout successful',
     };
@@ -352,6 +359,12 @@ export class AuthModuleService {
     }
 
     const data = await this.issueAuthTokens(user);
+
+    if (user.role === USER_ROLE.TECHNICIAN) {
+      await this.dataSource
+        .getRepository(TechnicianProfile)
+        .update({ userId: user.id }, { jobStatus: JOB_STATUS.AVAILABLE });
+    }
 
     return {
       message: 'Login successful',

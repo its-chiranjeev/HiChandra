@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Payment, PAYMENT_STATUS } from '@hichandra/entities';
+import { Payment, PAYMENT_STATUS, PAYMENT_TYPE } from '@hichandra/entities';
 import { Repository, Not, IsNull } from 'typeorm';
 
 @Injectable()
@@ -14,30 +14,41 @@ export class PaymentRepository {
     page: number,
     limit: number,
     status?: PAYMENT_STATUS,
+    paymentType?: PAYMENT_TYPE,
+    technicianId?: number,
+    customerId?: number,
   ) {
     const query = this.repo
       .createQueryBuilder('payment')
-      .leftJoinAndSelect(
-        'payment.customer',
-        'customer',
-      )
-      .leftJoinAndSelect(
-        'payment.technician',
-        'technician',
-      )
-      .leftJoinAndSelect(
-        'payment.payoutByUser',
-        'payoutByUser',
-      )
-      .leftJoinAndSelect(
-        'payment.booking',
-        'booking',
-      );
+      .leftJoinAndSelect('payment.customer', 'customer')
+      .leftJoinAndSelect('payment.technician', 'technician')
+      .leftJoinAndSelect('payment.payoutByUser', 'payoutByUser');
 
     if (status) {
       query.andWhere(
         'payment.status = :status',
         { status },
+      );
+    }
+
+    if (paymentType) {
+      query.andWhere(
+        'payment.paymentType = :paymentType',
+        { paymentType },
+      );
+    }
+
+    if (technicianId) {
+      query.andWhere(
+        'payment.technicianId = :technicianId',
+        { technicianId },
+      );
+    }
+
+    if (customerId) {
+      query.andWhere(
+        'payment.customerId = :customerId',
+        { customerId },
       );
     }
 
@@ -116,15 +127,18 @@ export class PaymentRepository {
     return this.repo.save(payment);
   }
   async findPaymentById(id: number) {
-    return this.repo.findOne({
-      where: { id },
-      relations: {
-        booking: true,
-        customer: true,
-        technician: true,
-        payoutByUser: true,
-      },
-    });
+    return this.repo
+      .createQueryBuilder('payment')
+      .leftJoinAndSelect('payment.customer', 'customer')
+      .leftJoinAndSelect('payment.technician', 'technician')
+      .leftJoinAndSelect('payment.payoutByUser', 'payoutByUser')
+      .leftJoinAndSelect('payment.booking', 'booking')
+      .leftJoinAndSelect('booking.service', 'service')
+      .leftJoinAndSelect('service.pricingRule', 'pricingRule')
+      .leftJoinAndSelect('service.specifications', 'specifications')
+      .leftJoinAndSelect('booking.address', 'address')
+      .where('payment.id = :id', { id })
+      .getOne();
   }
 
   async findLatestByBookingId(

@@ -534,11 +534,12 @@ export class BookingService {
     status?: BOOKING_STATUS,
     sortById?: string,
     sortByUpdatedAt?: string,
+    sortByCreatedAt?: string,
     reviewStatus?: REVIEW_STATUS,
     technicianPayoutStatus?: BOOKING_PAYMENT_STATUS,
     bookingPaymentStatus?: BOOKING_PAYMENT_STATUS,
   ) {
-    let sortBy: 'id' | 'updatedAt' = 'id';
+    let sortBy: 'id' | 'updatedAt' | 'createdAt' = 'createdAt';
     let finalSortOrder: 'ASC' | 'DESC' = 'DESC';
 
     if (sortById) {
@@ -547,6 +548,9 @@ export class BookingService {
     } else if (sortByUpdatedAt) {
       sortBy = 'updatedAt';
       finalSortOrder = sortByUpdatedAt.toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
+    } else if (sortByCreatedAt) {
+      sortBy = 'createdAt';
+      finalSortOrder = sortByCreatedAt.toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
     }
 
     const { bookings, total } =
@@ -1021,6 +1025,20 @@ export class BookingService {
       );
     }
 
+    // Ensure the same user cannot have more than one pending complaint at the same time
+    const userPendingComplaint = await this.dataSource.getRepository(Complaint).findOne({
+      where: {
+        createdBy: user.id,
+        status: COMPLAINT_STATUS.PENDING,
+      },
+    });
+
+    if (userPendingComplaint) {
+      throw new BadRequestException(
+        'You already have a pending complaint. Please resolve it before creating a new one.',
+      );
+    }
+
     if (dto.bookingId) {
       const booking =
         await this.bookingRepository.findBookingById(
@@ -1053,18 +1071,6 @@ export class BookingService {
             'This booking is not assigned to you',
           );
         }
-      }
-
-      const pendingComplaint =
-        await this.complaintRepository.findPendingComplaint(
-          dto.bookingId,
-          dto.serviceId,
-        );
-
-      if (pendingComplaint) {
-        throw new BadRequestException(
-          'A complaint is already pending for this booking',
-        );
       }
     }
 

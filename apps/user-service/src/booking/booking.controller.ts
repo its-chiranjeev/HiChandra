@@ -148,6 +148,7 @@ export class BookingController {
     @Query('status') status?: BOOKING_STATUS,
     @Query('sortById') sortById?: string,
     @Query('sortByUpdatedAt') sortByUpdatedAt?: string,
+    @Query('sortByCreatedAt') sortByCreatedAt?: string,
     @Query('reviewStatus') reviewStatus?: REVIEW_STATUS,
     @Query('technicianPayoutStatus') technicianPayoutStatus?: BOOKING_PAYMENT_STATUS,
     @Query('bookingPaymentStatus') bookingPaymentStatus?: BOOKING_PAYMENT_STATUS,
@@ -159,6 +160,7 @@ export class BookingController {
       status,
       sortById,
       sortByUpdatedAt,
+      sortByCreatedAt,
       reviewStatus,
       technicianPayoutStatus,
       bookingPaymentStatus,
@@ -532,7 +534,7 @@ export class BookingController {
     return this.bookingService.deleteComplaint(id);
   }
 
-  @Post('review')
+  @Patch('review')
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.CREATED)
   async createBookingReview(

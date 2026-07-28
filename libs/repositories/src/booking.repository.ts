@@ -15,7 +15,7 @@ export class BookingRepository {
     page = 1,
     limit = 10,
     status?: BOOKING_STATUS,
-    sortBy: 'id' | 'updatedAt' = 'updatedAt',
+    sortBy: 'id' | 'updatedAt' | 'createdAt' = 'createdAt',
     sortOrder: 'ASC' | 'DESC' = 'DESC',
     reviewStatus?: REVIEW_STATUS,
     technicianPayoutStatus?: BOOKING_PAYMENT_STATUS,

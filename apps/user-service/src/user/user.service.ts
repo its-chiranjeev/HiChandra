@@ -1856,8 +1856,19 @@ export class UserService {
     };
   }
 
-  async getMyAddresses(userId: number) {
-    const addresses = await this.userRepository.findCustomerAddresses(userId);
+  async getMyAddresses(userId: number, page: number = 1, limit: number = 10) {
+    const skip = (page - 1) * limit;
+    const [addresses, total] = await this.dataSource.getRepository(CustomerAddress).findAndCount({
+      where: {
+        userId,
+        isActive: true,
+      },
+      order: {
+        createdAt: 'DESC',
+      },
+      skip,
+      take: limit,
+    });
 
     if (!addresses.length) {
       throw new NotFoundException('No addresses found');
@@ -1878,6 +1889,12 @@ export class UserService {
         createdAt: address.createdAt,
         updatedAt: address.updatedAt,
       })),
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
     };
   }
 

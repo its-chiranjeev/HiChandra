@@ -330,8 +330,12 @@ export class UserController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(USER_ROLE.CUSTOMER)
   @HttpCode(HttpStatus.OK)
-  async getMyAddresses(@Req() req: any) {
-    return this.userService.getMyAddresses(req.user.id);
+  async getMyAddresses(
+    @Req() req: any,
+    @Query('page') page: string = '1',
+    @Query('limit') limit: string = '10',
+  ) {
+    return this.userService.getMyAddresses(req.user.id, Number(page), Number(limit));
   }
 
   @Post('customer/token-payment-link')

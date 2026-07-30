@@ -22,7 +22,7 @@ import {
   ResetPasswordDto,
   ForgotPasswordDto
 } from '@hichandra/dtos';
-import { DataSource, Repository, LessThan } from 'typeorm';
+import { DataSource, Repository, LessThan, Raw } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { EmailService } from '@hichandra/email-services';
 import { SmsService } from '@hichandra/sms-services';
@@ -148,13 +148,17 @@ export class AuthModuleService {
     // 2. Verify if user already exists by phone
     if (dto.phone) {
       const existingUserByPhone = await this.userRepository.findOne({
-        where: { phone: dto.phone },
+        where: dto.countryCode
+          ? { phone: dto.phone, countryCode: dto.countryCode }
+          : { phone: dto.phone },
       });
       if (existingUserByPhone) {
         throw new ConflictException('Phone number already in use');
       }
       const verifyAccount = await this.otpRepository.findOne({
-        where: { phone: dto.phone },
+        where: dto.countryCode
+          ? { phone: dto.phone, countryCode: dto.countryCode }
+          : { phone: dto.phone },
       });
       if (verifyAccount) {
         await this.otpRepository.delete(verifyAccount.id);
@@ -179,6 +183,7 @@ export class AuthModuleService {
     const newOtp = this.otpRepository.create({
       ...(dto.email && { email: dto.email }),
       ...(dto.phone && { phone: dto.phone }),
+      countryCode: dto.countryCode || null,
       otp: otpCode,
       expiresAt,
       role: dto.role,
@@ -191,13 +196,13 @@ export class AuthModuleService {
       message: 'OTP has been sent.',
       email: dto.email,
       phone: dto.phone,
+      countryCode: dto.countryCode,
     };
   }
 
   async verifyOtpService(dto: VerifyOtpDto) {
     const otpRecord = await this.otpRepository.findOne({
       where: {
-        //email: dto.email,
         phone: dto.phone,
         otp: dto.otp,
         isVerified: false,
@@ -313,16 +318,25 @@ export class AuthModuleService {
     }
 
     const isEmail = identifier.includes('@');
+    const cleanIdentifier = identifier.replace(/\s+/g, '');
+    const cleanNoPlus = cleanIdentifier.replace(/^\+/, '');
 
     const user = await this.userRepository.findOne({
       where: isEmail
         ? { email: identifier.toLowerCase() }
-        : { phone: identifier },
+        : [
+          { phone: cleanIdentifier },
+          { phone: cleanNoPlus },
+          {
+            phone: Raw(() => `CONCAT(REPLACE("countryCode", '+', ''), phone) = :val`, { val: cleanNoPlus }),
+          },
+        ],
       select: [
         'id',
         'email',
         'username',
         'phone',
+        'countryCode',
         'password',
         'role',
         'status',
@@ -550,20 +564,19 @@ export class AuthModuleService {
     if (!dto.phone) {
       throw new BadRequestException('Phone number is required');
     }
-    //const user = await this.userRepository.findByEmail(dto.email);
     const user = await this.userRepository.findOne({
-      where: { phone: dto.phone },
+      where: dto.countryCode
+        ? { phone: dto.phone, countryCode: dto.countryCode }
+        : { phone: dto.phone },
     });
     if (!user) {
       throw new NotFoundException('User not found');
     }
 
-    //const oldOtp = await this.otpRepository.findLatestValidOtp(dto.email);
     const oldOtp = await this.otpRepository.findOne({
-      where: {
-        phone: dto.phone,
-        isVerified: false,
-      },
+      where: dto.countryCode
+        ? { phone: dto.phone, countryCode: dto.countryCode, isVerified: false }
+        : { phone: dto.phone, isVerified: false },
     });
     if (oldOtp) {
       await this.otpRepository.update(oldOtp.id, {
@@ -575,14 +588,13 @@ export class AuthModuleService {
       100000 + Math.random() * 900000,
     ).toString();
 
-    //await this.emailService.sendOtpEmail(dto.email, otpCode);
     await this.smsService.sendOtpSms(dto.phone, otpCode);
     const expiresAt = new Date();
     expiresAt.setMinutes(expiresAt.getMinutes() + 10);
 
     const otp = this.otpRepository.create({
-      //email: dto.email,
       phone: dto.phone,
+      countryCode: dto.countryCode || null,
       otp: otpCode,
       expiresAt,
       role: user.role,
@@ -600,18 +612,19 @@ export class AuthModuleService {
     if (!dto.phone) {
       throw new BadRequestException('Phone number is required');
     }
-    //const user = await this.userRepository.findByEmail(dto.email);
     const user = await this.userRepository.findOne({
-      where: { phone: dto.phone },
+      where: dto.countryCode
+        ? { phone: dto.phone, countryCode: dto.countryCode }
+        : { phone: dto.phone },
     });
     if (!user) {
       throw new NotFoundException('User not found');
     }
 
-    //const otpRecord = await this.otpRepository.findLatestValidOtp(dto.email);
     const otpRecord = await this.otpRepository.findOne({
       where: {
         phone: dto.phone,
+        otp: dto.otp,
         isVerified: false,
       },
     });

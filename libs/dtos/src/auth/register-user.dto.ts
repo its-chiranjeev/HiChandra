@@ -20,6 +20,12 @@ export class RegisterUserDto {
   @MaxLength(15)
   phone?: string;
 
+  @IsOptional()
+  @IsString()
+  @Transform(({ value }) => value?.trim())
+  @MaxLength(5)
+  countryCode?: string;
+
   @IsEnum(USER_ROLE)
   @IsNotEmpty()
   @Transform(({ value }) => value.toUpperCase())

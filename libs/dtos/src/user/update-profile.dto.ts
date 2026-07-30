@@ -72,6 +72,10 @@ export class UpdateProfileDto {
 
   @IsOptional()
   @IsString()
+  countryCode?: string;
+
+  @IsOptional()
+  @IsString()
   emergencyContact?: string;
 
   @IsOptional()

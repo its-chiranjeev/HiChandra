@@ -22,6 +22,12 @@ export class VerifyOtpDto {
   @MaxLength(15)
   phone?: string;
 
+  @IsOptional()
+  @IsString()
+  @Transform(({ value }) => value?.trim())
+  @MaxLength(5)
+  countryCode?: string;
+
   @IsString()
   @IsNotEmpty()
   @Transform(({ value }) => value?.trim())

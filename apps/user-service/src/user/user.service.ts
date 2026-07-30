@@ -10,7 +10,7 @@ import {
 import { BadRequestException } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 import { randomUUID } from 'crypto';
-import { DataSource, QueryRunner, Not } from 'typeorm';
+import { DataSource, QueryRunner, Not, IsNull } from 'typeorm';
 import { last, single } from 'rxjs';
 import {
   UserRepository,
@@ -584,16 +584,14 @@ export class UserService {
   }
 
   async adminRegisterService(dto: RegisterDto) {
-    // const existingUser = await this.userRepository.findByEmail(dto.email);
-    // if (existingUser) {
-    //   throw new ConflictException('Email already in use');
-    // }
-    const existingUserByPhone = await this.userRepository.findOne({
-      where: { phone: dto.phone },
-    });
+    if (dto.phone) {
+      const existingUserByPhone = await this.userRepository.findOne({
+        where: { phone: dto.phone, countryCode: dto.countryCode || IsNull() },
+      });
 
-    if (existingUserByPhone) {
-      throw new ConflictException('Phone number already in use');
+      if (existingUserByPhone) {
+        throw new ConflictException('Phone number and country code combination already in use');
+      }
     }
 
     if (dto.username) {
@@ -605,21 +603,13 @@ export class UserService {
       }
     }
 
-    if (dto.phone) {
-      const existingUserByPhone = await this.userRepository.findOne({
-        where: { phone: dto.phone },
-      });
-      if (existingUserByPhone) {
-        throw new ConflictException('Phone number already in use');
-      }
-    }
-
     const hashedPassword = await bcrypt.hash(dto.password, 10);
 
     const newUser = this.userRepository.create({
       email: dto.email,
       username: dto.username,
       ...(dto.phone && { phone: dto.phone }),
+      ...(dto.countryCode && { countryCode: dto.countryCode }),
       firstName: dto.firstName,
       lastName: dto.lastName,
       password: hashedPassword,
@@ -668,10 +658,10 @@ export class UserService {
 
       if (dto.phone) {
         const existingUserByPhone = await userRepository.findOne({
-          where: { phone: dto.phone },
+          where: { phone: dto.phone, countryCode: dto.countryCode || IsNull() },
         });
         if (existingUserByPhone && (!dto.technicianId || existingUserByPhone.id !== Number(dto.technicianId))) {
-          throw new ConflictException('Phone number already in use');
+          throw new ConflictException('Phone number and country code combination already in use');
         }
       }
 
@@ -693,16 +683,13 @@ export class UserService {
         }
       }
 
-      // const otpRecord = await otpRepository.findOne({
-      //   where: { email: dto.email, phone: dto.phone },
-      // });
       const otpRecord = await otpRepository.findOne({
-        where: { phone: dto.phone },
+        where: { phone: dto.phone, countryCode: dto.countryCode || IsNull() },
       });
 
       if (!otpRecord) {
         throw new BadRequestException(
-          'OTP record not found for this phone number',
+          'OTP record not found for this phone number and country code',
         );
       }
 
@@ -733,6 +720,7 @@ export class UserService {
         existingTechnician.email = dto.email;
         existingTechnician.username = dto.username;
         existingTechnician.phone = dto.phone;
+        existingTechnician.countryCode = dto.countryCode;
         existingTechnician.firstName = dto.firstName;
         existingTechnician.lastName = dto.lastName;
         existingTechnician.password = hashedPassword;
@@ -744,6 +732,7 @@ export class UserService {
           email: dto.email,
           username: dto.username,
           phone: dto.phone,
+          countryCode: dto.countryCode,
           firstName: dto.firstName,
           lastName: dto.lastName,
           password: hashedPassword,
@@ -1287,14 +1276,23 @@ export class UserService {
         }
         user.username = dto.username;
       }
-      if (dto.phone && dto.phone !== user.phone) {
-        const existing = await userRepo.findOne({
-          where: { phone: dto.phone },
-        });
-        if (existing) {
-          throw new ConflictException('Phone number already in use');
+      const targetPhone = dto.phone !== undefined ? dto.phone : user.phone;
+      const targetCountryCode = dto.countryCode !== undefined ? dto.countryCode : user.countryCode;
+
+      if (
+        (dto.phone !== undefined && dto.phone !== user.phone) ||
+        (dto.countryCode !== undefined && dto.countryCode !== user.countryCode)
+      ) {
+        if (targetPhone) {
+          const existing = await userRepo.findOne({
+            where: { phone: targetPhone, countryCode: targetCountryCode || IsNull() },
+          });
+          if (existing && existing.id !== user.id) {
+            throw new ConflictException('Phone number and country code combination already in use');
+          }
         }
-        user.phone = dto.phone;
+        if (dto.phone !== undefined) user.phone = dto.phone;
+        if (dto.countryCode !== undefined) user.countryCode = dto.countryCode;
       }
       if (dto.email && dto.email !== user.email) {
         const existing = await userRepo.findOne({

@@ -21,6 +21,9 @@ export class Otp {
   @Column({ type: 'varchar', length: 15, nullable: true })
   phone?: string;
 
+  @Column({ type: 'varchar', length: 5, nullable: true })
+  countryCode?: string | null;
+
   @Column({ type: 'varchar', length: 10 })
   otp!: string;
 

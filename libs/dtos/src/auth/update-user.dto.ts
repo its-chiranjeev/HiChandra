@@ -1,4 +1,4 @@
-import { IsEmail, IsOptional, IsString, IsEnum } from 'class-validator';
+import { IsEmail, IsOptional, IsString, IsEnum, MaxLength } from 'class-validator';
 import { USER_ROLE, USER_STATUS } from '@hichandra/entities';
 
 export class UpdateUserDto {
@@ -21,6 +21,11 @@ export class UpdateUserDto {
   @IsOptional()
   @IsString()
   phone?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(5)
+  countryCode?: string;
 
   @IsOptional()
   @IsEnum(USER_ROLE)

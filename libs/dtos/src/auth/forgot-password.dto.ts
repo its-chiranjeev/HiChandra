@@ -1,12 +1,18 @@
-import { IsEmail, IsPhoneNumber, IsNotEmpty, IsString, MinLength, IsOptional } from 'class-validator';
+import { IsEmail, IsPhoneNumber, IsNotEmpty, IsString, MinLength, IsOptional, MaxLength } from 'class-validator';
 
 export class ForgotPasswordDto {
   @IsOptional()
   @IsEmail()
   email?: string;
 
-  @IsPhoneNumber('IN')
+  @IsOptional()
+  @IsString()
   phone?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(5)
+  countryCode?: string;
 }
 
 export class ResetPasswordDto {
@@ -14,8 +20,14 @@ export class ResetPasswordDto {
   @IsEmail()
   email?: string;
 
-  @IsPhoneNumber('IN')
-  phone?: string;;
+  @IsOptional()
+  @IsString()
+  phone?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(5)
+  countryCode?: string;
 
   @IsString()
   @IsNotEmpty()

@@ -9,6 +9,7 @@ import {
   OneToMany,
   OneToOne,
   JoinColumn,
+  Unique,
 } from 'typeorm';
 import { TechnicianProfile } from './technician-profile.entity';
 import { CustomerAddress } from './customer-address.entity';
@@ -28,6 +29,7 @@ export enum USER_STATUS {
 }
 
 @Entity('users')
+@Unique(['phone', 'countryCode'])
 export class User {
   @PrimaryGeneratedColumn()
   id!: number;
@@ -45,7 +47,9 @@ export class User {
   @Column({ type: 'varchar', length: 100 })
   username!: string;
 
-  @Index({ unique: true })
+  @Column({ type: 'varchar', length: 5, nullable: true })
+  countryCode?: string | null;
+
   @Column({ type: 'varchar', length: 15, nullable: true })
   phone?: string;
 

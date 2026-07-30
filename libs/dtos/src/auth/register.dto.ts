@@ -11,6 +11,7 @@ import {
   MaxLength,
   ValidateNested,
   Matches,
+  ValidateIf,
 } from 'class-validator';
 export class TechnicianServiceDto {
   @Type(() => Number)
@@ -180,11 +181,13 @@ export class RegisterDto {
   email?: string; // email
 
   @IsString()
+  @ValidateIf(o => !o.technicianId)
   @IsNotEmpty()
   @Transform(({ value }) => value?.trim())
-  username!: string;
+  username?: string;
 
   @IsString()
+  @ValidateIf(o => !o.technicianId)
   @IsNotEmpty()
   phone?: string;
 
@@ -195,9 +198,10 @@ export class RegisterDto {
   countryCode?: string;
 
   @IsString()
+  @ValidateIf(o => !o.technicianId)
   @IsNotEmpty()
   @Transform(({ value }) => value?.trim())
-  firstName!: string;
+  firstName?: string;
 
   @IsOptional()
   @IsString()
@@ -205,9 +209,10 @@ export class RegisterDto {
   lastName?: string;
 
   @IsString()
+  @ValidateIf(o => !o.technicianId)
   @IsNotEmpty()
   @Transform(({ value }) => value?.trim())
-  password!: string;
+  password?: string;
 
   // @IsOptional()
   // @Transform(({ value }) => {

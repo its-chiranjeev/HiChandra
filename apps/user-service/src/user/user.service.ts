@@ -603,6 +603,9 @@ export class UserService {
       }
     }
 
+    if (!dto.password) {
+      throw new BadRequestException('Password is required');
+    }
     const hashedPassword = await bcrypt.hash(dto.password, 10);
 
     const newUser = this.userRepository.create({
@@ -639,7 +642,7 @@ export class UserService {
     // if (!dto.email) {
     //   throw new BadRequestException('Email is required');
     // }
-    if (!dto.phone) {
+    if (!dto.technicianId && !dto.phone) {
       throw new BadRequestException('Phone number is required');
     }
 
@@ -656,9 +659,23 @@ export class UserService {
       );
       const customerAddressRepository = manager.getRepository(CustomerAddress);
 
-      if (dto.phone) {
+      let existingTechnician: User | null = null;
+      if (dto.technicianId) {
+        existingTechnician = await userRepository.findOne({
+          where: { id: Number(dto.technicianId) },
+        });
+        if (!existingTechnician) {
+          throw new NotFoundException('Technician user not found');
+        }
+      }
+
+      const targetPhone = dto.phone || existingTechnician?.phone;
+      const targetCountryCode = dto.countryCode !== undefined ? dto.countryCode : existingTechnician?.countryCode;
+      const targetUsername = dto.username || existingTechnician?.username;
+
+      if (targetPhone) {
         const existingUserByPhone = await userRepository.findOne({
-          where: { phone: dto.phone, countryCode: dto.countryCode || IsNull() },
+          where: { phone: targetPhone, countryCode: targetCountryCode || IsNull() },
         });
         if (existingUserByPhone && (!dto.technicianId || existingUserByPhone.id !== Number(dto.technicianId))) {
           throw new ConflictException('Phone number and country code combination already in use');
@@ -674,60 +691,70 @@ export class UserService {
         }
       }
 
-      if (dto.username) {
+      if (targetUsername) {
         const existingUserByUsername = await userRepository.findOne({
-          where: { username: dto.username },
+          where: { username: targetUsername },
         });
         if (existingUserByUsername && (!dto.technicianId || existingUserByUsername.id !== Number(dto.technicianId))) {
           throw new ConflictException('Username already in use');
         }
       }
 
-      const otpRecord = await otpRepository.findOne({
-        where: { phone: dto.phone },
-      });
+      let userRole = USER_ROLE.CUSTOMER;
 
-      if (!otpRecord) {
-        throw new BadRequestException(
-          'OTP record not found for this phone number',
-        );
+      if (!dto.technicianId) {
+        if (!targetPhone) {
+          throw new BadRequestException('Phone number is required');
+        }
+
+        const otpRecord = await otpRepository.findOne({
+          where: { phone: targetPhone },
+        });
+
+        if (!otpRecord) {
+          throw new BadRequestException(
+            'OTP record not found for this phone number',
+          );
+        }
+
+        if (!otpRecord.isVerified) {
+          throw new ForbiddenException('OTP is not verified');
+        }
+
+        userRole = otpRecord.role || USER_ROLE.CUSTOMER;
+        await otpRepository.delete(otpRecord.id);
+      } else {
+        userRole = USER_ROLE.TECHNICIAN;
       }
 
-      if (!otpRecord.isVerified) {
-        throw new ForbiddenException('OTP is not verified');
-      }
-
-      if (otpRecord.role === USER_ROLE.TECHNICIAN) {
+      if (userRole === USER_ROLE.TECHNICIAN) {
         if (!files?.aadharUrl?.[0]) {
           throw new BadRequestException('Aadhaar document is required for technician registration');
         }
       }
 
-      await otpRepository.delete(otpRecord.id);
-
-      const hashedPassword = await bcrypt.hash(dto.password, 10);
+      let hashedPassword = existingTechnician?.password;
+      if (dto.password) {
+        hashedPassword = await bcrypt.hash(dto.password, 10);
+      }
 
       let savedUser: User;
 
-      if (dto.technicianId) {
-        const existingTechnician = await userRepository.findOne({
-          where: { id: Number(dto.technicianId) },
-        });
-        if (!existingTechnician) {
-          throw new NotFoundException('Technician user not found');
-        }
-
-        existingTechnician.email = dto.email;
-        existingTechnician.username = dto.username;
-        existingTechnician.phone = dto.phone;
-        existingTechnician.countryCode = dto.countryCode;
-        existingTechnician.firstName = dto.firstName;
-        existingTechnician.lastName = dto.lastName;
-        existingTechnician.password = hashedPassword;
-        existingTechnician.role = otpRecord.role || USER_ROLE.CUSTOMER;
+      if (dto.technicianId && existingTechnician) {
+        if (dto.email !== undefined) existingTechnician.email = dto.email;
+        if (dto.username !== undefined) existingTechnician.username = dto.username;
+        if (dto.phone !== undefined) existingTechnician.phone = dto.phone;
+        if (dto.countryCode !== undefined) existingTechnician.countryCode = dto.countryCode;
+        if (dto.firstName !== undefined) existingTechnician.firstName = dto.firstName;
+        if (dto.lastName !== undefined) existingTechnician.lastName = dto.lastName;
+        if (hashedPassword !== undefined) existingTechnician.password = hashedPassword;
+        existingTechnician.role = userRole;
 
         savedUser = await userRepository.save(existingTechnician);
       } else {
+        if (!dto.username || !dto.phone || !dto.firstName || !hashedPassword) {
+          throw new BadRequestException('Missing required fields for registration');
+        }
         const newUser = userRepository.create({
           email: dto.email,
           username: dto.username,
@@ -736,7 +763,7 @@ export class UserService {
           firstName: dto.firstName,
           lastName: dto.lastName,
           password: hashedPassword,
-          role: otpRecord.role || USER_ROLE.CUSTOMER,
+          role: userRole,
         });
 
         savedUser = await userRepository.save(newUser);

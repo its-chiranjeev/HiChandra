@@ -20,7 +20,8 @@ import {
   UpdateTechnicianPayoutAccountDto,
   UpdateTechnicianServicesDto,
   UpdateTechnicianLocationDto,
-  UpdateTechnicianBrandExpertiseDto
+  UpdateTechnicianBrandExpertiseDto,
+  CreateTechnicianLocationDto
 } from '@hichandra/dtos';
 import { TECHNICIAN_STATUS, USER_ROLE, USER_STATUS } from '@hichandra/entities';
 import { UpdateServiceDto } from '@hichandra/dtos';
@@ -407,14 +408,24 @@ export class UserController {
   @Patch('profile')
   @UseGuards(JwtAuthGuard)
   @UseInterceptors(
-    FileFieldsInterceptor([{ name: 'profileImage', maxCount: 1 }]),
+    FileFieldsInterceptor([
+      { name: 'profileImage', maxCount: 1 },
+      { name: 'pan', maxCount: 1 },
+      { name: 'policeCert', maxCount: 1 },
+      { name: 'tradeLicense', maxCount: 1 },
+      { name: 'selfie', maxCount: 1 },
+    ]),
   )
   @HttpCode(HttpStatus.OK)
   async updateProfile(
     @Req() req: any,
     @UploadedFiles()
     files: {
-      profileImage?: Express.Multer.File[]; 
+      profileImage?: Express.Multer.File[];
+      pan?: Express.Multer.File[];
+      policeCert?: Express.Multer.File[];
+      tradeLicense?: Express.Multer.File[];
+      selfie?: Express.Multer.File[];
     },
     @Body(new ValidationPipe({ whitelist: true, transform: true }))
     dto: UpdateProfileDto,
@@ -432,6 +443,19 @@ export class UserController {
     dto: UpdateTechnicianServicesDto,
   ) {
     return this.userService.updateTechnicianServices(req.user.id, dto);
+  }
+
+  @Post('technician/location')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLE.TECHNICIAN)
+  @HttpCode(HttpStatus.CREATED)
+  async createTechnicianLocation(
+    @Req() req: any,
+    @Body(new ValidationPipe({ whitelist: true, transform: true }))
+    dto: CreateTechnicianLocationDto,
+  ) {
+    const userId = req.user.id || req.user.sub;
+    return this.userService.createTechnicianLocation(userId, dto);
   }
 
   @Patch('technician/location/:id')
@@ -469,8 +493,8 @@ export class UserController {
     @Body(new ValidationPipe({ whitelist: true, transform: true }))
     dto: UpdateTechnicianBrandExpertiseDto,
   ) {
-    const technicianId = req.user.id || req.user.sub;
-    return this.userService.updateTechnicianBrandExpertise(technicianId, dto);
+    const userId = req.user.id || req.user.sub;
+    return this.userService.updateTechnicianBrandExpertise(userId, dto);
   }
 
   @Get('admin/dashboard-stats')

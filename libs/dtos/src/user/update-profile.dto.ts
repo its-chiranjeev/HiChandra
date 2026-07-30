@@ -35,6 +35,22 @@ export class UpdateTechnicianProfileDetailsDto {
   @IsOptional()
   @IsString()
   gst?: string;
+
+  @IsOptional()
+  @IsString()
+  panUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  policeCertUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  tradeLicenseUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  selfieUrl?: string;
 }
 
 export class UpdateProfileDto {

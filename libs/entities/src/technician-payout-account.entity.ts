@@ -49,35 +49,35 @@ export class TechnicianPayoutAccount {
     length: 255,
     nullable: true,
   })
-  upiId?: string;
+  upiId?: string | null;
 
   @Column({
     type: 'varchar',
     length: 255,
     nullable: true,
   })
-  accountHolderName?: string;
+  accountHolderName?: string | null;
 
   @Column({
     type: 'varchar',
     length: 100,
     nullable: true,
   })
-  bankName?: string;
+  bankName?: string | null;
 
   @Column({
     type: 'varchar',
     length: 100,
     nullable: true,
   })
-  accountNumber?: string;
+  accountNumber?: string | null;
 
   @Column({
     type: 'varchar',
     length: 11,
     nullable: true,
   })
-  ifscCode?: string;
+  ifscCode?: string | null;
 
   /*
    * RAZORPAY DETAILS

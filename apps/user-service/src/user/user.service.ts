@@ -67,7 +67,8 @@ import {
   UpdateTechnicianPayoutAccountDto,
   UpdateTechnicianServicesDto,
   UpdateTechnicianLocationDto,
-  UpdateTechnicianBrandExpertiseDto
+  UpdateTechnicianBrandExpertiseDto,
+  CreateTechnicianLocationDto
 } from '@hichandra/dtos';
 import { RazorpayXService, PaymentService } from '@hichandra/payment';
 import { SmsService } from '@hichandra/sms-services';
@@ -1248,6 +1249,10 @@ export class UserService {
     dto: UpdateProfileDto,
     files?: {
       profileImage?: Express.Multer.File[];
+      pan?: Express.Multer.File[];
+      policeCert?: Express.Multer.File[];
+      tradeLicense?: Express.Multer.File[];
+      selfie?: Express.Multer.File[];
     },
   ) {
     return this.dataSource.transaction(async (manager) => {
@@ -1353,8 +1358,62 @@ export class UserService {
           if (profileData.hasVehicle !== undefined)
             profile.hasVehicle = profileData.hasVehicle;
 
-          await profileRepo.save(profile);
         }
+
+
+        if (files?.pan?.[0]) {
+          const uploadedUrl = await this.s3Service.uploadFileHelper(
+            user.id,
+            'technician-pan',
+            files.pan,
+          );
+          if (uploadedUrl) {
+            profile.panUrl = uploadedUrl;
+          }
+        } else if (dto.technicianProfile?.panUrl !== undefined) {
+          profile.panUrl = dto.technicianProfile.panUrl;
+        }
+
+        if (files?.policeCert?.[0]) {
+          const uploadedUrl = await this.s3Service.uploadFileHelper(
+            user.id,
+            'technician-police-cert',
+            files.policeCert,
+          );
+          if (uploadedUrl) {
+            profile.policeCertUrl = uploadedUrl;
+          }
+        } else if (dto.technicianProfile?.policeCertUrl !== undefined) {
+          profile.policeCertUrl = dto.technicianProfile.policeCertUrl;
+        }
+
+        if (files?.tradeLicense?.[0]) {
+          const uploadedUrl = await this.s3Service.uploadFileHelper(
+            user.id,
+            'technician-trade-license',
+            files.tradeLicense,
+          );
+          if (uploadedUrl) {
+            profile.tradeLicenseUrl = uploadedUrl;
+          }
+        } else if (dto.technicianProfile?.tradeLicenseUrl !== undefined) {
+          profile.tradeLicenseUrl = dto.technicianProfile.tradeLicenseUrl;
+        }
+
+        if (files?.selfie?.[0]) {
+          const uploadedUrl = await this.s3Service.uploadFileHelper(
+            user.id,
+            'technician-selfie',
+            files.selfie,
+          );
+          if (uploadedUrl) {
+            profile.selfieUrl = uploadedUrl;
+          }
+        } else if (dto.technicianProfile?.selfieUrl !== undefined) {
+          profile.selfieUrl = dto.technicianProfile.selfieUrl;
+        }
+
+        await profileRepo.save(profile);
       }
 
       const updatedUser = await userRepo.findOne({
@@ -2316,10 +2375,10 @@ export class UserService {
       payoutAccount.upiId = finalUpiId;
 
       // Clear previous bank details.
-      payoutAccount.accountHolderName = undefined;
-      payoutAccount.bankName = undefined;
-      payoutAccount.accountNumber = undefined;
-      payoutAccount.ifscCode = undefined;
+      payoutAccount.accountHolderName = null;
+      payoutAccount.bankName = null;
+      payoutAccount.accountNumber = null;
+      payoutAccount.ifscCode = null;
     }
 
     /*
@@ -2389,7 +2448,7 @@ export class UserService {
       payoutAccount.accountType =
         PAYOUT_ACCOUNT_TYPE.BANK_ACCOUNT;
 
-      payoutAccount.upiId = undefined;
+      payoutAccount.upiId = null;
 
       payoutAccount.accountHolderName =
         finalAccountHolderName;
@@ -2447,6 +2506,18 @@ export class UserService {
     if (!payoutAccount) {
       throw new NotFoundException(
         'Technician payout account not found',
+      );
+    }
+
+    const count = await this.dataSource
+      .getRepository(TechnicianPayoutAccount)
+      .count({
+        where: { technicianId },
+      });
+
+    if (count <= 1) {
+      throw new BadRequestException(
+        'At least one payout account must be present',
       );
     }
 
@@ -2702,16 +2773,95 @@ export class UserService {
     });
   }
 
+  async createTechnicianLocation(
+    userId: number,
+    dto: CreateTechnicianLocationDto,
+  ) {
+    return this.dataSource.transaction(async (manager) => {
+      const userRepo = manager.getRepository(User);
+      const profileRepo = manager.getRepository(TechnicianProfile);
+      const locationRepo = manager.getRepository(TechnicianLocation);
+
+      const user = await userRepo.findOne({
+        where: { id: userId },
+        relations: ['technicianProfile'],
+      });
+
+      if (!user) {
+        throw new NotFoundException('User not found');
+      }
+
+      if (user.role !== USER_ROLE.TECHNICIAN) {
+        throw new BadRequestException('Only technicians can add locations');
+      }
+
+      let profile = user.technicianProfile;
+      if (!profile) {
+        profile = profileRepo.create({
+          userId: user.id,
+          status: TECHNICIAN_STATUS.PENDING_APPROVAL,
+        });
+        profile = await profileRepo.save(profile);
+      }
+
+      const isDefault = dto.isDefault === true;
+
+      if (isDefault) {
+        // Reset all other locations for this profile to false
+        await locationRepo.update(
+          { technicianId: profile.id },
+          { isDefault: false },
+        );
+      }
+
+      const newLocation = locationRepo.create({
+        technicianId: profile.id,
+        latitude: dto.latitude,
+        longitude: dto.longitude,
+        serviceRadiusKm: dto.serviceRadiusKm,
+        fullAddress: dto.fullAddress,
+        city: dto.city,
+        state: dto.state,
+        pincode: dto.pincode,
+        isDefault,
+        isActive: dto.isActive !== false,
+        currentLat: dto.latitude,
+        currentLng: dto.longitude,
+        locationUpdatedAt: new Date(),
+      });
+
+      const savedLocation = await locationRepo.save(newLocation);
+
+      return {
+        success: true,
+        message: 'Technician location created successfully',
+        data: savedLocation,
+      };
+    });
+  }
+
   async updateTechnicianLocation(
-    technicianId: number,
+    userId: number,
     id: number,
     dto: UpdateTechnicianLocationDto,
   ) {
     return this.dataSource.transaction(async (manager) => {
+      const userRepo = manager.getRepository(User);
       const locationRepo = manager.getRepository(TechnicianLocation);
 
+      const user = await userRepo.findOne({
+        where: { id: userId },
+        relations: ['technicianProfile'],
+      });
+
+      if (!user || !user.technicianProfile) {
+        throw new NotFoundException('Technician profile not found');
+      }
+
+      const technicianProfileId = user.technicianProfile.id;
+
       const location = await locationRepo.findOne({
-        where: { id, technicianId },
+        where: { id, technicianId: technicianProfileId },
       });
 
       if (!location) {
@@ -2750,7 +2900,7 @@ export class UserService {
       if (dto.isDefault === true) {
         // Set all other locations for this technician to isDefault = false
         await locationRepo.update(
-          { technicianId },
+          { technicianId: technicianProfileId },
           { isDefault: false },
         );
         location.isDefault = true;
@@ -2769,14 +2919,26 @@ export class UserService {
   }
 
   async deleteTechnicianLocation(
-    technicianId: number,
+    userId: number,
     id: number,
   ) {
     return this.dataSource.transaction(async (manager) => {
+      const userRepo = manager.getRepository(User);
       const locationRepo = manager.getRepository(TechnicianLocation);
 
+      const user = await userRepo.findOne({
+        where: { id: userId },
+        relations: ['technicianProfile'],
+      });
+
+      if (!user || !user.technicianProfile) {
+        throw new NotFoundException('Technician profile not found');
+      }
+
+      const technicianProfileId = user.technicianProfile.id;
+
       const location = await locationRepo.findOne({
-        where: { id, technicianId },
+        where: { id, technicianId: technicianProfileId },
       });
 
       if (!location) {

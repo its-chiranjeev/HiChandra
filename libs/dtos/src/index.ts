@@ -32,3 +32,4 @@ export * from './booking/admin-update-booking-review.dto';
 export * from './user/update-technician-services.dto';
 export * from './user/update-technician-location.dto';
 export * from './user/update-technician-brand-expertise.dto';
+export * from './user/create-technician-location.dto';

@@ -13,10 +13,21 @@ export class AdminCreateTechnicianDto {
   lastName?: string;
 
   @IsString()
+  @IsOptional()
+  @Transform(({ value }) => value?.trim())
+  username?: string;
+
+  @IsString()
   @IsNotEmpty()
   @Length(10, 15)
   @Transform(({ value }) => value?.trim())
   phone!: string;
+
+  @IsString()
+  @IsOptional()
+  @Length(1, 5)
+  @Transform(({ value }) => value?.trim())
+  countryCode?: string;
 
   @IsEmail()
   @IsOptional()

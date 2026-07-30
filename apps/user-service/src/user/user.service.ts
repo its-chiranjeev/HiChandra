@@ -1941,26 +1941,43 @@ export class UserService {
   }
 
   async adminCreateTechnicianService(dto: AdminCreateTechnicianDto) {
-    const existingUser = await this.userRepository.findOne({
-      where: [
-        { phone: dto.phone },
-        { username: dto.phone },
-        ...(dto.email ? [{ email: dto.email }] : []),
-      ],
+    const targetUsername = dto.username || dto.phone;
+
+    // Check Phone uniqueness
+    const existingPhone = await this.userRepository.findOne({
+      where: { phone: dto.phone },
     });
-    if (existingUser) {
-      throw new ConflictException('A user with this phone, email, or username already exists');
+    if (existingPhone) {
+      throw new ConflictException('Phone number already in use');
     }
 
-    const username = dto.phone;
+    // Check Username uniqueness
+    const existingUsername = await this.userRepository.findOne({
+      where: { username: targetUsername },
+    });
+    if (existingUsername) {
+      throw new ConflictException('Username already in use');
+    }
+
+    // Check Email uniqueness
+    if (dto.email) {
+      const existingEmail = await this.userRepository.findOne({
+        where: { email: dto.email },
+      });
+      if (existingEmail) {
+        throw new ConflictException('Email already in use');
+      }
+    }
+
     const hashedPassword = await bcrypt.hash(dto.password, 10);
 
     const newUser = this.userRepository.create({
       firstName: dto.firstName,
       lastName: dto.lastName,
       phone: dto.phone,
+      countryCode: dto.countryCode || null,
       email: dto.email,
-      username,
+      username: targetUsername,
       password: hashedPassword,
       role: USER_ROLE.TECHNICIAN,
       status: USER_STATUS.ACTIVE,

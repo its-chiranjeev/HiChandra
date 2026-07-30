@@ -64,7 +64,10 @@ import {
   UpdateTechnicianStatusDto,
   AdminCreateTechnicianDto,
   CreateTechnicianPayoutAccountDto,
-  UpdateTechnicianPayoutAccountDto
+  UpdateTechnicianPayoutAccountDto,
+  UpdateTechnicianServicesDto,
+  UpdateTechnicianLocationDto,
+  UpdateTechnicianBrandExpertiseDto
 } from '@hichandra/dtos';
 import { RazorpayXService, PaymentService } from '@hichandra/payment';
 import { SmsService } from '@hichandra/sms-services';
@@ -1263,11 +1266,7 @@ export class UserService {
         throw new NotFoundException('User not found');
       }
 
-      const hasTechFields =
-        dto.technicianProfile ||
-        dto.location ||
-        dto.services ||
-        dto.brandExpertise;
+      const hasTechFields = !!dto.technicianProfile;
       if (hasTechFields && user.role !== USER_ROLE.TECHNICIAN) {
         throw new BadRequestException(
           'Only technicians can update technician-specific profile fields',
@@ -1291,6 +1290,19 @@ export class UserService {
           throw new ConflictException('Phone number already in use');
         }
         user.phone = dto.phone;
+      }
+      if (dto.email && dto.email !== user.email) {
+        const existing = await userRepo.findOne({
+          where: { email: dto.email },
+        });
+        if (existing) {
+          throw new ConflictException('Email address already in use');
+        }
+        user.email = dto.email;
+      }
+
+      if (dto.password) {
+        user.password = await bcrypt.hash(dto.password, 10);
       }
 
       if (dto.firstName !== undefined) user.firstName = dto.firstName;
@@ -1342,134 +1354,6 @@ export class UserService {
             profile.hasVehicle = profileData.hasVehicle;
 
           await profileRepo.save(profile);
-
-          const payoutRepo = manager.getRepository(TechnicianPayoutAccount);
-          let payoutAccount = await payoutRepo.findOne({
-            where: { technicianId: user.id },
-          });
-
-          const upiId = profileData.upiId !== undefined ? profileData.upiId : payoutAccount?.upiId;
-          const accountHolderName = profileData.accountHolderName !== undefined ? profileData.accountHolderName : payoutAccount?.accountHolderName;
-          const bankName = profileData.bankName !== undefined ? profileData.bankName : payoutAccount?.bankName;
-          const accountNumber = profileData.accountNumber !== undefined ? profileData.accountNumber : payoutAccount?.accountNumber;
-          const ifscCode = profileData.ifscCode !== undefined ? profileData.ifscCode : payoutAccount?.ifscCode;
-
-          if (
-            upiId !== undefined ||
-            accountHolderName !== undefined ||
-            bankName !== undefined ||
-            accountNumber !== undefined ||
-            ifscCode !== undefined
-          ) {
-            let accountType = payoutAccount?.accountType;
-            if (upiId) {
-              accountType = PAYOUT_ACCOUNT_TYPE.VPA;
-            } else if (accountNumber) {
-              accountType = PAYOUT_ACCOUNT_TYPE.BANK_ACCOUNT;
-            }
-
-            if (!payoutAccount) {
-              payoutAccount = payoutRepo.create({
-                technicianId: user.id,
-                upiId,
-                accountHolderName,
-                bankName,
-                accountNumber,
-                ifscCode,
-                accountType,
-                status: PAYOUT_ONBOARDING_STATUS.PENDING,
-                isActive: false,
-              });
-            } else {
-              payoutAccount.upiId = upiId;
-              payoutAccount.accountHolderName = accountHolderName;
-              payoutAccount.bankName = bankName;
-              payoutAccount.accountNumber = accountNumber;
-              payoutAccount.ifscCode = ifscCode;
-              payoutAccount.accountType = accountType;
-            }
-            await payoutRepo.save(payoutAccount);
-          }
-        }
-
-        if (dto.location) {
-          const locData = dto.location;
-          let location = await locationRepo.findOne({
-            where: { technicianId: profile.id },
-          });
-
-          if (!location) {
-            location = locationRepo.create({
-              technicianId: profile.id,
-              latitude: locData.latitude ?? 0,
-              longitude: locData.longitude ?? 0,
-              currentLat: locData.latitude ?? 0,
-              currentLng: locData.longitude ?? 0,
-              locationUpdatedAt: new Date(),
-              isActive: true,
-            });
-          }
-
-          if (locData.latitude !== undefined) {
-            location.latitude = locData.latitude;
-            location.currentLat = locData.latitude;
-            location.locationUpdatedAt = new Date();
-          }
-          if (locData.longitude !== undefined) {
-            location.longitude = locData.longitude;
-            location.currentLng = locData.longitude;
-            location.locationUpdatedAt = new Date();
-          }
-          if (locData.fullAddress !== undefined)
-            location.fullAddress = locData.fullAddress;
-          if (locData.city !== undefined) location.city = locData.city;
-          if (locData.state !== undefined) location.state = locData.state;
-          if (locData.pincode !== undefined) location.pincode = locData.pincode;
-          if (locData.serviceRadiusKm !== undefined)
-            location.serviceRadiusKm = locData.serviceRadiusKm;
-
-          await locationRepo.save(location);
-        }
-
-        if (dto.services) {
-          await techServiceRepo.delete({ technicianProfileId: profile.id });
-
-          if (dto.services.length > 0) {
-            const uniqueIds = Array.from(new Set(dto.services));
-            for (const sId of uniqueIds) {
-              const sExists = await serviceRepo.findOne({
-                where: { id: sId, isActive: true },
-              });
-              if (!sExists) {
-                throw new BadRequestException(
-                  `Service with ID ${sId} does not exist or is inactive`,
-                );
-              }
-            }
-
-            const servicesToSave = uniqueIds.map((serviceId) =>
-              techServiceRepo.create({
-                technicianProfileId: profile.id,
-                serviceId,
-              }),
-            );
-            await techServiceRepo.save(servicesToSave);
-          }
-        }
-
-        if (dto.brandExpertise) {
-          await brandRepo.delete({ technicianProfileId: profile.id });
-
-          if (dto.brandExpertise.length > 0) {
-            const uniqueBrands = Array.from(new Set(dto.brandExpertise));
-            const brandsToSave = uniqueBrands.map((brandName) =>
-              brandRepo.create({
-                technicianProfileId: profile.id,
-                brandName,
-              }),
-            );
-            await brandRepo.save(brandsToSave);
-          }
         }
       }
 
@@ -2144,21 +2028,6 @@ export class UserService {
       );
     }
 
-    /*
-    * CHECK EXISTING PAYOUT ACCOUNT
-    */
-
-    const existingAccount =
-      await this
-        .technicianPayoutAccountRepository
-        .findByTechnicianId(technicianId);
-
-    if (existingAccount) {
-      throw new ConflictException(
-        'Technician payout account already exists',
-      );
-    }
-
     const {
       accountType,
       upiId,
@@ -2327,11 +2196,13 @@ export class UserService {
 
   async updateTechnicianPayoutAccount(
     technicianId: number,
+    id: number,
     dto: UpdateTechnicianPayoutAccountDto,
   ) {
     const payoutAccount =
-      await this.technicianPayoutAccountRepository
-        .findByTechnicianId(technicianId);
+      await this.technicianPayoutAccountRepository.findOne({
+        where: { id, technicianId },
+      });
 
     if (!payoutAccount) {
       throw new NotFoundException(
@@ -2566,10 +2437,12 @@ export class UserService {
 
   async deleteTechnicianPayoutAccount(
     technicianId: number,
+    id: number,
   ) {
     const payoutAccount =
-      await this.technicianPayoutAccountRepository
-        .findByTechnicianId(technicianId);
+      await this.technicianPayoutAccountRepository.findOne({
+        where: { id, technicianId },
+      });
 
     if (!payoutAccount) {
       throw new NotFoundException(
@@ -2577,11 +2450,10 @@ export class UserService {
       );
     }
 
-    await this.technicianPayoutAccountRepository
-      .deleteByTechnicianId(technicianId);
+    await this.technicianPayoutAccountRepository.delete(id);
 
     return {
-      technicianId,
+      id,
       deleted: true,
     };
   }
@@ -2763,5 +2635,213 @@ export class UserService {
       walletBalance: this.roundCurrency(bookingStats.totalEarning,),
       currency: 'INR',
     };
+  }
+
+  async updateTechnicianServices(
+    userId: number,
+    dto: UpdateTechnicianServicesDto,
+  ) {
+    return this.dataSource.transaction(async (manager) => {
+      const userRepo = manager.getRepository(User);
+      const profileRepo = manager.getRepository(TechnicianProfile);
+      const techServiceRepo = manager.getRepository(TechnicianService);
+      const serviceRepo = manager.getRepository(Service);
+
+      const user = await userRepo.findOne({
+        where: { id: userId },
+        relations: ['technicianProfile'],
+      });
+
+      if (!user) {
+        throw new NotFoundException('User not found');
+      }
+
+      if (user.role !== USER_ROLE.TECHNICIAN) {
+        throw new BadRequestException('Only technicians can manage services');
+      }
+
+      let profile = user.technicianProfile;
+      if (!profile) {
+        profile = profileRepo.create({
+          userId: user.id,
+          status: TECHNICIAN_STATUS.PENDING_APPROVAL,
+        });
+        profile = await profileRepo.save(profile);
+      }
+
+      // Delete existing technician services
+      await techServiceRepo.delete({ technicianProfileId: profile.id });
+
+      // Save new services if provided
+      if (dto.services && dto.services.length > 0) {
+        const uniqueIds = Array.from(new Set(dto.services));
+        for (const sId of uniqueIds) {
+          const sExists = await serviceRepo.findOne({
+            where: { id: sId, isActive: true },
+          });
+          if (!sExists) {
+            throw new BadRequestException(
+              `Service with ID ${sId} does not exist or is inactive`,
+            );
+          }
+        }
+
+        const servicesToSave = uniqueIds.map((serviceId) =>
+          techServiceRepo.create({
+            technicianProfileId: profile.id,
+            serviceId,
+          }),
+        );
+        await techServiceRepo.save(servicesToSave);
+      }
+
+      return {
+        success: true,
+        message: 'Technician services updated successfully',
+      };
+    });
+  }
+
+  async updateTechnicianLocation(
+    technicianId: number,
+    id: number,
+    dto: UpdateTechnicianLocationDto,
+  ) {
+    return this.dataSource.transaction(async (manager) => {
+      const locationRepo = manager.getRepository(TechnicianLocation);
+
+      const location = await locationRepo.findOne({
+        where: { id, technicianId },
+      });
+
+      if (!location) {
+        throw new NotFoundException('Technician location not found');
+      }
+
+      if (dto.latitude !== undefined) {
+        location.latitude = dto.latitude;
+        location.currentLat = dto.latitude;
+        location.locationUpdatedAt = new Date();
+      }
+      if (dto.longitude !== undefined) {
+        location.longitude = dto.longitude;
+        location.currentLng = dto.longitude;
+        location.locationUpdatedAt = new Date();
+      }
+      if (dto.serviceRadiusKm !== undefined) {
+        location.serviceRadiusKm = dto.serviceRadiusKm;
+      }
+      if (dto.fullAddress !== undefined) {
+        location.fullAddress = dto.fullAddress;
+      }
+      if (dto.city !== undefined) {
+        location.city = dto.city;
+      }
+      if (dto.state !== undefined) {
+        location.state = dto.state;
+      }
+      if (dto.pincode !== undefined) {
+        location.pincode = dto.pincode;
+      }
+      if (dto.isActive !== undefined) {
+        location.isActive = dto.isActive;
+      }
+
+      if (dto.isDefault === true) {
+        // Set all other locations for this technician to isDefault = false
+        await locationRepo.update(
+          { technicianId },
+          { isDefault: false },
+        );
+        location.isDefault = true;
+      } else if (dto.isDefault === false) {
+        location.isDefault = false;
+      }
+
+      const savedLocation = await locationRepo.save(location);
+
+      return {
+        success: true,
+        message: 'Technician location updated successfully',
+        data: savedLocation,
+      };
+    });
+  }
+
+  async deleteTechnicianLocation(
+    technicianId: number,
+    id: number,
+  ) {
+    return this.dataSource.transaction(async (manager) => {
+      const locationRepo = manager.getRepository(TechnicianLocation);
+
+      const location = await locationRepo.findOne({
+        where: { id, technicianId },
+      });
+
+      if (!location) {
+        throw new NotFoundException('Technician location not found');
+      }
+
+      await locationRepo.delete(id);
+
+      return {
+        success: true,
+        message: 'Technician location deleted successfully',
+      };
+    });
+  }
+
+  async updateTechnicianBrandExpertise(
+    userId: number,
+    dto: UpdateTechnicianBrandExpertiseDto,
+  ) {
+    return this.dataSource.transaction(async (manager) => {
+      const userRepo = manager.getRepository(User);
+      const profileRepo = manager.getRepository(TechnicianProfile);
+      const brandRepo = manager.getRepository(TechnicianBrandExpertise);
+
+      const user = await userRepo.findOne({
+        where: { id: userId },
+        relations: ['technicianProfile'],
+      });
+
+      if (!user) {
+        throw new NotFoundException('User not found');
+      }
+
+      if (user.role !== USER_ROLE.TECHNICIAN) {
+        throw new BadRequestException('Only technicians can manage brand expertise');
+      }
+
+      let profile = user.technicianProfile;
+      if (!profile) {
+        profile = profileRepo.create({
+          userId: user.id,
+          status: TECHNICIAN_STATUS.PENDING_APPROVAL,
+        });
+        profile = await profileRepo.save(profile);
+      }
+
+      // Delete existing brand expertise records
+      await brandRepo.delete({ technicianProfileId: profile.id });
+
+      // Save new brands if provided
+      if (dto.brands && dto.brands.length > 0) {
+        const uniqueBrands = Array.from(new Set(dto.brands));
+        const brandsToSave = uniqueBrands.map((brandName) =>
+          brandRepo.create({
+            technicianProfileId: profile.id,
+            brandName,
+          }),
+        );
+        await brandRepo.save(brandsToSave);
+      }
+
+      return {
+        success: true,
+        message: 'Technician brand expertise updated successfully',
+      };
+    });
   }
 }

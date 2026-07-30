@@ -17,7 +17,10 @@ import {
   UpdateTechnicianStatusDto,
   AdminCreateTechnicianDto,
   CreateTechnicianPayoutAccountDto,
-  UpdateTechnicianPayoutAccountDto
+  UpdateTechnicianPayoutAccountDto,
+  UpdateTechnicianServicesDto,
+  UpdateTechnicianLocationDto,
+  UpdateTechnicianBrandExpertiseDto
 } from '@hichandra/dtos';
 import { TECHNICIAN_STATUS, USER_ROLE, USER_STATUS } from '@hichandra/entities';
 import { UpdateServiceDto } from '@hichandra/dtos';
@@ -228,12 +231,13 @@ export class UserController {
     };
   }
 
-  @Patch('technician/payout-account')
+  @Patch('technician/payout-account/:id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(USER_ROLE.TECHNICIAN)
   @HttpCode(HttpStatus.OK)
   async updateTechnicianPayoutAccount(
     @Req() req: any,
+    @Param('id', ParseIntPipe) id: number,
     @Body(
       new ValidationPipe({
         whitelist: true,
@@ -249,6 +253,7 @@ export class UserController {
       await this.userService
         .updateTechnicianPayoutAccount(
           technicianId,
+          id,
           dto,
         );
 
@@ -260,12 +265,13 @@ export class UserController {
     };
   }
 
-  @Delete('technician/payout-account')
+  @Delete('technician/payout-account/:id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(USER_ROLE.TECHNICIAN)
   @HttpCode(HttpStatus.OK)
   async deleteTechnicianPayoutAccount(
     @Req() req: any,
+    @Param('id', ParseIntPipe) id: number,
   ) {
     const technicianId =
       req.user.id || req.user.sub;
@@ -274,6 +280,7 @@ export class UserController {
       await this.userService
         .deleteTechnicianPayoutAccount(
           technicianId,
+          id,
         );
 
     return {
@@ -407,12 +414,63 @@ export class UserController {
     @Req() req: any,
     @UploadedFiles()
     files: {
-      profileImage?: Express.Multer.File[];
+      profileImage?: Express.Multer.File[]; 
     },
     @Body(new ValidationPipe({ whitelist: true, transform: true }))
     dto: UpdateProfileDto,
   ) {
     return this.userService.updateProfileService(req.user.id, dto, files);
+  }
+
+  @Patch('technician/services')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLE.TECHNICIAN)
+  @HttpCode(HttpStatus.OK)
+  async updateTechnicianServices(
+    @Req() req: any,
+    @Body(new ValidationPipe({ whitelist: true, transform: true }))
+    dto: UpdateTechnicianServicesDto,
+  ) {
+    return this.userService.updateTechnicianServices(req.user.id, dto);
+  }
+
+  @Patch('technician/location/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLE.TECHNICIAN)
+  @HttpCode(HttpStatus.OK)
+  async updateTechnicianLocation(
+    @Req() req: any,
+    @Param('id', ParseIntPipe) id: number,
+    @Body(new ValidationPipe({ whitelist: true, transform: true }))
+    dto: UpdateTechnicianLocationDto,
+  ) {
+    const technicianId = req.user.id || req.user.sub;
+    return this.userService.updateTechnicianLocation(technicianId, id, dto);
+  }
+
+  @Delete('technician/location/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLE.TECHNICIAN)
+  @HttpCode(HttpStatus.OK)
+  async deleteTechnicianLocation(
+    @Req() req: any,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    const technicianId = req.user.id || req.user.sub;
+    return this.userService.deleteTechnicianLocation(technicianId, id);
+  }
+
+  @Patch('technician/brand-expertise')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLE.TECHNICIAN)
+  @HttpCode(HttpStatus.OK)
+  async updateTechnicianBrandExpertise(
+    @Req() req: any,
+    @Body(new ValidationPipe({ whitelist: true, transform: true }))
+    dto: UpdateTechnicianBrandExpertiseDto,
+  ) {
+    const technicianId = req.user.id || req.user.sub;
+    return this.userService.updateTechnicianBrandExpertise(technicianId, dto);
   }
 
   @Get('admin/dashboard-stats')

@@ -30,8 +30,8 @@ export class AssignmentService {
       }
 
       const location = Array.isArray(locationsVal)
-        ? locationsVal[0]
-        : locationsVal;
+        ? locationsVal.find((loc) => loc.isDefault)
+        : null;
       if (location) {
         return this.filterTechnicianBasedOnLocationLatLong(
           location,

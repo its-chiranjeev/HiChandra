@@ -684,12 +684,12 @@ export class UserService {
       }
 
       const otpRecord = await otpRepository.findOne({
-        where: { phone: dto.phone, countryCode: dto.countryCode || IsNull() },
+        where: { phone: dto.phone },
       });
 
       if (!otpRecord) {
         throw new BadRequestException(
-          'OTP record not found for this phone number and country code',
+          'OTP record not found for this phone number',
         );
       }
 

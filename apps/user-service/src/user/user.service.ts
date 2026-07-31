@@ -642,11 +642,11 @@ export class UserService {
     // if (!dto.email) {
     //   throw new BadRequestException('Email is required');
     // }
-    if (!dto.phone) {
+    if (!dto.technicianId && !dto.phone) {
       throw new BadRequestException('Phone number is required');
     }
 
-    return this.dataSource.transaction(async (manager) => {
+    const result = await this.dataSource.transaction(async (manager) => {
       const userRepository = manager.getRepository(User);
       const otpRepository = manager.getRepository(Otp);
       const technicianProfileRepository =
@@ -934,8 +934,6 @@ export class UserService {
         await customerAddressRepository.save(newAddress);
       }
 
-      const tokenData = await this.authModuleService.issueAuthTokens(savedUser);
-
       let userResponse: any = {
         id: savedUser.id,
         email: savedUser.email,
@@ -981,11 +979,18 @@ export class UserService {
       }
 
       return {
-        message: 'Registration successful',
-        tokens: tokenData.tokens,
-        user: userResponse,
+        savedUser,
+        userResponse,
       };
     });
+
+    const tokenData = await this.authModuleService.issueAuthTokens(result.savedUser);
+
+    return {
+      message: 'Registration successful',
+      tokens: tokenData.tokens,
+      user: result.userResponse,
+    };
   }
 
   async createServiceWithPricing(

@@ -175,19 +175,19 @@ export class CustomerAddressDto {
 }
 
 export class RegisterDto {
-  @IsString()
   @IsOptional()
+  @IsString()
   @Transform(({ value }) => value?.trim())
   email?: string; // email
 
+  @IsOptional()
   @IsString()
-  @ValidateIf(o => !o.technicianId)
   @IsNotEmpty()
   @Transform(({ value }) => value?.trim())
   username?: string;
 
+  @IsOptional()
   @IsString()
-  @ValidateIf(o => !o.technicianId)
   @IsNotEmpty()
   phone?: string;
 
@@ -197,9 +197,8 @@ export class RegisterDto {
   @MaxLength(5)
   countryCode?: string;
 
+  @IsOptional()
   @IsString()
-  @ValidateIf(o => !o.technicianId)
-  @IsNotEmpty()
   @Transform(({ value }) => value?.trim())
   firstName?: string;
 
@@ -208,9 +207,8 @@ export class RegisterDto {
   @Transform(({ value }) => value?.trim())
   lastName?: string;
 
+  @IsOptional()
   @IsString()
-  @ValidateIf(o => !o.technicianId)
-  @IsNotEmpty()
   @Transform(({ value }) => value?.trim())
   password?: string;
 
@@ -259,7 +257,7 @@ export class RegisterDto {
   // @Type(() => CustomerAddressDto)
   // customerAddress?: CustomerAddressDto;
 
-  @IsOptional() 
+  @IsOptional()
   @Transform(({ value }) => {
     if (typeof value === 'string') {
       return plainToInstance(CustomerAddressDto, JSON.parse(value));

@@ -331,6 +331,7 @@ export class UserController {
     @Body(new ValidationPipe({ whitelist: true, transform: true }))
     dto: RegisterDto,
   ) {
+    console.log("hello");
     return this.userService.userRegisterService(dto, files);
   }
 
@@ -580,6 +581,6 @@ export class UserController {
     if (process.env.NODE_ENV === 'production') {
       return;
     }
-    await this.userService.scramblePhoneNumbers();
+    // await this.userService.scramblePhoneNumbers();
   }
 }

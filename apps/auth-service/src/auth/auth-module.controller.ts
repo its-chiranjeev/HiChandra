@@ -24,8 +24,8 @@ export class AuthModuleController {
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
   async logout(@Req() req: any) {
-    console.log(req.user);
-    console.log(req.user.id);
+    // console.log(req.user);
+    // console.log(req.user.id);
     return this.authModuleService.logoutService(req.user.id);
   }
 

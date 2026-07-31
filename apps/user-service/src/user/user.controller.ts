@@ -147,8 +147,8 @@ export class UserController {
         } catch (e) { }
       }
     }
-    console.log(status);
-    console.log(typeof status);
+    // console.log(status);
+    // console.log(typeof status);
     return this.userService.getAllServices(
       page ? Number(page) : undefined,
       limit ? Number(limit) : undefined,
@@ -331,7 +331,7 @@ export class UserController {
     @Body(new ValidationPipe({ whitelist: true, transform: true }))
     dto: RegisterDto,
   ) {
-    console.log("hello");
+    // console.log("hello");
     return this.userService.userRegisterService(dto, files);
   }
 

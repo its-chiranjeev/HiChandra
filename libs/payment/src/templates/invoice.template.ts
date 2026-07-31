@@ -315,12 +315,14 @@ export const paymentInvoiceTemplate = (
         </td>
       </tr>
 
+      ${Number(data.platformFee) > 0 ? `
       <tr>
         <td>Platform Fee</td>
         <td>
           ${data.currency} ${data.platformFee}
         </td>
       </tr>
+      ` : ''}
 
       <tr>
         <td>

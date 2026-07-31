@@ -368,17 +368,11 @@ export class BookingService {
         );
       }
 
-      const commissionRate = 0.15; // 15% platform commission
-      const platformCommission = Number((subtotal * commissionRate).toFixed(2));
-      const platformEarning = Number(
-        (platformFee + platformCommission).toFixed(2),
-      );
-      const technicianEarning = Number(
-        (subtotal - platformCommission).toFixed(2),
-      );
+      const platformEarning = platformFee;
+      const technicianEarning = subtotal;
 
       const priceBreakdown: PriceBreakdown = {
-        serviceBasePrice,
+        serviceBasePrice: appliedBasePrice,
         distanceCharge,
         emergencyCharge,
         peakHourCharge,
@@ -434,7 +428,7 @@ export class BookingService {
       const activeTechnicians = allTechnicianWithService.filter(
         (u): u is User => !!u,
       );
-
+      // console.log(activeTechnicians);
       const matchedTechnicians =
         await this.assignmentService.assignTechnician(
           bookingWithRelations,
@@ -517,10 +511,25 @@ export class BookingService {
       order: { createdAt: 'DESC' },
     });
 
+    let payoutAccounts: TechnicianPayoutAccount[] = [];
+    if (booking.technicianId) {
+      payoutAccounts = await this.dataSource.getRepository(TechnicianPayoutAccount).find({
+        where: { technicianId: booking.technicianId },
+      });
+    }
+
     const { customerOtp, ...bookingWithoutOtp } = booking;
+
+    const technician = bookingWithoutOtp.technician
+      ? {
+        ...bookingWithoutOtp.technician,
+        payoutAccounts,
+      }
+      : null;
 
     return {
       ...bookingWithoutOtp,
+      technician,
       payments,
       complaints,
       payouts,
@@ -784,13 +793,28 @@ export class BookingService {
         p.paymentType === PAYMENT_TYPE.TECHNICIAN_PAYOUT
     ) || null;
 
+    let payoutAccounts: TechnicianPayoutAccount[] = [];
+    if (booking.technicianId) {
+      payoutAccounts = await this.dataSource.getRepository(TechnicianPayoutAccount).find({
+        where: { technicianId: booking.technicianId },
+      });
+    }
+
     const { customerOtp, payments: _, ...bookingWithoutOtp } = booking;
+
+    const technician = bookingWithoutOtp.technician
+      ? {
+        ...bookingWithoutOtp.technician,
+        payoutAccounts,
+      }
+      : null;
 
     return {
       success: true,
       message: 'Booking fetched successfully',
       data: {
         ...bookingWithoutOtp,
+        technician,
         bookingPayment,
         technicianPayout,
       },
@@ -2917,10 +2941,8 @@ export class BookingService {
         throw new BadRequestException('Calculation error: Total amount must be greater than base price.');
       }
 
-      const commissionRate = 0.15;
-      const platformCommission = Number((subtotal * commissionRate).toFixed(2));
-      const platformEarning = Number((platformFee + platformCommission).toFixed(2));
-      const technicianEarning = Number((subtotal - platformCommission).toFixed(2));
+      const platformEarning = platformFee;
+      const technicianEarning = subtotal;
 
       const priceBreakdown: PriceBreakdown = {
         serviceBasePrice: appliedBasePrice,

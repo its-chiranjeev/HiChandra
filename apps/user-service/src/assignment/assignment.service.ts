@@ -40,7 +40,6 @@ export class AssignmentService {
       }
       return false;
     });
-
     this.logger.log(
       `Found ${matchedTechnicians.length} technicians within radius.`,
     );

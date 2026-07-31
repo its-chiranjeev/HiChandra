@@ -885,6 +885,7 @@ export class UserService {
           city: profileData.city,
           state: profileData.state,
           pincode: profileData.pincode,
+          isDefault: true,
           isActive: true,
         });
         await locationRepository.save(newLocation);
@@ -1665,86 +1666,86 @@ export class UserService {
      * 1. Admin is approving the technician
      * 2. Fund account has not already been created
      */
-    if (
-      dto.status === TECHNICIAN_STATUS.APPROVED &&
-      (!payoutAccount || !payoutAccount.razorpayFundAccountId)
-    ) {
-      const hasUpi = payoutAccount && payoutAccount.upiId && payoutAccount.upiId.trim() !== '';
+    // if (
+    //   dto.status === TECHNICIAN_STATUS.APPROVED &&
+    //   (!payoutAccount || !payoutAccount.razorpayFundAccountId)
+    // ) {
+    //   const hasUpi = payoutAccount && payoutAccount.upiId && payoutAccount.upiId.trim() !== '';
 
-      if (!hasUpi) {
-        if (
-          !payoutAccount ||
-          !payoutAccount.accountHolderName ||
-          !payoutAccount.accountNumber ||
-          !payoutAccount.ifscCode ||
-          !payoutAccount.bankName
-        ) {
-          throw new BadRequestException(
-            'Technician bank details or UPI ID are required before approval',
-          );
-        }
-      }
+    //   if (!hasUpi) {
+    //     if (
+    //       !payoutAccount ||
+    //       !payoutAccount.accountHolderName ||
+    //       !payoutAccount.accountNumber ||
+    //       !payoutAccount.ifscCode ||
+    //       !payoutAccount.bankName
+    //     ) {
+    //       throw new BadRequestException(
+    //         'Technician bank details or UPI ID are required before approval',
+    //       );
+    //     }
+    //   }
 
-      let contactId = payoutAccount.razorpayContactId;
+    //   let contactId = payoutAccount.razorpayContactId;
 
-      /*
-       * Create Contact only when it was not created earlier.
-       * This avoids duplicate Razorpay contacts if approval is retried.
-       */
-      if (!contactId) {
-        const fullName =
-          `${technician.firstName || ''} ${technician.lastName || ''
-            }`.trim() || technician.username;
+    //   /*
+    //    * Create Contact only when it was not created earlier.
+    //    * This avoids duplicate Razorpay contacts if approval is retried.
+    //    */
+    //   if (!contactId) {
+    //     const fullName =
+    //       `${technician.firstName || ''} ${technician.lastName || ''
+    //         }`.trim() || technician.username;
 
-        if (!fullName) {
-          throw new BadRequestException(
-            'Technician name is required to create Razorpay contact',
-          );
-        }
+    //     if (!fullName) {
+    //       throw new BadRequestException(
+    //         'Technician name is required to create Razorpay contact',
+    //       );
+    //     }
 
-        const contact = await this.razorpayXService.createContact({
-          technicianId: technician.id,
-          name: fullName,
-          email: technician.email || undefined,
-          phone: technician.phone || undefined,
-        });
+    //     const contact = await this.razorpayXService.createContact({
+    //       technicianId: technician.id,
+    //       name: fullName,
+    //       email: technician.email || undefined,
+    //       phone: technician.phone || undefined,
+    //     });
 
-        contactId = contact.id;
-        payoutAccount.razorpayContactId = contact.id;
-      }
+    //     contactId = contact.id;
+    //     payoutAccount.razorpayContactId = contact.id;
+    //   }
 
-      if (!contactId) {
-        throw new BadRequestException(
-          'Failed to create Razorpay contact',
-        );
-      }
+    //   if (!contactId) {
+    //     throw new BadRequestException(
+    //       'Failed to create Razorpay contact',
+    //     );
+    //   }
 
-      /*
-       * Create the beneficiary fund account in RazorpayX.
-       * This fundAccountId will be used later during direct payout.
-       */
-      let fundAccount;
-      if (hasUpi) {
-        fundAccount = await this.razorpayXService.createVpaFundAccount({
-          contactId,
-          upiId: payoutAccount.upiId!,
-        });
-        payoutAccount.accountType = PAYOUT_ACCOUNT_TYPE.VPA;
-      } else {
-        fundAccount = await this.razorpayXService.createFundAccount({
-          contactId,
-          accountHolderName: payoutAccount.accountHolderName!,
-          accountNumber: payoutAccount.accountNumber!,
-          ifscCode: payoutAccount.ifscCode!,
-        });
-        payoutAccount.accountType = PAYOUT_ACCOUNT_TYPE.BANK_ACCOUNT;
-      }
+    //   /*
+    //    * Create the beneficiary fund account in RazorpayX.
+    //    * This fundAccountId will be used later during direct payout.
+    //    */
+    //   let fundAccount;
+    //   if (hasUpi) {
+    //     fundAccount = await this.razorpayXService.createVpaFundAccount({
+    //       contactId,
+    //       upiId: payoutAccount.upiId!,
+    //     });
+    //     payoutAccount.accountType = PAYOUT_ACCOUNT_TYPE.VPA;
+    //   } else {
+    //     fundAccount = await this.razorpayXService.createFundAccount({
+    //       contactId,
+    //       accountHolderName: payoutAccount.accountHolderName!,
+    //       accountNumber: payoutAccount.accountNumber!,
+    //       ifscCode: payoutAccount.ifscCode!,
+    //     });
+    //     payoutAccount.accountType = PAYOUT_ACCOUNT_TYPE.BANK_ACCOUNT;
+    //   }
 
-      payoutAccount.razorpayFundAccountId = fundAccount.id;
-      payoutAccount.status = PAYOUT_ONBOARDING_STATUS.ACTIVE;
-      payoutAccount.isActive = true;
-      await payoutAccountRepo.save(payoutAccount);
-    }
+    //   payoutAccount.razorpayFundAccountId = fundAccount.id;
+    //   payoutAccount.status = PAYOUT_ONBOARDING_STATUS.ACTIVE;
+    //   payoutAccount.isActive = true;
+    //   await payoutAccountRepo.save(payoutAccount);
+    // }
 
     // Change approval/rejection status after external setup succeeds.
     profile.status = dto.status;
@@ -2632,12 +2633,12 @@ export class UserService {
       console.warn('Scramble phone cron skipped because environment is production');
       return;
     }
-    console.log("Scramble phone cron is running");
+    // console.log("Scramble phone cron is running");
     const targetPhones = phones && phones.length > 0 ? phones : [
-      // '8923101766',
+      '8923101766',
       '9817361209',
       '7082354083',
-      // '7668697182',
+      '7668697182',
       '9354678205',
     ];
 

@@ -327,19 +327,30 @@ export class PaymentService {
       ? 'Payment Date'
       : 'Invoice Date';
 
-    const serviceBasePrice =
-      Number(booking.service?.pricingRule?.serviceBasePrice ?? 0);
+    const breakdown = typeof booking.priceBreakdown === 'string'
+      ? JSON.parse(booking.priceBreakdown)
+      : booking.priceBreakdown;
 
-    const gst =
+    const serviceBasePrice = breakdown?.serviceBasePrice !== undefined
+      ? Number(breakdown.serviceBasePrice)
+      : Number(booking.service?.pricingRule?.serviceBasePrice ?? 0);
+
+    const gstPercent =
       Number(booking.service?.pricingRule?.gst ?? 0);
 
-    const platformFee =
-      Number(booking.service?.pricingRule?.platformFee ?? 0);
+    const platformFee = breakdown?.platformFee !== undefined
+      ? Number(breakdown.platformFee)
+      : (booking.service?.pricingRule?.isPlatformFeeApplied
+          ? Number(booking.service?.pricingRule?.platformFee ?? 0)
+          : 0);
 
-    const gstAmount = (serviceBasePrice * gst) / 100;
+    const gstAmount = breakdown?.gst !== undefined
+      ? Number(breakdown.gst)
+      : ((serviceBasePrice * gstPercent) / 100);
 
-    const finalAmount =
-      serviceBasePrice + gstAmount + platformFee;
+    const finalAmount = booking.totalAmount !== undefined
+      ? Number(booking.totalAmount)
+      : (serviceBasePrice + gstAmount + platformFee);
 
     const html = paymentInvoiceTemplate({
 
@@ -365,7 +376,7 @@ export class PaymentService {
         : '-',
 
       serviceBasePrice: serviceBasePrice.toFixed(2),
-      gstPercent: gst.toFixed(2),
+      gstPercent: gstPercent.toFixed(2),
       gstAmount: gstAmount.toFixed(2),
       platformFee: platformFee.toFixed(2),
       finalAmount: finalAmount.toFixed(2),

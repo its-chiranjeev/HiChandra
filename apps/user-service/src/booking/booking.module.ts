@@ -10,6 +10,7 @@ import { PaymentModule } from '@hichandra/payment';
 import { RepositoriesModule } from '@hichandra/repositories';
 import { S3Module } from '@hichandra/s3';
 import { SmsServicesModule } from '@hichandra/sms-services';
+import { GatewayModule } from '@hichandra/gateway';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { SmsServicesModule } from '@hichandra/sms-services';
     RepositoriesModule,
     S3Module,
     SmsServicesModule,
+    GatewayModule,
   ],
   controllers: [BookingController],
   providers: [BookingService],

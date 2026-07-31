@@ -10,6 +10,7 @@ import { BookingRepository, UserRepository, ComplaintRepository, PaymentReposito
 import { S3Service } from '@hichandra/s3';
 import { SmsService } from '@hichandra/sms-services';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { BookingGateway } from '@hichandra/gateway';
 
 @Injectable()
 export class BookingService {
@@ -28,6 +29,7 @@ export class BookingService {
     private readonly s3Service: S3Service,
     private readonly serviceRepository: ServiceRepository,
     private readonly smsService: SmsService,
+    private readonly bookingGateway: BookingGateway,
   ) { }
 
   private getIstDateParts(date: Date) {
@@ -822,7 +824,7 @@ export class BookingService {
   }
 
   async acceptBooking(technicianId: number, bookingId: number): Promise<Booking> {
-    return this.dataSource.transaction(async (manager) => {
+    const savedBooking = await this.dataSource.transaction(async (manager) => {
       const bookingRepo = manager.getRepository(Booking);
       const userRepo = manager.getRepository(User);
 
@@ -864,6 +866,31 @@ export class BookingService {
 
       return bookingRepo.save(booking);
     });
+
+    // Send socket notifications outside transaction
+    try {
+      const fullBooking = await this.bookingRepository.findBookingById(bookingId);
+      if (fullBooking) {
+        // 1. Notify the customer who initiated the booking
+        this.bookingGateway.emitToUser(
+          fullBooking.customerId,
+          'booking_accepted',
+          fullBooking,
+        );
+
+        // 2. Dismiss notifications for other technicians
+        const otherTechIds = fullBooking.filteredTechnicians || [];
+        for (const techId of otherTechIds) {
+          if (techId !== technicianId) {
+            this.bookingGateway.dismissNotification(techId);
+          }
+        }
+      }
+    } catch (e) {
+      this.logger.error('Failed to send Socket.io notifications after booking acceptance', e);
+    }
+
+    return savedBooking;
   }
 
   async assignBookingManually(

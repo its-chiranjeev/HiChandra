@@ -47,4 +47,13 @@ export class BookingGateway
       this.server.to(socketId).emit('booking_taken');
     }
   }
+
+  emitToUser(userId: number, event: string, data: any): boolean {
+    const socketId = this.userSockets.get(userId);
+    if (socketId) {
+      this.server.to(socketId).emit(event, data);
+      return true;
+    }
+    return false;
+  }
 }

@@ -15,11 +15,11 @@ async function bootstrap() {
 
   // Need to be commented in production
   if (process.env.NODE_ENV !== 'production') {
-    app.enableCors({
-      origin: true, // Allow all origins
-      credentials: true,
-      methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
-    });
+    // app.enableCors({
+    //   origin: true, // Allow all origins
+    //   credentials: true,
+    //   methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+    // });
   }
 
   const logger = new Logger('HTTP');

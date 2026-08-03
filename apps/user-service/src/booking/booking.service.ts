@@ -950,6 +950,56 @@ export class BookingService {
         booking,
       );
 
+    // Send socket notifications
+    try {
+      const fullBooking = await this.bookingRepository.findBookingById(bookingId);
+      if (fullBooking) {
+        // 1. Notify the customer
+        this.bookingGateway.emitToUser(
+          fullBooking.customerId,
+          'booking_accepted',
+          fullBooking,
+        );
+
+        // 2. Notify the assigned technician
+        const { password, hashedRefreshToken, ...safeCustomer } = fullBooking.customer || {};
+        this.bookingGateway.emitToUser(technicianId, 'booking_assigned', {
+          bookingId: fullBooking.id,
+
+          bookingInfo: { 
+            ...fullBooking,
+            customer: undefined,
+            service: undefined,
+            address: undefined,
+            technician: undefined,
+          },
+
+          serviceInfo: {
+            ...fullBooking.service,
+          },
+
+          customerInfo: {
+            ...safeCustomer,
+            name: `${safeCustomer.firstName || ''} ${safeCustomer.lastName || ''}`.trim(),
+          },
+
+          addressInfo: {
+            ...fullBooking.address,
+          },
+        });
+
+        // 3. Dismiss notifications for other technicians
+        const otherTechIds = fullBooking.filteredTechnicians || [];
+        for (const techId of otherTechIds) {
+          if (techId !== technicianId) {
+            this.bookingGateway.dismissNotification(techId);
+          }
+        }
+      }
+    } catch (e) {
+      this.logger.error('Failed to send Socket.io notifications after manual booking assignment', e);
+    }
+
     return {
       success: true,
       message: 'Booking assigned successfully',

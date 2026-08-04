@@ -438,6 +438,44 @@ export class BookingRepository {
     return expiredBookingIds.length;
   }
 
+  async cancelExpiredPendingBookings(): Promise<number> {
+    const bookings = await this.repo.find({
+      where: {
+        status: BOOKING_STATUS.PENDING,
+      },
+    });
+
+    const now = Date.now();
+    const expiredBookingIds: number[] = [];
+    for (const booking of bookings) {
+      if (booking.scheduledAt) {
+        const d = booking.scheduledAt;
+        const utcTime = Date.UTC(
+          d.getFullYear(),
+          d.getMonth(),
+          d.getDate(),
+          d.getHours(),
+          d.getMinutes(),
+          d.getSeconds(),
+          d.getMilliseconds()
+        );
+        if (now > utcTime) {
+          expiredBookingIds.push(booking.id);
+        }
+      }
+    }
+
+    if (expiredBookingIds.length > 0) {
+      await this.repo.createQueryBuilder()
+        .update(Booking)
+        .set({ status: BOOKING_STATUS.CANCELLED })
+        .whereInIds(expiredBookingIds)
+        .execute();
+    }
+
+    return expiredBookingIds.length;
+  }
+
   async countAllBookings(): Promise<number> {
     return this.repo.count();
   }

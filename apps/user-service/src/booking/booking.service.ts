@@ -489,6 +489,26 @@ export class BookingService {
           : String(error),
       );
     }
+
+    this.logger.log('Cancelling expired pending bookings...');
+    try {
+      const cancelledCount =
+        await this.bookingRepository
+          .cancelExpiredPendingBookings();
+
+      if (cancelledCount > 0) {
+        this.logger.log(
+          `${cancelledCount} expired pending booking(s) cancelled`,
+        );
+      }
+    } catch (error) {
+      this.logger.error(
+        'Failed to cancel expired pending bookings',
+        error instanceof Error
+          ? error.stack
+          : String(error),
+      );
+    }
   }
 
   async getBooking(bookingId: number): Promise<any> {
@@ -966,7 +986,7 @@ export class BookingService {
         this.bookingGateway.emitToUser(technicianId, 'booking_assigned', {
           bookingId: fullBooking.id,
 
-          bookingInfo: { 
+          bookingInfo: {
             ...fullBooking,
             customer: undefined,
             service: undefined,
@@ -1084,6 +1104,25 @@ export class BookingService {
 
     if (!updated) {
       throw new NotFoundException('Booking not found after update');
+    }
+
+    // Send socket notification to the technician if the customer cancels the booking
+    if (user.role === USER_ROLE.CUSTOMER && booking.technician?.id) {
+      try {
+        this.bookingGateway.emitToUser(
+          booking.technician.id,
+          'booking_cancelled',
+          {
+            bookingId: booking.id,
+            message: 'This booking has been cancelled by the customer',
+          },
+        );
+      } catch (e) {
+        this.logger.error(
+          `Failed to send Socket.io cancellation notification to technician ${booking.technician.id}`,
+          e,
+        );
+      }
     }
 
     return {
@@ -1311,7 +1350,6 @@ export class BookingService {
       if (
         dto.status !== BOOKING_STATUS.ENROUTE &&
         dto.status !== BOOKING_STATUS.ARRIVED &&
-        dto.status !== BOOKING_STATUS.CANCELLED &&
         dto.status !== BOOKING_STATUS.COMPLETED
       ) {
         throw new BadRequestException('Invalid status transition');
@@ -1334,22 +1372,6 @@ export class BookingService {
         }
       }
 
-      if (dto.status === BOOKING_STATUS.CANCELLED) {
-        // Cancel can be up to ARRIVED, once it's ONGOING it cannot be cancelled
-        if (
-          booking.status === BOOKING_STATUS.ONGOING ||
-          booking.status === BOOKING_STATUS.COMPLETED ||
-          booking.status === BOOKING_STATUS.CANCELLED
-        ) {
-          throw new BadRequestException(
-            'Booking cannot be cancelled once it is ongoing, completed, or already cancelled',
-          );
-        }
-        if (dto.cancellationReason) {
-          booking.cancellationReason = dto.cancellationReason;
-          booking.cancelledBy = userId;
-        }
-      }
 
       if (dto.status === BOOKING_STATUS.COMPLETED) {
         // Ongoing -> Completed transition
@@ -1371,10 +1393,7 @@ export class BookingService {
         );
       }
 
-      if (
-        dto.status === BOOKING_STATUS.COMPLETED ||
-        dto.status === BOOKING_STATUS.CANCELLED
-      ) {
+      if (dto.status === BOOKING_STATUS.COMPLETED) {
         await technicianProfileRepo.update(
           { userId: userId },
           { jobStatus: JOB_STATUS.AVAILABLE },

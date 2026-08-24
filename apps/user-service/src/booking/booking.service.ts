@@ -4,7 +4,7 @@ import { EmailService } from '@hichandra/email-services';
 import { PaymentService, RazorpayXService } from '@hichandra/payment';
 import { Injectable, NotFoundException, BadRequestException, UnprocessableEntityException, ForbiddenException, UnauthorizedException, Logger } from '@nestjs/common';
 import { DataSource, Not, IsNull } from 'typeorm';
-import { CreateBookingDto, UpdateBookingStatusDto, CreateBookingReviewDto, StartBookingDto, AssignBookingDto, CancelBookingDto, CreateComplaintDto, UpdateComplaintDto, CreateTechnicianPayoutDto, RescheduleBookingDto, RepeatBookingDto, TechnicianCancelBookingDto, AdminCreateBookingDto, AdminUpdateBookingReviewDto, AdminCreatePayoutDto } from '@hichandra/dtos';
+import { CreateBookingDto, UpdateBookingStatusDto, CreateBookingReviewDto, StartBookingDto, AssignBookingDto, CancelBookingDto, CreateComplaintDto, UpdateComplaintDto, CreateTechnicianPayoutDto, RescheduleBookingDto, RepeatBookingDto, TechnicianCancelBookingDto, AdminCreateBookingDto, AdminUpdateBookingReviewDto, AdminCreatePayoutDto, AcceptBookingDto } from '@hichandra/dtos';
 import { AssignmentService } from '../assignment/assignment.service';
 import { BookingRepository, UserRepository, ComplaintRepository, PaymentRepository, ServiceRepository } from '@hichandra/repositories';
 import { S3Service } from '@hichandra/s3';
@@ -61,7 +61,410 @@ export class BookingService {
     });
   }
 
-  async createBooking(
+   // TODO:Tushar's code
+  // async createBooking(
+  //   customerId: number,
+  //   dto: CreateBookingDto,
+  //   userRole?: USER_ROLE,
+  //   // ): Promise<Booking> {
+  // ): Promise<any> {
+  //   return this.dataSource.transaction(async (manager) => {
+  //     const userRepo = manager.getRepository(User);
+  //     const customer = await userRepo.findOne({
+  //       where: { id: customerId },
+  //     });
+  //     if (!customer) {
+  //       throw new NotFoundException('Customer not found');
+  //     }
+  //     // if (userRole !== USER_ROLE.ADMIN && !customer.isTokenPaid) {
+  //     //   throw new BadRequestException('Token payment is required before booking');
+  //     // }
+
+  //     const serviceRepo = manager.getRepository(Service);
+  //     const addressRepo = manager.getRepository(CustomerAddress);
+  //     const bookingRepo = manager.getRepository(Booking);
+  //     const technicianServices = await manager
+  //       .getRepository(TechnicianService)
+  //       .find({
+  //         where: { serviceId: dto.serviceId },
+  //       });
+
+
+  //     // console.log(technicianServices);
+  //     const allTechnicianWithService = await Promise.all(
+  //       technicianServices.map(async (ts) => {
+  //         const technicianProfileId = ts.technicianProfileId;
+  //         const user = await manager.getRepository(User).findOne({ //add condition for technician should be available
+  //           // where: { technicianProfileId: technicianProfileId },
+  //           where: {
+  //             status: USER_STATUS.ACTIVE,
+  //             technicianProfile: {
+  //               id: technicianProfileId,
+  //               // jobStatus: JOB_STATUS.AVAILABLE,
+  //             },
+  //           },
+  //           relations: ['technicianProfile', 'technicianProfile.locations'],
+  //         });
+  //         if (user?.technicianProfile?.locations) {
+  //           user.technicianProfile.locations =
+  //             user.technicianProfile.locations.filter((loc) => loc.isDefault);
+  //         }
+  //         return user;
+  //       }),
+  //     );
+  //     // console.log(allTechnicianWithService);
+  //     const service = await serviceRepo.findOne({
+  //       where: { id: dto.serviceId, isActive: true },
+  //       relations: ['specifications', 'pricingRule'],
+  //     });
+  //     if (!service) {
+  //       throw new NotFoundException('Service not found or inactive');
+  //     }
+  //     if (!service.pricingRule) {
+  //       throw new BadRequestException(
+  //         'Pricing rules are not configured for this service',
+  //       );
+  //     }
+
+  //     // Check for existing pending booking of the same service (across all dates)
+  //     const pendingBooking = await bookingRepo.findOne({
+  //       where: {
+  //         customerId,
+  //         serviceId: dto.serviceId,
+  //         status: BOOKING_STATUS.PENDING,
+  //       },
+  //     });
+  //     if (pendingBooking) {
+  //       throw new BadRequestException(
+  //         'You already have a pending booking for this service',
+  //       );
+  //     }
+
+  //     // Check for same-day booking of the same service
+  //     // const targetDate = dto.scheduledAt
+  //     //   ? new Date(dto.scheduledAt)
+  //     //   : new Date();
+  //     // const startOfDay = new Date(targetDate);
+  //     // startOfDay.setHours(0, 0, 0, 0);
+  //     // const endOfDay = new Date(targetDate);
+  //     // endOfDay.setHours(23, 59, 59, 999);
+  //     //added
+  //     const targetDate = dto.scheduledAt
+  //       ? new Date(dto.scheduledAt)
+  //       : new Date();
+
+  //     if (Number.isNaN(targetDate.getTime())) {
+  //       throw new BadRequestException('Invalid scheduledAt date');
+  //     }
+
+  //     // Get IST date only, example: 2026-07-08
+  //     const istDateString = targetDate.toLocaleDateString('en-CA', {
+  //       timeZone: 'Asia/Kolkata',
+  //     });
+
+  //     // IST day range converted to UTC for DB query
+  //     const startOfDay = new Date(`${istDateString}T00:00:00.000+05:30`);
+  //     const endOfDay = new Date(`${istDateString}T23:59:59.999+05:30`);
+  //     //
+  //     const sameDayBooking = await bookingRepo
+  //       .createQueryBuilder('booking')
+  //       .where('booking.customerId = :customerId', { customerId })
+  //       .andWhere('booking.serviceId = :serviceId', {
+  //         serviceId: dto.serviceId,
+  //       })
+  //       .andWhere('booking.scheduledAt BETWEEN :startOfDay AND :endOfDay', {
+  //         startOfDay,
+  //         endOfDay,
+  //       })
+  //       .andWhere('booking.status != :cancelledStatus', {
+  //         cancelledStatus: BOOKING_STATUS.CANCELLED,
+  //       })
+  //       .getOne();
+
+  //     if (sameDayBooking) {
+  //       throw new BadRequestException(
+  //         `You already have an active booking for this service on this date (Status: ${sameDayBooking.status})`,
+  //       );
+  //     }
+
+  //     const dbSpecs = service.specifications || [];
+  //     const userSpecs = dto.serviceSpecifications || [];
+  //     const dbSpecsMap = new Map(dbSpecs.map((s) => [s.id, s]));
+
+  //     // 1. Check if all required specs are present in userSpecs
+  //     const requiredSpecs = dbSpecs.filter((s) => s.isRequired && s.isActive);
+  //     for (const reqSpec of requiredSpecs) {
+  //       const found = userSpecs.find((u) => u.specificationId === reqSpec.id);
+  //       if (!found || found.value === undefined || found.value === null) {
+  //         throw new BadRequestException(
+  //           `Specification "${reqSpec.name}" (ID ${reqSpec.id}) is required`,
+  //         );
+  //       }
+  //     }
+
+  //     // 2. Validate userSpecs and fill names automatically
+  //     for (const uSpec of userSpecs) {
+  //       const dbSpec = dbSpecsMap.get(uSpec.specificationId);
+  //       if (!dbSpec || !dbSpec.isActive) {
+  //         throw new BadRequestException(
+  //           `Specification ID ${uSpec.specificationId} is not valid for this service`,
+  //         );
+  //       }
+
+  //       // Autofill name from DB if not provided
+  //       uSpec.name = dbSpec.name;
+
+  //       // Type checks
+  //       if (dbSpec.type === 'number') {
+  //         if (typeof uSpec.value !== 'number') {
+  //           throw new BadRequestException(
+  //             `Specification "${dbSpec.name}" must be a number`,
+  //           );
+  //         }
+  //       } else if (dbSpec.type === 'select') {
+  //         if (typeof uSpec.value !== 'string') {
+  //           throw new BadRequestException(
+  //             `Specification "${dbSpec.name}" must be a string value`,
+  //           );
+  //         }
+  //         if (dbSpec.values && Array.isArray(dbSpec.values)) {
+  //           const allowed = dbSpec.values as string[];
+  //           if (!allowed.includes(uSpec.value)) {
+  //             throw new BadRequestException(
+  //               `Value "${uSpec.value}" is not valid for "${dbSpec.name}". Allowed values: ${allowed.join(', ')}`,
+  //             );
+  //           }
+  //         }
+  //       } else if (dbSpec.type === 'multiselect') {
+  //         if (!Array.isArray(uSpec.value)) {
+  //           throw new BadRequestException(
+  //             `Specification "${dbSpec.name}" must be an array of string values`,
+  //           );
+  //         }
+  //         if (dbSpec.values && Array.isArray(dbSpec.values)) {
+  //           const allowed = dbSpec.values as string[];
+  //           for (const val of uSpec.value) {
+  //             if (typeof val !== 'string') {
+  //               throw new BadRequestException(
+  //                 `Each value in "${dbSpec.name}" must be a string`,
+  //               );
+  //             }
+  //             if (!allowed.includes(val)) {
+  //               throw new BadRequestException(
+  //                 `Value "${val}" is not valid for "${dbSpec.name}". Allowed values: ${allowed.join(', ')}`,
+  //               );
+  //             }
+  //           }
+  //         }
+  //       } else if (dbSpec.type === 'text') {
+  //         if (typeof uSpec.value !== 'string') {
+  //           throw new BadRequestException(
+  //             `Specification "${dbSpec.name}" must be a string`,
+  //           );
+  //         }
+  //       } else if (dbSpec.type === 'image') {
+  //         if (typeof uSpec.value !== 'string') {
+  //           throw new BadRequestException(
+  //             `Specification "${dbSpec.name}" must be an image URL string`,
+  //           );
+  //         }
+  //       }
+  //     }
+
+  //     const address = await addressRepo.findOne({
+  //       where: {
+  //         id: dto.customerAddressId,
+  //         userId: customerId,
+  //         isActive: true,
+  //         // isDefault: true,
+  //       },
+  //     });
+  //     if (!address) {
+  //       throw new NotFoundException(
+  //         'Address not found or does not belong to this customer',
+  //       );
+  //     }
+  //     const serviceSpecifications = userSpecs.map((uSpec) => ({
+  //       specificationId: uSpec.specificationId,
+  //       value: uSpec.value,
+  //     }));
+
+  //     // Calculate Fare and Breakdown using new toggle booleans
+  //     const pricingRule = service.pricingRule;
+  //     const serviceBasePrice = Number(pricingRule.serviceBasePrice);
+  //     // const isWeekend = targetDate.getDay() === 0 || targetDate.getDay() === 6;
+  //     // const weekendMultiplier = isWeekend
+  //     //   ? Number(pricingRule.weekendMultiplier)
+  //     //   : 1.0;
+
+  //     // let isPeakHour = false;
+  //     // const hour = targetDate.getHours();
+  //     //added
+  //     const { weekday, hour } = this.getIstDateParts(targetDate);
+
+  //     const isWeekend = weekday === 'Sat' || weekday === 'Sun';
+
+  //     const weekendMultiplier = isWeekend
+  //       ? Number(pricingRule.weekendMultiplier)
+  //       : 1.0;
+
+  //     let isPeakHour = false;
+  //     //
+  //     if (pricingRule.peakHours && Array.isArray(pricingRule.peakHours)) {
+  //       for (const range of pricingRule.peakHours) {
+  //         if (hour >= range.start && hour <= range.end) {
+  //           isPeakHour = true;
+  //           break;
+  //         }
+  //       }
+  //     }
+  //     const peakHourMultiplier = isPeakHour
+  //       ? Number(pricingRule.peakHourMultiplier)
+  //       : 1.0;
+  //     const surgeMultiplier = pricingRule.isSurgeEnabled
+  //       ? Number(pricingRule.surgeFactor)
+  //       : 1.0;
+
+  //     const weekendCharge =
+  //       pricingRule.isWeekendApplied && isWeekend
+  //         ? Number((serviceBasePrice * (weekendMultiplier - 1)).toFixed(2))
+  //         : 0;
+  //     const peakHourCharge =
+  //       pricingRule.isPeakHourApplied && isPeakHour
+  //         ? Number((serviceBasePrice * (peakHourMultiplier - 1)).toFixed(2))
+  //         : 0;
+  //     const surgeCharge = pricingRule.isSurgeEnabled
+  //       ? Number((serviceBasePrice * (surgeMultiplier - 1)).toFixed(2))
+  //       : 0;
+  //     const emergencyCharge =
+  //       pricingRule.isEmergencyApplied && dto.isEmergency
+  //         ? Number(pricingRule.emergencyCharge)
+  //         : 0;
+  //     const distanceCharge = 0; // Calculated dynamically if isDistanceKmApplied is true during assignment/completion
+
+  //     const appliedBasePrice = pricingRule.isServiceBasePriceApplied !== false
+  //       ? serviceBasePrice
+  //       : 0;
+
+  //     const subtotal =
+  //       appliedBasePrice +
+  //       weekendCharge +
+  //       peakHourCharge +
+  //       surgeCharge +
+  //       emergencyCharge +
+  //       distanceCharge;
+
+  //     const platformFee = pricingRule.isPlatformFeeApplied
+  //       ? Number(pricingRule.platformFee)
+  //       : 0;
+  //     const gstRate = Number(pricingRule.gst) / 100;
+  //     const gst = pricingRule.isGstApplied
+  //       ? Number(((subtotal + platformFee) * gstRate).toFixed(2))
+  //       : 0;
+
+  //     const totalAmount = Number((subtotal + platformFee + gst).toFixed(2));
+
+  //     // Make validation that totalAmount is greater than appliedBasePrice
+  //     if (totalAmount < appliedBasePrice) {
+  //       throw new BadRequestException(
+  //         'Calculation error: Total amount must be greater than the service base price.',
+  //       );
+  //     }
+
+  //     const platformEarning = platformFee;
+  //     const technicianEarning = subtotal;
+
+  //     const priceBreakdown: PriceBreakdown = {
+  //       serviceBasePrice: appliedBasePrice,
+  //       distanceCharge,
+  //       emergencyCharge,
+  //       peakHourCharge,
+  //       weekendCharge,
+  //       surgeCharge,
+  //       gst,
+  //       platformFee,
+  //       technicianEarning,
+  //       platformEarning,
+  //     };
+
+  //     const customerOtp = Math.floor(100000 + Math.random() * 900000).toString();
+
+  //     const booking = bookingRepo.create({
+  //       customerId,
+  //       serviceId: dto.serviceId,
+  //       addressId: dto.customerAddressId,
+  //       serviceSpecifications: serviceSpecifications as any,
+  //       isEmergency: dto.isEmergency ?? false,
+  //       scheduledAt: targetDate,
+  //       status: BOOKING_STATUS.PENDING,
+  //       totalAmount,
+  //       priceBreakdown,
+  //       customerOtp,
+  //     });
+
+  //     // const savedBooking = await bookingRepo.save(booking);
+
+  //     // // Filter technician list based on availability and send notifications
+  //     // const activeTechnicians = allTechnicianWithService.filter(
+  //     //   (u): u is User => !!u,
+  //     // );
+  //     // await this.assignmentService.assignTechnician(
+  //     //   savedBooking,
+  //     //   activeTechnicians,
+  //     //   address,
+  //     //   service,
+  //     // );
+  //     // throw new Error("hell");
+  //     // return savedBooking;
+
+  //     let savedBooking = await bookingRepo.save(booking);
+
+  //     const bookingWithRelations = await bookingRepo.findOne({
+  //       where: { id: savedBooking.id },
+  //       relations: ['customer', 'service', 'address'],
+  //     });
+
+  //     if (!bookingWithRelations) {
+  //       throw new NotFoundException('Booking not found after creation');
+  //     }
+  //     // Filter technician list based on availability and send notifications
+  //     const activeTechnicians = allTechnicianWithService.filter(
+  //       (u): u is User => !!u,
+  //     );
+  //     // console.log(activeTechnicians);
+  //     const matchedTechnicians =
+  //       await this.assignmentService.assignTechnician(
+  //         bookingWithRelations,
+  //         activeTechnicians,
+  //         address,
+  //         service,
+  //       );
+
+  //     // console.log(matchedTechnicians);
+  //     bookingWithRelations.filteredTechnicians =
+  //       matchedTechnicians.map((tech) => tech.id);
+
+  //     savedBooking = await bookingRepo.save(bookingWithRelations);
+
+  //     const finalBooking = await bookingRepo.findOne({
+  //       where: { id: savedBooking.id },
+  //       relations: ['customer', 'service', 'address'],
+  //     });
+
+  //     if (!finalBooking) {
+  //       throw new NotFoundException('Booking not found after save');
+  //     }
+
+  //     return {
+  //       ...finalBooking,
+  //       scheduledAtIst: this.toIstString(finalBooking.scheduledAt),
+  //       createdAtIst: this.toIstString(finalBooking.createdAt),
+  //       updatedAtIst: this.toIstString(finalBooking.updatedAt),
+  //     };
+  //   });
+  // }
+
+   async createBookingService(
     customerId: number,
     dto: CreateBookingDto,
     userRole?: USER_ROLE,
@@ -150,10 +553,10 @@ export class BookingService {
       //added
       const targetDate = dto.scheduledAt
         ? new Date(dto.scheduledAt)
-        : new Date();
+        : new Date(dto.fromTime);
 
       if (Number.isNaN(targetDate.getTime())) {
-        throw new BadRequestException('Invalid scheduledAt date');
+        throw new BadRequestException('Invalid scheduledAt/fromTime date');
       }
 
       // Get IST date only, example: 2026-07-08
@@ -171,10 +574,13 @@ export class BookingService {
         .andWhere('booking.serviceId = :serviceId', {
           serviceId: dto.serviceId,
         })
-        .andWhere('booking.scheduledAt BETWEEN :startOfDay AND :endOfDay', {
-          startOfDay,
-          endOfDay,
-        })
+        .andWhere(
+          '(booking.scheduledAt BETWEEN :startOfDay AND :endOfDay OR booking.fromTime BETWEEN :startOfDay AND :endOfDay)',
+          {
+            startOfDay,
+            endOfDay,
+          },
+        )
         .andWhere('booking.status != :cancelledStatus', {
           cancelledStatus: BOOKING_STATUS.CANCELLED,
         })
@@ -394,7 +800,9 @@ export class BookingService {
         addressId: dto.customerAddressId,
         serviceSpecifications: serviceSpecifications as any,
         isEmergency: dto.isEmergency ?? false,
-        scheduledAt: targetDate,
+        scheduledAt: dto.scheduledAt ? targetDate : null,
+        fromTime: new Date(dto.fromTime),
+        toTime: new Date(dto.toTime),
         status: BOOKING_STATUS.PENDING,
         totalAmount,
         priceBreakdown,
@@ -457,6 +865,8 @@ export class BookingService {
       return {
         ...finalBooking,
         scheduledAtIst: this.toIstString(finalBooking.scheduledAt),
+        fromTimeIst: this.toIstString(finalBooking.fromTime),
+        toTimeIst: this.toIstString(finalBooking.toTime),
         createdAtIst: this.toIstString(finalBooking.createdAt),
         updatedAtIst: this.toIstString(finalBooking.updatedAt),
       };
@@ -621,6 +1031,8 @@ export class BookingService {
         bookingPayment,
         technicianPayout,
         scheduledAtIst: this.toIstString(booking.scheduledAt),
+        fromTimeIst: this.toIstString(booking.fromTime),
+        toTimeIst: this.toIstString(booking.toTime),
         createdAtIst: this.toIstString(booking.createdAt),
         updatedAtIst: this.toIstString(booking.updatedAt),
         customer: cleanCustomer,
@@ -720,6 +1132,10 @@ export class BookingService {
               isEmergency: complaint.booking.isEmergency,
               scheduledAt: complaint.booking.scheduledAt,
               scheduledAtIst: this.toIstString(complaint.booking.scheduledAt),
+              fromTime: complaint.booking.fromTime ?? null,
+              toTime: complaint.booking.toTime ?? null,
+              fromTimeIst: complaint.booking.fromTime ? this.toIstString(complaint.booking.fromTime) : null,
+              toTimeIst: complaint.booking.toTime ? this.toIstString(complaint.booking.toTime) : null,
               totalAmount: complaint.booking.totalAmount,
               priceBreakdown: complaint.booking.priceBreakdown,
               customer: cleanCustomer,
@@ -843,7 +1259,82 @@ export class BookingService {
     };
   }
 
-  async acceptBooking(technicianId: number, bookingId: number): Promise<Booking> {
+  // TODO:Tushar's code
+  // async acceptBookingService(technicianId: number, bookingId: number): Promise<Booking> {
+  //   const savedBooking = await this.dataSource.transaction(async (manager) => {
+  //     const bookingRepo = manager.getRepository(Booking);
+  //     const userRepo = manager.getRepository(User);
+
+  //     const technician = await userRepo.findOne({
+  //       where: { id: technicianId, role: USER_ROLE.TECHNICIAN },
+  //       relations: ['technicianProfile'],
+  //     });
+  //     if (!technician) {
+  //       throw new NotFoundException(
+  //         'Technician not found or user is not a technician',
+  //       );
+  //     }
+  //     if (
+  //       technician.status !== USER_STATUS.ACTIVE ||
+  //       technician.technicianProfile?.status !== TECHNICIAN_STATUS.APPROVED
+  //     ) {
+  //       throw new BadRequestException(
+  //         'Technician is not active or not approved',
+  //       );
+  //     }
+
+  //     const booking = await bookingRepo.findOne({ where: { id: bookingId } });
+  //     if (!booking) {
+  //       throw new NotFoundException('Booking not found');
+  //     }
+
+  //     if (booking.status !== BOOKING_STATUS.PENDING) {
+  //       throw new BadRequestException('Booking is not in PENDING state');
+  //     }
+
+  //     if (booking.technicianId) {
+  //       throw new BadRequestException(
+  //         'Booking is already accepted by another technician',
+  //       );
+  //     }
+
+  //     booking.technicianId = technicianId;
+  //     booking.status = BOOKING_STATUS.ACCEPTED;
+
+  //     return bookingRepo.save(booking);
+  //   });
+
+  //   // Send socket notifications outside transaction
+  //   try {
+  //     const fullBooking = await this.bookingRepository.findBookingById(bookingId);
+  //     if (fullBooking) {
+  //       // 1. Notify the customer who initiated the booking
+  //       this.bookingGateway.emitToUser(
+  //         fullBooking.customerId,
+  //         'booking_accepted',
+  //         fullBooking,
+  //       );
+
+  //       // 2. Dismiss notifications for other technicians
+  //       const otherTechIds = fullBooking.filteredTechnicians || [];
+  //       for (const techId of otherTechIds) {
+  //         if (techId !== technicianId) {
+  //           this.bookingGateway.dismissNotification(techId);
+  //         }
+  //       }
+  //     }
+  //   } catch (e) {
+  //     this.logger.error('Failed to send Socket.io notifications after booking acceptance', e);
+  //   }
+
+  //   return savedBooking;
+  // }
+
+  async acceptBookingService(
+    technicianId: number,
+    bookingId: number,
+    dto: AcceptBookingDto,
+  ): Promise<Booking> {
     const savedBooking = await this.dataSource.transaction(async (manager) => {
       const bookingRepo = manager.getRepository(Booking);
       const userRepo = manager.getRepository(User);
@@ -881,8 +1372,21 @@ export class BookingService {
         );
       }
 
+      if (booking.fromTime && booking.toTime) {
+        const scheduledAt = new Date(dto.scheduledAt);
+        const fromTime = new Date(booking.fromTime);
+        const toTime = new Date(booking.toTime);
+
+        if (scheduledAt < fromTime || scheduledAt > toTime) {
+          throw new BadRequestException(
+            'Scheduled time must be within the booking scheduled time slot',
+          );
+        }
+      }
+
       booking.technicianId = technicianId;
       booking.status = BOOKING_STATUS.ACCEPTED;
+      booking.scheduledAt = new Date(dto.scheduledAt);
 
       return bookingRepo.save(booking);
     });
@@ -2659,6 +3163,10 @@ export class BookingService {
         technicianPayout,
         scheduledAt: booking.scheduledAt,
         scheduledAtIst: this.toIstString(booking.scheduledAt),
+        fromTime: booking.fromTime,
+        toTime: booking.toTime,
+        fromTimeIst: this.toIstString(booking.fromTime),
+        toTimeIst: this.toIstString(booking.toTime),
         totalAmount: booking.totalAmount,
         isEmergency: booking.isEmergency,
         cancellationReason: booking.cancellationReason,
@@ -3151,6 +3659,10 @@ export class BookingService {
 
           address: addressObj,
           scheduledAt: booking.scheduledAt ?? null,
+          fromTime: booking.fromTime ?? null,
+          toTime: booking.toTime ?? null,
+          fromTimeIst: booking.fromTime ? this.toIstString(booking.fromTime) : null,
+          toTimeIst: booking.toTime ? this.toIstString(booking.toTime) : null,
           totalAmount: booking.totalAmount ?? null,
           priceBreakdown: booking.priceBreakdown ?? null,
           serviceSpecifications: booking.serviceSpecifications ?? null,

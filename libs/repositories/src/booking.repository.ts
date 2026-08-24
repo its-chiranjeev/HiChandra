@@ -448,8 +448,8 @@ export class BookingRepository {
     const now = Date.now();
     const expiredBookingIds: number[] = [];
     for (const booking of bookings) {
-      if (booking.scheduledAt) {
-        const d = booking.scheduledAt;
+      const d = booking.scheduledAt ?? booking.fromTime;
+      if (d) {
         const utcTime = Date.UTC(
           d.getFullYear(),
           d.getMonth(),

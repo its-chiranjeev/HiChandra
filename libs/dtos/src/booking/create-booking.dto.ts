@@ -49,4 +49,14 @@ export class CreateBookingDto {
   @Type(() => Date)
   @IsDate()
   scheduledAt?: Date;
+
+  @Type(() => Date)
+  @IsDate()
+  @IsNotEmpty()
+  fromTime!: Date;
+
+  @Type(() => Date)
+  @IsDate()
+  @IsNotEmpty()
+  toTime!: Date;
 }

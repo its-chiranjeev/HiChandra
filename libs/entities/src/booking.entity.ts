@@ -128,6 +128,12 @@ export class Booking {
   scheduledAt?: Date;
 
   @Column({ type: 'timestamp', nullable: true })
+  fromTime?: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
+  toTime?: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
   startedAt?: Date;
 
   @Column({ type: 'timestamp', nullable: true })

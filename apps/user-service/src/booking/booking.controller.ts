@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Param, ParseIntPipe, HttpCode, Patch, HttpStatus, Query, Post, Req, Headers, UseGuards, ValidationPipe, Delete, StreamableFile } from '@nestjs/common';
 import { BookingService } from './booking.service';
 import { JwtAuthGuard, Roles, RolesGuard } from '@hichandra/common';
-import { StartBookingDto, CreateBookingDto, AssignBookingDto, CancelBookingDto, CreateComplaintDto, UpdateComplaintDto, UpdateBookingStatusDto, CreateTechnicianPayoutDto, RescheduleBookingDto, RepeatBookingDto, TechnicianCancelBookingDto, CreateBookingReviewDto, AdminCreateBookingDto, AdminUpdateBookingReviewDto, AdminCreatePayoutDto } from '@hichandra/dtos';
+import { StartBookingDto, CreateBookingDto, AssignBookingDto, CancelBookingDto, CreateComplaintDto, UpdateComplaintDto, UpdateBookingStatusDto, CreateTechnicianPayoutDto, RescheduleBookingDto, RepeatBookingDto, TechnicianCancelBookingDto, CreateBookingReviewDto, AdminCreateBookingDto, AdminUpdateBookingReviewDto, AdminCreatePayoutDto, AcceptBookingDto } from '@hichandra/dtos';
 import { USER_ROLE, BOOKING_STATUS, COMPLAINT_STATUS, PAYMENT_STATUS, User, REVIEW_STATUS, PAYMENT_TYPE, BOOKING_PAYMENT_STATUS } from '@hichandra/entities';
 import type { Request } from 'express';
 import { PaymentService } from '@hichandra/payment';
@@ -17,7 +17,25 @@ export class BookingController {
     private readonly paymentService: PaymentService,
   ) { }
 
-  @Post()
+  // TODO:Tushar's code
+  // @Post()
+  // @UseGuards(JwtAuthGuard, RolesGuard)
+  // @Roles(USER_ROLE.CUSTOMER)
+  // @HttpCode(HttpStatus.CREATED)
+  // async createBooking(
+  //   @Req() req: any,
+  //   @Body(new ValidationPipe({ whitelist: true, transform: true }))
+  //   dto: CreateBookingDto,
+  // ) {
+  //   const booking = await this.bookingService.createBooking(req.user.id, dto, req.user.role);
+  //   return {
+  //     success: true,
+  //     message: 'Booking created successfully',
+  //     data: booking,
+  //   };
+  // }
+
+   @Post()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(USER_ROLE.CUSTOMER)
   @HttpCode(HttpStatus.CREATED)
@@ -26,7 +44,7 @@ export class BookingController {
     @Body(new ValidationPipe({ whitelist: true, transform: true }))
     dto: CreateBookingDto,
   ) {
-    const booking = await this.bookingService.createBooking(req.user.id, dto, req.user.role);
+    const booking = await this.bookingService.createBookingService(req.user.id, dto, req.user.role);
     return {
       success: true,
       message: 'Booking created successfully',
@@ -342,18 +360,38 @@ export class BookingController {
   }
 
 
+  //TODO: Tushar's Code for accepting booking
+  // @Patch(':id/accept')
+  // @UseGuards(JwtAuthGuard, RolesGuard)
+  // @Roles(USER_ROLE.TECHNICIAN)
+  // @HttpCode(HttpStatus.OK)
+  // async acceptBooking(@Req() req: any, @Param('id', ParseIntPipe) id: number) {
+  //   const booking = await this.bookingService.acceptBookingService(req.user.id, id);
+  //   return {
+  //     success: true,
+  //     message: 'Booking accepted successfully',
+  //     data: booking,
+  //   };
+  // }
+
   @Patch(':id/accept')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(USER_ROLE.TECHNICIAN)
   @HttpCode(HttpStatus.OK)
-  async acceptBooking(@Req() req: any, @Param('id', ParseIntPipe) id: number) {
-    const booking = await this.bookingService.acceptBooking(req.user.id, id);
+  async acceptBooking(
+    @Req() req: any,
+    @Param('id', ParseIntPipe) id: number,
+    @Body(new ValidationPipe({ whitelist: true, transform: true }))
+    dto: AcceptBookingDto,
+  ) {
+    const booking = await this.bookingService.acceptBookingService(req.user.id, id, dto);
     return {
       success: true,
       message: 'Booking accepted successfully',
       data: booking,
     };
   }
+
 
   @Patch(':id/status')
   @UseGuards(JwtAuthGuard, RolesGuard)

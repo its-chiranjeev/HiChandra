@@ -452,7 +452,26 @@ export class BookingController {
     );
   }
 
-  @Post('admin/assign-booking')
+  //TODO: Tushar's code for assigning booking
+  // @Post('admin/assign-booking')
+  // @UseGuards(JwtAuthGuard, RolesGuard)
+  // @Roles(USER_ROLE.ADMIN)
+  // @HttpCode(HttpStatus.OK)
+  // async assignBookingManually(
+  //   @Body(
+  //     new ValidationPipe({
+  //       whitelist: true,
+  //       transform: true,
+  //     }),
+  //   )
+  //   dto: AssignBookingDto,
+  // ) {
+  //   return this.bookingService.assignBookingManuallyService(
+  //     dto,
+  //   );
+  // }
+
+   @Post('admin/assign-booking')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(USER_ROLE.ADMIN)
   @HttpCode(HttpStatus.OK)
@@ -465,7 +484,7 @@ export class BookingController {
     )
     dto: AssignBookingDto,
   ) {
-    return this.bookingService.assignBookingManually(
+    return this.bookingService.assignBookingManuallyService(
       dto,
     );
   }

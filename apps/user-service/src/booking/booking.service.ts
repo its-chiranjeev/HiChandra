@@ -1417,7 +1417,122 @@ export class BookingService {
     return savedBooking;
   }
 
-  async assignBookingManually(
+  //TODO: Tushar's code for assigning booking
+  // async assignBookingManuallyService(
+  //   dto: AssignBookingDto,) {
+  //   const { bookingId, technicianId } = dto;
+
+  //   // Validate booking
+  //   const booking =
+  //     await this.bookingRepository.findManualAssignableBooking(
+  //       bookingId,
+  //     );
+
+  //   if (!booking) {
+  //     throw new UnprocessableEntityException(
+  //       'Booking not found, not pending, or manual assignment not allowed',
+  //     );
+  //   }
+
+  //   // Prevent reassignment
+  //   if (booking.technicianId) {
+  //     throw new UnprocessableEntityException(
+  //       'Booking already assigned',
+  //     );
+  //   }
+
+  //   // Validate technician
+  //   const technician =
+  //     await this.userRepository.findTechnicianById(
+  //       technicianId,
+  //     );
+
+  //   if (!technician) {
+  //     throw new UnprocessableEntityException(
+  //       'Technician not found or inactive',
+  //     );
+  //   }
+
+  //   // Check if technician actually provides the booked service
+  //   const technicianProvidesService = technician.technicianProfile?.services?.some(
+  //     (ts) => ts.serviceId === booking.serviceId,
+  //   );
+
+  //   if (!technicianProvidesService) {
+  //     throw new BadRequestException(
+  //       `Technician does not provide the service requested in this booking`,
+  //     );
+  //   }
+
+  //   // Assign booking
+  //   booking.technicianId = technician.id;
+  //   booking.technician = technician;
+
+  //   booking.status = BOOKING_STATUS.ACCEPTED;
+
+  //   const updated =
+  //     await this.bookingRepository.saveBooking(
+  //       booking,
+  //     );
+
+  //   // Send socket notifications
+  //   try {
+  //     const fullBooking = await this.bookingRepository.findBookingById(bookingId);
+  //     if (fullBooking) {
+  //       // 1. Notify the customer
+  //       this.bookingGateway.emitToUser(
+  //         fullBooking.customerId,
+  //         'booking_accepted',
+  //         fullBooking,
+  //       );
+
+  //       // 2. Notify the assigned technician
+  //       const { password, hashedRefreshToken, ...safeCustomer } = fullBooking.customer || {};
+  //       this.bookingGateway.emitToUser(technicianId, 'booking_assigned', {
+  //         bookingId: fullBooking.id,
+
+  //         bookingInfo: {
+  //           ...fullBooking,
+  //           customer: undefined,
+  //           service: undefined,
+  //           address: undefined,
+  //           technician: undefined,
+  //         },
+
+  //         serviceInfo: {
+  //           ...fullBooking.service,
+  //         },
+
+  //         customerInfo: {
+  //           ...safeCustomer,
+  //           name: `${safeCustomer.firstName || ''} ${safeCustomer.lastName || ''}`.trim(),
+  //         },
+
+  //         addressInfo: {
+  //           ...fullBooking.address,
+  //         },
+  //       });
+
+  //       // 3. Dismiss notifications for other technicians
+  //       const otherTechIds = fullBooking.filteredTechnicians || [];
+  //       for (const techId of otherTechIds) {
+  //         if (techId !== technicianId) {
+  //           this.bookingGateway.dismissNotification(techId);
+  //         }
+  //       }
+  //     }
+  //   } catch (e) {
+  //     this.logger.error('Failed to send Socket.io notifications after manual booking assignment', e);
+  //   }
+
+  //   return {
+  //     success: true,
+  //     message: 'Booking assigned successfully',
+  //     data: updated,
+  //   };
+  // }
+
+  async assignBookingManuallyService(
     dto: AssignBookingDto,) {
     const { bookingId, technicianId } = dto;
 
@@ -1463,11 +1578,24 @@ export class BookingService {
       );
     }
 
+    if (booking.fromTime && booking.toTime) {
+      const scheduledAt = new Date(dto.scheduledAt);
+      const fromTime = new Date(booking.fromTime);
+      const toTime = new Date(booking.toTime);
+
+      if (scheduledAt < fromTime || scheduledAt > toTime) {
+        throw new BadRequestException(
+          'Scheduled time must be within the booking scheduled time slot',
+        );
+      }
+    }
+
     // Assign booking
     booking.technicianId = technician.id;
     booking.technician = technician;
 
     booking.status = BOOKING_STATUS.ACCEPTED;
+    booking.scheduledAt = new Date(dto.scheduledAt);
 
     const updated =
       await this.bookingRepository.saveBooking(

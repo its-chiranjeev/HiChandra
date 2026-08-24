@@ -1,4 +1,4 @@
-import { IsInt, IsNotEmpty, Min } from 'class-validator';
+import { IsInt, IsNotEmpty, Min, IsDate } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class AssignBookingDto {
@@ -13,4 +13,9 @@ export class AssignBookingDto {
     @IsInt()
     @Min(1)
     technicianId!: number;
+
+    @Type(() => Date)
+    @IsDate()
+    @IsNotEmpty()
+    scheduledAt!: Date;
 }

@@ -84,6 +84,8 @@ export class UserRepository extends BaseRepository<User> {
     status?: USER_STATUS,
     technicianProfileStatus?: TECHNICIAN_STATUS,
     serviceId?: number,
+    name?: string,
+    phoneNumber?: string,
   ) {
     const query = this.repo
       .createQueryBuilder('user')
@@ -106,6 +108,19 @@ export class UserRepository extends BaseRepository<User> {
 
     if (serviceId) {
       query.andWhere('services.serviceId = :serviceId', { serviceId });
+    }
+
+    if (name) {
+      query.andWhere(
+        new Brackets((qb) => {
+          qb.where('user.firstName ILIKE :name', { name: `%${name}%` })
+            .orWhere('user.lastName ILIKE :name', { name: `%${name}%` });
+        }),
+      );
+    }
+
+    if (phoneNumber) {
+      query.andWhere('user.phone ILIKE :phoneNumber', { phoneNumber: `%${phoneNumber}%` });
     }
 
     if (technicianProfileStatus) {

@@ -163,6 +163,8 @@ export class UserService {
     status?: USER_STATUS,
     technicianProfileStatus?: TECHNICIAN_STATUS,
     serviceId?: number,
+    name?: string,
+    phoneNumber?: string,
   ) {
     const { users, total } = await this.userRepository.findAllUsers(
       page,
@@ -171,6 +173,8 @@ export class UserService {
       status,
       technicianProfileStatus,
       serviceId,
+      name,
+      phoneNumber,
     );
     const formattedUsers = await Promise.all(
       users.map(async (user) => {

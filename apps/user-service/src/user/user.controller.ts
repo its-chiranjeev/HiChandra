@@ -89,6 +89,8 @@ export class UserController {
     @Query('status') status?: USER_STATUS,
     @Query('technicianProfileStatus') technicianProfileStatus?: TECHNICIAN_STATUS,
     @Query('serviceId') serviceId?: string,
+    @Query('name') name?: string,
+    @Query('phoneNumber') phoneNumber?: string,
   ) {
     if (serviceId && role !== USER_ROLE.TECHNICIAN) {
       throw new BadRequestException(
@@ -102,6 +104,8 @@ export class UserController {
       status,
       technicianProfileStatus,
       serviceId ? Number(serviceId) : undefined,
+      name,
+      phoneNumber,
     );
   }
 

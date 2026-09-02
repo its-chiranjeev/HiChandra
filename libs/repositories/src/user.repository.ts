@@ -86,6 +86,8 @@ export class UserRepository extends BaseRepository<User> {
     serviceId?: number,
     name?: string,
     phoneNumber?: string,
+    city?: string,
+    search?: string,
   ) {
     const query = this.repo
       .createQueryBuilder('user')
@@ -121,6 +123,26 @@ export class UserRepository extends BaseRepository<User> {
 
     if (phoneNumber) {
       query.andWhere('user.phone ILIKE :phoneNumber', { phoneNumber: `%${phoneNumber}%` });
+    }
+
+    if (city) {
+      query.andWhere(
+        new Brackets((qb) => {
+          qb.where('addresses.city ILIKE :city', { city: `%${city}%` })
+            .orWhere('locations.city ILIKE :city', { city: `%${city}%` });
+        }),
+      );
+    }
+
+    if (search) {
+      query.andWhere(
+        new Brackets((qb) => {
+          qb.where('user.firstName ILIKE :search', { search: `%${search}%` })
+            .orWhere('user.lastName ILIKE :search', { search: `%${search}%` })
+            .orWhere('user.email ILIKE :search', { search: `%${search}%` })
+            .orWhere('user.phone ILIKE :search', { search: `%${search}%` });
+        }),
+      );
     }
 
     if (technicianProfileStatus) {
@@ -220,7 +242,7 @@ export class UserRepository extends BaseRepository<User> {
   async getCustomerDashboardStats(userId: number) {
     const [
       totalBookings,
-      upcomingBookings,
+      completedBookings,
       activeBookings,
       savedAddresses,
     ] = await Promise.all([
@@ -231,7 +253,7 @@ export class UserRepository extends BaseRepository<User> {
       this.bookingRepository.count({
         where: {
           customerId: userId,
-          status: BOOKING_STATUS.PENDING,
+          status: BOOKING_STATUS.COMPLETED,
         },
       }),
 
@@ -266,7 +288,7 @@ export class UserRepository extends BaseRepository<User> {
 
     return {
       totalBookings,
-      upcomingBookings,
+      completedBookings,
       activeBookings,
       savedAddresses,
     };

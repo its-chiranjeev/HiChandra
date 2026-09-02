@@ -1,4 +1,4 @@
-import { FileFieldsInterceptor } from '@nestjs/platform-express';
+import { FileFieldsInterceptor, AnyFilesInterceptor } from '@nestjs/platform-express';
 import { Body, Controller, Query, Get, Put, Patch, Delete, Param, ParseIntPipe, HttpCode, HttpStatus, Post, Req, UnauthorizedException, UseGuards, UseInterceptors, ValidationPipe, UploadedFiles, UnprocessableEntityException, BadRequestException, } from '@nestjs/common';
 import { UserService } from './user.service';
 import * as jwt from 'jsonwebtoken';
@@ -16,6 +16,7 @@ import {
   AssignBookingDto,
   UpdateTechnicianStatusDto,
   AdminCreateTechnicianDto,
+  AdminCreateCustomerDto,
   CreateTechnicianPayoutAccountDto,
   UpdateTechnicianPayoutAccountDto,
   UpdateTechnicianServicesDto,
@@ -58,6 +59,19 @@ export class UserController {
     return this.userService.adminCreateTechnicianService(dto);
   }
 
+  @Post('admin/customer')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLE.ADMIN)
+  @UseInterceptors(AnyFilesInterceptor())
+  @HttpCode(HttpStatus.CREATED)
+  async adminCreateCustomer(
+    @Body(new ValidationPipe({ whitelist: true, transform: true }))
+    dto: AdminCreateCustomerDto,
+  ) {
+    return this.userService.adminCreateCustomerService(dto);
+  }
+
+
   @Delete('delete/service/:id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(USER_ROLE.ADMIN)
@@ -91,6 +105,8 @@ export class UserController {
     @Query('serviceId') serviceId?: string,
     @Query('name') name?: string,
     @Query('phoneNumber') phoneNumber?: string,
+    @Query('city') city?: string,
+    @Query('search') search?: string,
   ) {
     if (serviceId && role !== USER_ROLE.TECHNICIAN) {
       throw new BadRequestException(
@@ -106,6 +122,8 @@ export class UserController {
       serviceId ? Number(serviceId) : undefined,
       name,
       phoneNumber,
+      city,
+      search,
     );
   }
 

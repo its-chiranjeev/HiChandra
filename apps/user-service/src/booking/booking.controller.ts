@@ -92,13 +92,16 @@ export class BookingController {
   @Post('payment/webhook')
   @HttpCode(HttpStatus.OK)
   async paymentWebhook(
-    @Req() req: Request,
+    @Req() req: any,
     @Headers('x-razorpay-signature')
     signature: string,
   ) {
+    const rawBody = req.rawBody ? req.rawBody.toString('utf8') : JSON.stringify(req.body);
+    
     return this.bookingService.handlePaymentWebhook(
       req.body,
       signature,
+      rawBody
     );
   }
 

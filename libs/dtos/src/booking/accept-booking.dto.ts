@@ -1,9 +1,9 @@
-import { IsNotEmpty, IsDate } from 'class-validator';
+import { IsOptional, IsDate } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class AcceptBookingDto {
+  @IsOptional()
   @Type(() => Date)
   @IsDate()
-  @IsNotEmpty()
-  scheduledAt!: Date;
+  scheduledAt?: Date;
 }

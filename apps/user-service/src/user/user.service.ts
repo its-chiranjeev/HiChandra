@@ -68,10 +68,12 @@ import {
   UpdateTechnicianServicesDto,
   UpdateTechnicianLocationDto,
   UpdateTechnicianBrandExpertiseDto,
-  CreateTechnicianLocationDto
+  CreateTechnicianLocationDto,
+  AdminCreateCustomerDto,
 } from '@hichandra/dtos';
 import { RazorpayXService, PaymentService } from '@hichandra/payment';
 import { SmsService } from '@hichandra/sms-services';
+import { EmailService } from '@hichandra/email-services';
 
 @Injectable()
 export class UserService {
@@ -93,6 +95,7 @@ export class UserService {
     private readonly technicianPayoutAccountRepository: TechnicianPayoutAccountRepository,
     private readonly bookingRepository: BookingRepository,
     private readonly paymentRepository: PaymentRepository,
+    private readonly emailService: EmailService,
   ) { }
 
   async findById(id: number) {
@@ -165,6 +168,8 @@ export class UserService {
     serviceId?: number,
     name?: string,
     phoneNumber?: string,
+    city?: string,
+    search?: string,
   ) {
     const { users, total } = await this.userRepository.findAllUsers(
       page,
@@ -175,6 +180,8 @@ export class UserService {
       serviceId,
       name,
       phoneNumber,
+      city,
+      search,
     );
     const formattedUsers = await Promise.all(
       users.map(async (user) => {
@@ -745,7 +752,7 @@ export class UserService {
           lastName: dto.lastName,
           password: hashedPassword,
           role: userRole,
-          ...(userRole === USER_ROLE.TECHNICIAN && { isTechnicianProfileCompleted: true }),
+          isTechnicianProfileCompleted: userRole === USER_ROLE.TECHNICIAN,
         });
 
         savedUser = await userRepository.save(newUser);
@@ -2010,11 +2017,122 @@ export class UserService {
       console.error(`Failed to send technician creation SMS to ${dto.phone}:`, smsError);
     }
 
+    if (dto.email) {
+      try {
+        await this.emailService.sendTechnicianWelcomeEmail(dto.email, dto.firstName, dto.password);
+      } catch (error) {
+        this.logger.error(`Failed to send technician welcome email to ${dto.email}:`, error);
+      }
+    }
+
     const { password, ...result } = savedUser;
 
     return {
       success: true,
       message: 'Technician created successfully by Admin',
+      data: result,
+    };
+  }
+
+  async adminCreateCustomerService(dto: AdminCreateCustomerDto) {
+    const targetUsername = dto.username || dto.phone;
+
+    // Check Phone uniqueness
+    const existingPhone = await this.userRepository.findOne({
+      where: { phone: dto.phone },
+    });
+    if (existingPhone) {
+      throw new ConflictException('Phone number already in use');
+    }
+
+    // Check Username uniqueness
+    const existingUsername = await this.userRepository.findOne({
+      where: { username: targetUsername },
+    });
+    if (existingUsername) {
+      throw new ConflictException('Username already in use');
+    }
+
+    // Check Email uniqueness
+    if (dto.email) {
+      const existingEmail = await this.userRepository.findOne({
+        where: { email: dto.email },
+      });
+      if (existingEmail) {
+        throw new ConflictException('Email already in use');
+      }
+    }
+
+    const hashedPassword = await bcrypt.hash(dto.password, 10);
+
+    const newUser = this.userRepository.create({
+      firstName: dto.firstName,
+      lastName: dto.lastName,
+      phone: dto.phone,
+      countryCode: dto.countryCode || null,
+      email: dto.email,
+      username: targetUsername,
+      password: hashedPassword,
+      role: USER_ROLE.CUSTOMER,
+      status: USER_STATUS.ACTIVE,
+      isTechnicianProfileCompleted: false,
+    });
+
+    const savedUser = await this.userRepository.save(newUser);
+
+    if (dto.address || dto.city || dto.customerAddress) {
+      await this.dataSource.transaction(async (manager) => {
+        let addressStr = dto.address;
+        let cityStr = dto.city;
+        let lat = 0;
+        let lng = 0;
+        let pincodeStr: string | undefined = undefined;
+        let stateStr: string | undefined = undefined;
+        let labelStr: string | undefined = undefined;
+
+        if (dto.customerAddress) {
+          try {
+            const parsed = JSON.parse(dto.customerAddress);
+            addressStr = parsed.fullAddress || addressStr;
+            cityStr = parsed.city || cityStr;
+            lat = parsed.latitude || lat;
+            lng = parsed.longitude || lng;
+            pincodeStr = parsed.pincode ?? undefined;
+            stateStr = parsed.state ?? undefined;
+            labelStr = parsed.label ?? undefined;
+          } catch (e) { }
+        }
+
+        const addressRepository = manager.getRepository(CustomerAddress);
+        const newAddress = addressRepository.create({
+          userId: savedUser.id,
+          fullAddress: addressStr,
+          city: cityStr,
+          latitude: lat,
+          longitude: lng,
+          pincode: pincodeStr,
+          state: stateStr,
+          label: labelStr,
+          isDefault: true,
+          isActive: true,
+        });
+        await addressRepository.save(newAddress);
+      });
+    }
+
+    if (dto.email) {
+      try {
+        await this.emailService.sendCustomerWelcomeEmail(dto.email, dto.firstName, dto.password);
+      } catch (error) {
+        this.logger.error(`Failed to send customer welcome email to ${dto.email}:`, error);
+      }
+    }
+
+    const { password, ...result } = savedUser;
+
+    return {
+      success: true,
+      message: 'Customer created successfully by Admin',
       data: result,
     };
   }

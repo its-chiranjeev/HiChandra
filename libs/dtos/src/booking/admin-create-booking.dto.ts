@@ -24,8 +24,8 @@ export class AdminCreateBookingDto {
   serviceId!: number;
 
   @IsNumber()
-  @IsNotEmpty()
-  customerAddressId!: number;
+  @IsOptional()
+  customerAddressId?: number;
 
   @IsArray()
   @IsOptional()

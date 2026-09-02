@@ -1,9 +1,9 @@
-import { BadRequestException, Injectable, StreamableFile, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { BadRequestException, Injectable, StreamableFile, NotFoundException, ForbiddenException, HttpException, HttpStatus } from '@nestjs/common';
 import Razorpay from 'razorpay';
 import * as crypto from 'crypto';
 import puppeteer from 'puppeteer';
 import { paymentInvoiceTemplate } from './templates/invoice.template';
-import { User, BOOKING_STATUS, BOOKING_PAYMENT_STATUS } from '@hichandra/entities';
+import { User, BOOKING_STATUS, BOOKING_PAYMENT_STATUS, CUSTOMER_PAYMENT_MODE } from '@hichandra/entities';
 import { BookingRepository, PaymentRepository } from '@hichandra/repositories';
 
 
@@ -104,15 +104,53 @@ export class PaymentService {
         amount: amount,
       };
     } catch (err: unknown) {
+      console.error('❌ Razorpay Payment Link Error:', JSON.stringify(err, null, 2));
+
       const error = err as {
-        error?: { description?: string };
+        error?: {
+          description?: string;
+          code?: string;
+          field?: string;
+          source?: string;
+          step?: string;
+          reason?: string;
+        };
         message?: string;
       };
+
+      console.error('Razorpay Error Description:', error.error?.description);
+      console.error('Razorpay Error Code:', error.error?.code);
+      console.error('Razorpay Error Field:', error.error?.field);
+
+      const rzpStatusCode = (err as any).statusCode;
+      if (rzpStatusCode === 429 || error.error?.code === 'RATE_LIMIT_EXCEEDED') {
+        throw new HttpException(
+          'Razorpay test-mode payment link limit has been reached. Please try again later.',
+          HttpStatus.TOO_MANY_REQUESTS,
+        );
+      }
+
+      if (rzpStatusCode) {
+        throw new HttpException(
+          error.error?.description || error.message || 'Razorpay payment link creation failed',
+          rzpStatusCode,
+        );
+      }
+
       throw new BadRequestException(
         error.error?.description ||
         error.message ||
         'Razorpay payment link creation failed',
       );
+    }
+  }
+
+  async fetchPaymentLink(paymentLinkId: string) {
+    try {
+      return await this.razorpay.paymentLink.fetch(paymentLinkId);
+    } catch (err: unknown) {
+      console.error(`Failed to fetch Razorpay payment link ${paymentLinkId}:`, err);
+      return null;
     }
   }
 
@@ -300,9 +338,11 @@ export class PaymentService {
         : 'pending';
 
     const paymentMethodDisplay =
-      this.formatPaymentMethod(
-        String(razorpayPayment?.method ?? '-'),
-      );
+      payment.customerPaymentMode === CUSTOMER_PAYMENT_MODE.CASH
+        ? 'CASH'
+        : this.formatPaymentMethod(
+          String(razorpayPayment?.method ?? '-'),
+        );
 
     const amount =
       razorpayPayment?.amount
@@ -341,8 +381,8 @@ export class PaymentService {
     const platformFee = breakdown?.platformFee !== undefined
       ? Number(breakdown.platformFee)
       : (booking.service?.pricingRule?.isPlatformFeeApplied
-          ? Number(booking.service?.pricingRule?.platformFee ?? 0)
-          : 0);
+        ? Number(booking.service?.pricingRule?.platformFee ?? 0)
+        : 0);
 
     const gstAmount = breakdown?.gst !== undefined
       ? Number(breakdown.gst)
@@ -352,71 +392,82 @@ export class PaymentService {
       ? Number(booking.totalAmount)
       : (serviceBasePrice + gstAmount + platformFee);
 
-    const html = paymentInvoiceTemplate({
+      const rawDate = new Date(payment.updatedAt || payment.createdAt);
+      const utcDate = new Date(Date.UTC(
+        rawDate.getFullYear(),
+        rawDate.getMonth(),
+        rawDate.getDate(),
+        rawDate.getHours(),
+        rawDate.getMinutes(),
+        rawDate.getSeconds()
+      ));
 
-      companyName: process.env.HICHANDRA_COMPANY_NAME ?? 'HiChandra',
-      companyEmail: process.env.HICHANDRA_COMPANY_EMAIL ?? '-',
-      companyPhone: process.env.HICHANDRA_COMPANY_PHONE ?? '-',
-      companyAddress: process.env.HICHANDRA_COMPANY_ADDRESS ?? '-',
-      companyGstin:process.env.HICHANDRA_GSTIN ?? '-',
+      const formattedDate = utcDate.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
 
-      billingAddress: booking.address
-        ? [
-          booking.address.fullAddress,
-          booking.address.city,
-          booking.address.state,
-          booking.address.pincode,
-        ]
-          .filter(Boolean)
-          .join(', ')
-        : '-',
+      const html = paymentInvoiceTemplate({
+        companyName: process.env.HICHANDRA_COMPANY_NAME ?? 'HiChandra',
+        companyEmail: process.env.HICHANDRA_COMPANY_EMAIL ?? '-',
+        companyPhone: process.env.HICHANDRA_COMPANY_PHONE ?? '-',
+        companyAddress: process.env.HICHANDRA_COMPANY_ADDRESS ?? '-',
+        companyGstin: process.env.HICHANDRA_GSTIN ?? '-',
 
-      technicianName: booking.technician
-        ? `${booking.technician.firstName} ${booking.technician.lastName}`
-        : '-',
+        billingAddress: booking.address
+          ? [
+            booking.address.fullAddress,
+            booking.address.city,
+            booking.address.state,
+            booking.address.pincode,
+          ]
+            .filter(Boolean)
+            .join(', ')
+          : '-',
 
-      serviceBasePrice: serviceBasePrice.toFixed(2),
-      gstPercent: gstPercent.toFixed(2),
-      gstAmount: gstAmount.toFixed(2),
-      platformFee: platformFee.toFixed(2),
-      finalAmount: finalAmount.toFixed(2),
-      invoiceTitle,
-      invoiceId,
-      dateLabel,
+        technicianName: booking.technician
+          ? `${booking.technician.firstName} ${booking.technician.lastName}`
+          : '-',
 
-      bookingId: booking.id,
+        serviceBasePrice: serviceBasePrice.toFixed(2),
+        gstPercent: gstPercent.toFixed(2),
+        gstAmount: gstAmount.toFixed(2),
+        platformFee: platformFee.toFixed(2),
+        finalAmount: finalAmount.toFixed(2),
+        invoiceTitle,
+        invoiceId,
+        dateLabel,
 
-      customerName: `${booking.customer.firstName} ${booking.customer.lastName}`,
-      customerEmail: booking.customer.email ?? '-',
-      customerPhone: booking.customer.phone ?? '-',
+        bookingId: booking.id,
 
-      serviceName: booking.service?.name,
-      bookingStatus: booking.status.toLowerCase(),
+        customerName: `${booking.customer.firstName} ${booking.customer.lastName}`,
+        customerEmail: booking.customer.email ?? '-',
+        customerPhone: booking.customer.phone ?? '-',
 
-      paymentId: String(
-        razorpayPayment?.id ?? payment.paymentId ?? '-',
-      ),
+        serviceName: booking.service?.name,
+        bookingStatus: booking.status.toLowerCase(),
 
-      orderId: String(
-        razorpayPayment?.order_id ?? payment.orderId ?? '-',
-      ),
+        paymentId: String(
+          razorpayPayment?.id ?? payment.paymentId ?? '-',
+        ),
 
-      paymentMethod: paymentMethodDisplay,
+        orderId: String(
+          razorpayPayment?.order_id ?? payment.orderId ?? '-',
+        ),
 
-      paymentStatus: paymentStatusDisplay,
+        paymentMethod: paymentMethodDisplay,
 
-      statusClass,
+        paymentStatus: paymentStatusDisplay,
 
-      currency: String(
-        razorpayPayment?.currency ?? payment.currency ?? 'INR',
-      ),
+        statusClass,
 
-      amount: amount.toFixed(2),
+        currency: String(
+          razorpayPayment?.currency ?? payment.currency ?? 'INR',
+        ),
 
-      date: new Date(payment.createdAt).toLocaleString('en-IN'),
+        amount: amount.toFixed(2),
 
-      errorMessage,
-    });
+        date: formattedDate,
+
+        errorMessage,
+      });
 
     const browser = await puppeteer.launch({
       headless: true,

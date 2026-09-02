@@ -159,8 +159,6 @@ export class BookingRepository {
         technicianId,
         status:
           BOOKING_STATUS.COMPLETED,
-        bookingPaymentStatus:
-          BOOKING_PAYMENT_STATUS.PAID,
       },
     });
   }
@@ -172,7 +170,6 @@ export class BookingRepository {
       where: {
         customerId,
         status: BOOKING_STATUS.COMPLETED,
-        bookingPaymentStatus: BOOKING_PAYMENT_STATUS.PAID,
       },
     });
   }
@@ -185,7 +182,6 @@ export class BookingRepository {
       where: {
         technicianId,
         status: BOOKING_STATUS.COMPLETED,
-        bookingPaymentStatus: BOOKING_PAYMENT_STATUS.PAID,
         customerRating: Not(IsNull()),
       },
       relations: {
@@ -214,7 +210,6 @@ export class BookingRepository {
   ) {
     const where: any = {
       status: BOOKING_STATUS.COMPLETED,
-      bookingPaymentStatus: BOOKING_PAYMENT_STATUS.PAID,
     };
 
     if (role === USER_ROLE.CUSTOMER) {

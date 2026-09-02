@@ -26,6 +26,11 @@ export enum PAYMENT_TYPE {
   CUSTOMER_REFUND = 'CUSTOMER_REFUND',           // Admin -> Customer Refund
 }
 
+export enum CUSTOMER_PAYMENT_MODE {
+  CASH = 'CASH',
+  ONLINE = 'ONLINE',
+}
+
 @Entity('payments')
 export class Payment {
   @PrimaryGeneratedColumn()
@@ -101,6 +106,13 @@ export class Payment {
     nullable: true,
   })
   paymentType?: PAYMENT_TYPE;
+
+  @Column({
+    type: 'enum',
+    enum: CUSTOMER_PAYMENT_MODE,
+    nullable: true,
+  })
+  customerPaymentMode?: CUSTOMER_PAYMENT_MODE;
 
   @Index({ unique: true })
   @Column({ type: 'varchar', length: 100, nullable: true })

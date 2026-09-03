@@ -18,6 +18,7 @@ import { EntitiesService } from './entities.service';
 import { Complaint } from './complaint.entity';
 import { FavoriteTechnician } from './favorite-technician.entity';
 import { TechnicianPayoutAccount } from './technician-payout-account.entity';
+import { AuditLog } from './audit-log.entity';
 
 
 @Module({
@@ -39,6 +40,7 @@ import { TechnicianPayoutAccount } from './technician-payout-account.entity';
       Complaint,
       FavoriteTechnician,
       TechnicianPayoutAccount,
+      AuditLog,
     ]),
   ],
   providers: [EntitiesService],

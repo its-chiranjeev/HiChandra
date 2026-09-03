@@ -27,6 +27,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { EmailService } from '@hichandra/email-services';
 import { SmsService } from '@hichandra/sms-services';
 import { S3Service } from '@hichandra/s3';
+import { AuditLogService } from '@hichandra/common/audit/audit.service';
+import { AUDIT_MODULE, ACTOR_TYPE } from '@hichandra/entities';
 
 @Injectable()
 export class AuthModuleService {
@@ -41,6 +43,7 @@ export class AuthModuleService {
     private readonly smsService: SmsService,
     private readonly emailService: EmailService,
     private readonly s3Service: S3Service,
+    private readonly auditLogService: AuditLogService,
   ) { }
 
   async issueAuthTokens(user: User) {
@@ -238,6 +241,17 @@ export class AuthModuleService {
         .update({ userId: user.id }, { jobStatus: JOB_STATUS.OFFLINE });
     }
 
+    await this.auditLogService.create({
+      actorId: user.id,
+      actorType: ACTOR_TYPE.USER,
+      actorRole: user.role,
+      module: AUDIT_MODULE.USER,
+      entity: 'User',
+      entityId: user.id.toString(),
+      action: 'LOGOUT_SUCCESS',
+      message: `${user.role} logged out successfully.`,
+    });
+
     return {
       message: 'Logout successful',
     };
@@ -248,6 +262,16 @@ export class AuthModuleService {
     this.logger.log('Starting OTP cleanup...');
 
     const deletedCount = await this.otpRepository.deleteExpiredOtps();
+
+    if (deletedCount > 0) {
+      await this.auditLogService.create({
+        actorType: ACTOR_TYPE.SYSTEM,
+        module: AUDIT_MODULE.USER,
+        entity: 'Otp',
+        action: 'EXPIRED_OTP_DELETED',
+        message: `System cleaned up ${deletedCount} expired OTPs.`,
+      });
+    }
 
     this.logger.log(`Deleted ${deletedCount} expired OTP(s).`);
   }
@@ -379,6 +403,17 @@ export class AuthModuleService {
         .getRepository(TechnicianProfile)
         .update({ userId: user.id }, { jobStatus: JOB_STATUS.AVAILABLE });
     }
+
+    await this.auditLogService.create({
+      actorId: user.id,
+      actorType: ACTOR_TYPE.USER,
+      actorRole: user.role,
+      module: AUDIT_MODULE.USER,
+      entity: 'User',
+      entityId: user.id.toString(),
+      action: 'LOGIN_SUCCESS',
+      message: `${user.role} logged in successfully.`,
+    });
 
     return {
       message: 'Login successful',
@@ -603,6 +638,17 @@ export class AuthModuleService {
 
     await this.otpRepository.save(otp);
 
+    await this.auditLogService.create({
+      actorId: user.id,
+      actorType: ACTOR_TYPE.USER,
+      actorRole: user.role,
+      module: AUDIT_MODULE.USER,
+      entity: 'User',
+      entityId: user.id.toString(),
+      action: 'PASSWORD_RESET_REQUEST',
+      message: `${user.role} requested a password reset.`,
+    });
+
     return {
       message: 'OTP sent successfully',
     };
@@ -650,6 +696,17 @@ export class AuthModuleService {
 
     await this.otpRepository.update(otpRecord.id, {
       isVerified: true,
+    });
+
+    await this.auditLogService.create({
+      actorId: user.id,
+      actorType: ACTOR_TYPE.USER,
+      actorRole: user.role,
+      module: AUDIT_MODULE.USER,
+      entity: 'User',
+      entityId: user.id.toString(),
+      action: 'PASSWORD_CHANGED',
+      message: `${user.role} reset their password via OTP.`,
     });
 
     return {

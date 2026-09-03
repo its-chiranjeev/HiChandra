@@ -11,6 +11,8 @@ import { S3Service } from '@hichandra/s3';
 import { SmsService } from '@hichandra/sms-services';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { BookingGateway } from '@hichandra/gateway';
+import { AuditLogService } from '@hichandra/common/audit/audit.service';
+import { AUDIT_MODULE, ACTOR_TYPE } from '@hichandra/entities';
 
 @Injectable()
 export class BookingService {
@@ -30,6 +32,7 @@ export class BookingService {
     private readonly serviceRepository: ServiceRepository,
     private readonly smsService: SmsService,
     private readonly bookingGateway: BookingGateway,
+    private readonly auditLogService: AuditLogService,
   ) { }
 
   private getIstDateParts(date: Date) {
@@ -862,6 +865,18 @@ export class BookingService {
         throw new NotFoundException('Booking not found after save');
       }
 
+      await this.auditLogService.create({
+        actorId: customerId,
+        actorType: ACTOR_TYPE.USER,
+        actorRole: userRole,
+        module: AUDIT_MODULE.BOOKING,
+        entity: 'Booking',
+        entityId: finalBooking.id.toString(),
+        action: 'BOOKING_CREATED',
+        message: `${userRole || 'Customer'} created Booking #${finalBooking.id}.`,
+        newValue: { status: finalBooking.status, serviceId: finalBooking.serviceId },
+      }, manager);
+
       return {
         ...finalBooking,
         scheduledAtIst: this.toIstString(finalBooking.scheduledAt),
@@ -882,14 +897,27 @@ export class BookingService {
   async markExpiredBookingsManual(): Promise<void> {
     this.logger.log('Marking expired bookings for manual assignment...');
     try {
-      const updatedCount =
+      const updatedBookingIds =
         await this.bookingRepository
           .markExpiredAsManual();
 
-      if (updatedCount > 0) {
+      if (updatedBookingIds.length > 0) {
         this.logger.log(
-          `${updatedCount} booking(s) marked for manual assignment`,
+          `${updatedBookingIds.length} booking(s) marked for manual assignment`,
         );
+
+        for (const bookingId of updatedBookingIds) {
+          await this.auditLogService.create({
+            actorType: ACTOR_TYPE.SYSTEM,
+            module: AUDIT_MODULE.BOOKING,
+            entity: 'Booking',
+            entityId: bookingId.toString(),
+            action: 'AUTO_TO_MANUAL_CONVERTED',
+            message: `System converted Booking #${bookingId} from AUTO to MANUAL assignment.`,
+            oldValue: { isManualAssign: false },
+            newValue: { isManualAssign: true },
+          });
+        }
       }
     } catch (error) {
       this.logger.error(
@@ -1975,6 +2003,8 @@ export class BookingService {
         throw new NotFoundException('Booking not found');
       }
 
+      const oldStatus = booking.status;
+
       if (role === USER_ROLE.ADMIN) {
         if (dto.status !== BOOKING_STATUS.REJECTED) {
           throw new BadRequestException('Admin can only update the booking status to REJECTED');
@@ -1987,6 +2017,20 @@ export class BookingService {
         }
         booking.status = dto.status;
         const updatedBooking = await bookingRepo.save(booking);
+        
+        await this.auditLogService.create({
+          actorId: userId,
+          actorType: ACTOR_TYPE.USER,
+          actorRole: role,
+          module: AUDIT_MODULE.BOOKING,
+          entity: 'Booking',
+          entityId: updatedBooking.id.toString(),
+          action: 'BOOKING_STATUS_CHANGED',
+          message: `Admin changed Booking #${updatedBooking.id} status from ${oldStatus} to ${updatedBooking.status}.`,
+          oldValue: { status: oldStatus },
+          newValue: { status: updatedBooking.status },
+        }, manager);
+
         return updatedBooking;
       }
 
@@ -2070,6 +2114,19 @@ export class BookingService {
           );
         }
       }
+
+      await this.auditLogService.create({
+        actorId: userId,
+        actorType: ACTOR_TYPE.USER,
+        actorRole: role,
+        module: AUDIT_MODULE.BOOKING,
+        entity: 'Booking',
+        entityId: updatedBooking.id.toString(),
+        action: 'BOOKING_STATUS_CHANGED',
+        message: `Technician changed Booking #${updatedBooking.id} status from ${oldStatus} to ${updatedBooking.status}.`,
+        oldValue: { status: oldStatus },
+        newValue: { status: updatedBooking.status },
+      }, manager);
 
       return updatedBooking;
     });
@@ -2327,6 +2384,8 @@ export class BookingService {
         throw new NotFoundException('Payout record in payments not found');
       }
 
+      const oldStatus = payment.status;
+
       if (event === 'payout.processed') {
         payment.status = PAYMENT_STATUS.SUCCESS;
         payment.utr = payoutEntity.utr || payment.utr;
@@ -2351,6 +2410,19 @@ export class BookingService {
       }
 
       await this.paymentRepository.updatePayment(payment);
+
+      if (oldStatus !== payment.status) {
+        await this.auditLogService.create({
+          actorType: ACTOR_TYPE.WEBHOOK,
+          module: AUDIT_MODULE.PAYMENT,
+          entity: 'Payment',
+          entityId: payment.id.toString(),
+          action: 'PAYMENT_WEBHOOK_RECEIVED',
+          message: `Webhook updated Payment #${payment.id} status from ${oldStatus} to ${payment.status}.`,
+          oldValue: { status: oldStatus },
+          newValue: { status: payment.status },
+        });
+      }
 
       if (payment.status === PAYMENT_STATUS.SUCCESS && payment.booking) {
         payment.booking.technicianPayoutStatus = BOOKING_PAYMENT_STATUS.PAID;
@@ -2403,6 +2475,8 @@ export class BookingService {
       };
     }
 
+    const oldStatus = payment.status;
+
     payment.status =
       PAYMENT_STATUS.SUCCESS;
 
@@ -2412,6 +2486,19 @@ export class BookingService {
     await this.paymentRepository.updatePayment(
       payment,
     );
+
+    if ((oldStatus as string) !== (payment.status as string)) {
+      await this.auditLogService.create({
+        actorType: ACTOR_TYPE.WEBHOOK,
+        module: AUDIT_MODULE.PAYMENT,
+        entity: 'Payment',
+        entityId: payment.id.toString(),
+        action: 'PAYMENT_WEBHOOK_RECEIVED',
+        message: `Webhook updated Payment #${payment.id} status from ${oldStatus} to ${payment.status}.`,
+        oldValue: { status: oldStatus },
+        newValue: { status: payment.status },
+      });
+    }
 
     if (payment.booking) {
       payment.booking.bookingPaymentStatus = BOOKING_PAYMENT_STATUS.PAID;
@@ -2733,6 +2820,18 @@ export class BookingService {
 
       await this.paymentRepository.updatePayment(payout);
 
+      await this.auditLogService.create({
+        actorId: adminId,
+        actorType: ACTOR_TYPE.USER,
+        actorRole: USER_ROLE.ADMIN,
+        module: AUDIT_MODULE.PAYOUT,
+        entity: 'Payment',
+        entityId: payout.id.toString(),
+        action: 'PAYOUT_CREATED',
+        message: `Admin created a payout of ₹${payoutAmount} for Technician #${technician.id}.`,
+        newValue: { amount: payoutAmount },
+      });
+
       return {
         success: true,
         message: 'Technician payout initiated successfully',
@@ -2795,6 +2894,18 @@ export class BookingService {
     booking.technicianPayoutStatus = BOOKING_PAYMENT_STATUS.PAID;
     booking.technicianPayoutId = paymentId;
     await this.bookingRepository.saveBooking(booking);
+
+    await this.auditLogService.create({
+      actorId: adminId,
+      actorType: ACTOR_TYPE.USER,
+      actorRole: USER_ROLE.ADMIN,
+      module: AUDIT_MODULE.PAYOUT,
+      entity: 'Payment',
+      entityId: payout.id.toString(),
+      action: 'MANUAL_PAYOUT_CREATED',
+      message: `Admin recorded a manual payout of ₹${dto.amount} for Technician #${technician.id}.`,
+      newValue: { amount: dto.amount },
+    });
 
     return {
       success: true,

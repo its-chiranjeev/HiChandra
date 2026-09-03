@@ -4,6 +4,7 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { DatabaseModule } from '@hichandra/database';
 import { EntitiesModule } from '@hichandra/entities';
+import { CommonModule } from '@hichandra/common';
 import { AuthModuleModule } from './auth/auth-module.module';
 
 @Module({
@@ -13,6 +14,7 @@ import { AuthModuleModule } from './auth/auth-module.module';
     }),
     DatabaseModule,
     EntitiesModule,
+    CommonModule,
     AuthModuleModule,
   ],
   controllers: [AuthController],

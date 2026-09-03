@@ -391,7 +391,7 @@ export class BookingRepository {
     return { bookings, total };
   }
 
-  async markExpiredAsManual(): Promise<number> {
+  async markExpiredAsManual(): Promise<number[]> {
     const bookings = await this.repo.find({
       where: {
         status: BOOKING_STATUS.PENDING,
@@ -430,7 +430,7 @@ export class BookingRepository {
         .execute();
     }
 
-    return expiredBookingIds.length;
+    return expiredBookingIds;
   }
 
   async cancelExpiredPendingBookings(): Promise<number> {

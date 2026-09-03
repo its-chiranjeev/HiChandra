@@ -2,6 +2,8 @@ export * from './common.module';
 export * from './common.service';
 export * from './interceptors/response.interceptor';
 export * from './filters/global-exception.filter';
+export * from './audit/audit.module';
+export * from './audit/audit.service';
 export * from './auth/common-auth.module';
 export * from './decorators/roles.decorator';
 export * from './guards/jwtAuth.guard';

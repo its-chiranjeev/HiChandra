@@ -9,6 +9,8 @@ import { EntitiesModule } from '@hichandra/entities';
 import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 
+import { CommonModule } from '@hichandra/common';
+
 @Module({
   imports: [
     ScheduleModule.forRoot(),
@@ -17,6 +19,7 @@ import { ScheduleModule } from '@nestjs/schedule';
     }),
     DatabaseModule,
     EntitiesModule,
+    CommonModule,
     UserModule,
     BookingModule,
   ],

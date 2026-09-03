@@ -38,6 +38,7 @@ export class UserController {
   @UseInterceptors(FileFieldsInterceptor([{ name: 'icon', maxCount: 1 }]))
   @HttpCode(HttpStatus.OK)
   async createService(
+    @Req() req: any,
     @UploadedFiles()
     files: {
       icon?: Express.Multer.File[];
@@ -45,7 +46,7 @@ export class UserController {
     @Body(new ValidationPipe({ whitelist: true, transform: true }))
     dto: CreateServiceDto,
   ) {
-    return this.userService.createServiceWithPricing(dto, files);
+    return this.userService.createServiceWithPricing(req.user.id, dto, files);
   }
 
   @Post('admin/technician')
@@ -53,10 +54,11 @@ export class UserController {
   @Roles(USER_ROLE.ADMIN)
   @HttpCode(HttpStatus.CREATED)
   async adminCreateTechnician(
+    @Req() req: any,
     @Body(new ValidationPipe({ whitelist: true, transform: true }))
     dto: AdminCreateTechnicianDto,
   ) {
-    return this.userService.adminCreateTechnicianService(dto);
+    return this.userService.adminCreateTechnicianService(req.user.id, dto);
   }
 
   @Post('admin/customer')
@@ -65,10 +67,11 @@ export class UserController {
   @UseInterceptors(AnyFilesInterceptor())
   @HttpCode(HttpStatus.CREATED)
   async adminCreateCustomer(
+    @Req() req: any,
     @Body(new ValidationPipe({ whitelist: true, transform: true }))
     dto: AdminCreateCustomerDto,
   ) {
-    return this.userService.adminCreateCustomerService(dto);
+    return this.userService.adminCreateCustomerService(req.user.id, dto);
   }
 
 
@@ -77,9 +80,10 @@ export class UserController {
   @Roles(USER_ROLE.ADMIN)
   @HttpCode(HttpStatus.OK)
   async deleteService(
+    @Req() req: any,
     @Param('id', ParseIntPipe) id: number,
   ) {
-    return this.userService.deleteService(id);
+    return this.userService.deleteService(req.user.id, id);
   }
 
   @Post('admin/platform-setting')
@@ -87,10 +91,32 @@ export class UserController {
   @Roles(USER_ROLE.ADMIN)
   @HttpCode(HttpStatus.OK)
   async upsertPlatformSetting(
+    @Req() req: any,
     @Body(new ValidationPipe({ whitelist: true, transform: true }))
     dto: CreatePlatformSettingDto,
   ) {
-    return this.userService.upsertPlatformSetting(dto);
+    return this.userService.upsertPlatformSetting(req.user.id, dto);
+  }
+
+  @Get('admin/audit-logs')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLE.ADMIN)
+  async getAuditLogs(
+    @Query('page') page = '1',
+    @Query('limit') limit = '10',
+    @Query('module') module?: string,
+    @Query('action') action?: string,
+    @Query('actorId') actorId?: string,
+  ) {
+    return this.userService.getAuditLogsService(
+      Number(page),
+      Number(limit),
+      {
+        module,
+        action,
+        actorId: actorId ? Number(actorId) : undefined,
+      },
+    );
   }
 
   @Get('all')
@@ -131,17 +157,21 @@ export class UserController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(USER_ROLE.ADMIN)
   async updateUser(
+    @Req() req: any,
     @Param('id', ParseIntPipe) id: number,
     @Body() updateUserDto: UpdateUserDto,
   ) {
-    return this.userService.updateUserService(id, updateUserDto);
+    return this.userService.updateUserService(req.user.id, id, updateUserDto);
   }
 
   @Delete('delete/user/:id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(USER_ROLE.ADMIN)
-  async deleteUser(@Param('id', ParseIntPipe) id: number) {
-    return this.userService.deleteUserService(id);
+  async deleteUser(
+    @Req() req: any,
+    @Param('id', ParseIntPipe) id: number
+  ) {
+    return this.userService.deleteUserService(req.user.id, id);
   }
 
   @Get('service/all')
@@ -200,6 +230,7 @@ export class UserController {
   @Roles(USER_ROLE.ADMIN)
   @UseInterceptors(FileFieldsInterceptor([{ name: 'icon', maxCount: 1 }]))
   async updateService(
+    @Req() req: any,
     @Param('id', ParseIntPipe) id: number,
     @UploadedFiles()
     files: {
@@ -208,7 +239,7 @@ export class UserController {
     @Body(new ValidationPipe({ whitelist: true, transform: true }))
     dto: UpdateServiceDto,
   ) {
-    return this.userService.updateService(id, dto, files);
+    return this.userService.updateService(req.user.id, id, dto, files);
   }
 
   @Patch('admin/technician/status/:id')
@@ -216,10 +247,11 @@ export class UserController {
   @Roles(USER_ROLE.ADMIN)
   @HttpCode(HttpStatus.OK)
   async updateTechnicianStatus(
+    @Req() req: any,
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateTechnicianStatusDto,
   ) {
-    return this.userService.updateTechnicianStatusService(id, dto);
+    return this.userService.updateTechnicianStatusService(req.user.id, id, dto);
   }
 
   @Post('technician/payout-account')
@@ -467,6 +499,7 @@ export class UserController {
   ) {
     return this.userService.updateTechnicianServices(req.user.id, dto);
   }
+
 
   @Post('technician/location')
   @UseGuards(JwtAuthGuard, RolesGuard)

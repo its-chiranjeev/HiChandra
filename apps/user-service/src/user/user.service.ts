@@ -49,6 +49,8 @@ import {
   PAYMENT_TYPE,
   Booking,
   BOOKING_STATUS,
+  AUDIT_MODULE,
+  ACTOR_TYPE,
 } from '@hichandra/entities';
 import { AuthModuleService } from 'apps/auth-service/src/auth/auth-module.service';
 import { S3Service } from '@hichandra/s3';
@@ -74,6 +76,7 @@ import {
 import { RazorpayXService, PaymentService } from '@hichandra/payment';
 import { SmsService } from '@hichandra/sms-services';
 import { EmailService } from '@hichandra/email-services';
+import { AuditLogService } from '@hichandra/common/audit/audit.service';
 
 @Injectable()
 export class UserService {
@@ -96,6 +99,7 @@ export class UserService {
     private readonly bookingRepository: BookingRepository,
     private readonly paymentRepository: PaymentRepository,
     private readonly emailService: EmailService,
+    private readonly auditLogService: AuditLogService,
   ) { }
 
   async findById(id: number) {
@@ -118,7 +122,23 @@ export class UserService {
       hashedRefreshToken: _refreshToken,
       ...rest
     } = user;
-    return rest;
+
+    const cleanUser = { id: _id, ...rest };
+
+    return await this.presignUserS3Urls(cleanUser);
+  }
+
+  async getAuditLogsService(
+    page: number = 1,
+    limit: number = 10,
+    filters?: { module?: string; action?: string; actorId?: number },
+  ) {
+    const logs = await this.auditLogService.findAll(page, limit, filters);
+    return {
+      success: true,
+      message: 'Audit logs fetched successfully',
+      data: logs,
+    };
   }
 
   private async presignUserS3Urls(user: any) {
@@ -320,14 +340,29 @@ export class UserService {
     };
   }
 
-  async updateUserService(id: number, updateUserDto: UpdateUserDto) {
+  async updateUserService(adminId: number, id: number, updateUserDto: UpdateUserDto) {
     const user = await this.userRepository.findById(id);
 
     if (!user) {
       throw new Error('User not found');
     }
 
+    const oldStatus = user.status;
+
     const updatedUser = await this.userRepository.updateUser(id, updateUserDto);
+
+    await this.auditLogService.create({
+      actorId: adminId,
+      actorType: ACTOR_TYPE.USER,
+      actorRole: 'ADMIN',
+      module: AUDIT_MODULE.USER,
+      entity: 'User',
+      entityId: id.toString(),
+      action: 'USER_UPDATED',
+      message: `Admin updated User #${id}.`,
+      oldValue: { status: oldStatus },
+      newValue: { status: updatedUser?.status },
+    });
 
     return {
       success: true,
@@ -336,7 +371,7 @@ export class UserService {
     };
   }
 
-  async deleteUserService(id: number) {
+  async deleteUserService(adminId: number, id: number) {
     const user = await this.userRepository.findById(id);
 
     if (!user) {
@@ -344,6 +379,18 @@ export class UserService {
     }
 
     await this.userRepository.softDeleteUser(id);
+
+    await this.auditLogService.create({
+      actorId: adminId,
+      actorType: ACTOR_TYPE.USER,
+      actorRole: 'ADMIN',
+      module: AUDIT_MODULE.USER,
+      entity: 'User',
+      entityId: id.toString(),
+      action: 'USER_DELETED',
+      message: `Admin deleted User #${id}.`,
+      oldValue: { id: user.id },
+    });
 
     return {
       success: true,
@@ -535,7 +582,7 @@ export class UserService {
     };
   }
 
-  async deleteService(id: number) {
+  async deleteService(adminId: number, id: number) {
     const service = await this.serviceRepository.findOne({
       where: { id },
     });
@@ -548,6 +595,18 @@ export class UserService {
     await this.serviceRepository.save(service);
 
     await this.serviceRepository.softDeleteService(id);
+
+    await this.auditLogService.create({
+      actorId: adminId,
+      actorType: ACTOR_TYPE.USER,
+      actorRole: 'ADMIN',
+      module: AUDIT_MODULE.SERVICE,
+      entity: 'Service',
+      entityId: id.toString(),
+      action: 'SERVICE_DELETED',
+      message: `Admin deleted service ${service.name}.`,
+      oldValue: { id: service.id },
+    });
 
     return {
       success: true,
@@ -998,6 +1057,18 @@ export class UserService {
 
     const tokenData = await this.authModuleService.issueAuthTokens(result.savedUser);
 
+    await this.auditLogService.create({
+      actorId: result.savedUser.id,
+      actorType: ACTOR_TYPE.USER,
+      actorRole: result.savedUser.role,
+      module: AUDIT_MODULE.USER,
+      entity: 'User',
+      entityId: result.savedUser.id.toString(),
+      action: 'USER_REGISTERED',
+      message: `${result.savedUser.role} registered an account.`,
+      newValue: { phone: result.savedUser.phone, email: result.savedUser.email },
+    });
+
     return {
       message: 'Registration successful',
       tokens: tokenData.tokens,
@@ -1006,6 +1077,7 @@ export class UserService {
   }
 
   async createServiceWithPricing(
+    adminId: number,
     dto: CreateServiceDto,
     files?: {
       icon?: Express.Multer.File[];
@@ -1085,6 +1157,18 @@ export class UserService {
         savedSpecs = await specRepository.save(specsToCreate);
       }
 
+      await this.auditLogService.create({
+        actorId: adminId,
+        actorType: ACTOR_TYPE.USER,
+        actorRole: 'ADMIN',
+        module: AUDIT_MODULE.SERVICE,
+        entity: 'Service',
+        entityId: savedService.id.toString(),
+        action: 'SERVICE_CREATED',
+        message: `Admin created service ${savedService.name}.`,
+        newValue: { name: savedService.name },
+      }, manager);
+
       return {
         success: true,
         message: 'Service with pricing created successfully',
@@ -1097,7 +1181,7 @@ export class UserService {
     });
   }
 
-  async upsertPlatformSetting(dto: CreatePlatformSettingDto) {
+  async upsertPlatformSetting(adminId: number, dto: CreatePlatformSettingDto) {
     const platformSettingRepository =
       this.dataSource.getRepository(PlatformSetting);
 
@@ -1119,6 +1203,18 @@ export class UserService {
     }
 
     const savedSetting = await platformSettingRepository.save(setting);
+
+    await this.auditLogService.create({
+      actorId: adminId,
+      actorType: ACTOR_TYPE.USER,
+      actorRole: 'ADMIN',
+      module: AUDIT_MODULE.USER,
+      entity: 'PlatformSetting',
+      entityId: savedSetting.id.toString(),
+      action: 'PLATFORM_SETTING_UPDATED',
+      message: `Admin updated platform setting ${savedSetting.key}.`,
+      newValue: { value: savedSetting.value },
+    });
 
     return {
       success: true,
@@ -1468,6 +1564,7 @@ export class UserService {
   }
 
   async updateService(
+    adminId: number,
     id: number,
     dto: UpdateServiceDto,
     files?: {
@@ -1488,6 +1585,8 @@ export class UserService {
       if (!service) {
         throw new NotFoundException('Service not found');
       }
+
+      const oldServiceData = { price: service.pricingRule?.serviceBasePrice };
 
       // Update Service table
       if (dto.name !== undefined) {
@@ -1579,6 +1678,19 @@ export class UserService {
         relations: ['pricingRule', 'specifications'],
       });
 
+      await this.auditLogService.create({
+        actorId: adminId,
+        actorType: ACTOR_TYPE.USER,
+        actorRole: 'ADMIN',
+        module: AUDIT_MODULE.SERVICE,
+        entity: 'Service',
+        entityId: id.toString(),
+        action: 'SERVICE_UPDATED',
+        message: `Admin updated service ${updatedService?.name}.`,
+        oldValue: oldServiceData,
+        newValue: { price: updatedService?.pricingRule?.serviceBasePrice },
+      }, manager);
+
       return {
         success: true,
         message: 'Service updated successfully',
@@ -1628,6 +1740,7 @@ export class UserService {
   // }
   //added
   async updateTechnicianStatusService(
+    adminId: number,
     technicianId: number,
     dto: UpdateTechnicianStatusDto,
   ) {
@@ -1759,9 +1872,25 @@ export class UserService {
     // }
 
     // Change approval/rejection status after external setup succeeds.
+    const oldStatus = profile.status;
     profile.status = dto.status;
 
     await this.technicianProfileRepository.save(profile);
+
+    if (oldStatus !== profile.status) {
+      await this.auditLogService.create({
+        actorId: adminId,
+        actorType: ACTOR_TYPE.USER,
+        actorRole: 'ADMIN',
+        module: AUDIT_MODULE.USER,
+        entity: 'User',
+        entityId: technicianId.toString(),
+        action: 'USER_STATUS_CHANGED',
+        message: `Admin changed Technician #${technicianId} status from ${oldStatus} to ${profile.status}.`,
+        oldValue: { status: oldStatus },
+        newValue: { status: profile.status },
+      });
+    }
 
     return {
       success: true,
@@ -1962,7 +2091,7 @@ export class UserService {
     };
   }
 
-  async adminCreateTechnicianService(dto: AdminCreateTechnicianDto) {
+  async adminCreateTechnicianService(adminId: number, dto: AdminCreateTechnicianDto) {
     const targetUsername = dto.username || dto.phone;
 
     // Check Phone uniqueness
@@ -2025,6 +2154,18 @@ export class UserService {
       }
     }
 
+    await this.auditLogService.create({
+      actorId: adminId,
+      actorType: ACTOR_TYPE.USER,
+      actorRole: 'ADMIN',
+      module: AUDIT_MODULE.USER,
+      entity: 'User',
+      entityId: savedUser.id.toString(),
+      action: 'USER_REGISTERED',
+      message: `Admin created Technician ${savedUser.firstName}.`,
+      newValue: { phone: savedUser.phone, email: savedUser.email },
+    });
+
     const { password, ...result } = savedUser;
 
     return {
@@ -2034,7 +2175,7 @@ export class UserService {
     };
   }
 
-  async adminCreateCustomerService(dto: AdminCreateCustomerDto) {
+  async adminCreateCustomerService(adminId: number, dto: AdminCreateCustomerDto) {
     const targetUsername = dto.username || dto.phone;
 
     // Check Phone uniqueness
@@ -2127,6 +2268,18 @@ export class UserService {
         this.logger.error(`Failed to send customer welcome email to ${dto.email}:`, error);
       }
     }
+
+    await this.auditLogService.create({
+      actorId: adminId,
+      actorType: ACTOR_TYPE.USER,
+      actorRole: 'ADMIN',
+      module: AUDIT_MODULE.USER,
+      entity: 'User',
+      entityId: savedUser.id.toString(),
+      action: 'USER_REGISTERED',
+      message: `Admin created Customer ${savedUser.firstName}.`,
+      newValue: { phone: savedUser.phone, email: savedUser.email },
+    });
 
     const { password, ...result } = savedUser;
 

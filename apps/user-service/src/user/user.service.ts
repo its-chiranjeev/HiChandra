@@ -2137,20 +2137,57 @@ export class UserService {
 
     const savedUser = await this.userRepository.save(newUser);
 
+    let emailSent = false;
     try {
       await this.smsService.sendSms(
         dto.phone,
         `Your HiChandra technician profile has been created by Admin. Please log in using your phone number (${dto.phone}) and password (${dto.password}) to complete your profile setup.`,
       );
-    } catch (smsError) {
-      console.error(`Failed to send technician creation SMS to ${dto.phone}:`, smsError);
+      this.logger.log(`Technician creation SMS sent successfully to ${dto.phone}`);
+    } catch (smsError: any) {
+      this.logger.warn(
+        `Failed to send technician creation SMS to ${dto.phone}: ${smsError?.message || smsError}. Attempting email fallback...`,
+      );
+
+      if (dto.email) {
+        try {
+          await this.emailService.sendTechnicianWelcomeEmail(
+            dto.email,
+            dto.firstName,
+            dto.password,
+          );
+          emailSent = true;
+          this.logger.log(
+            `Technician welcome email sent successfully to ${dto.email} as fallback`,
+          );
+        } catch (emailError: any) {
+          this.logger.error(
+            `Failed to send technician welcome email to ${dto.email}: ${emailError?.message || emailError}`,
+            emailError?.stack,
+          );
+        }
+      } else {
+        this.logger.warn(
+          `Failed to send technician creation SMS to ${dto.phone} and no email was provided for fallback.`,
+        );
+      }
     }
 
-    if (dto.email) {
+    if (dto.email && !emailSent) {
       try {
-        await this.emailService.sendTechnicianWelcomeEmail(dto.email, dto.firstName, dto.password);
-      } catch (error) {
-        this.logger.error(`Failed to send technician welcome email to ${dto.email}:`, error);
+        await this.emailService.sendTechnicianWelcomeEmail(
+          dto.email,
+          dto.firstName,
+          dto.password,
+        );
+        this.logger.log(
+          `Technician welcome email sent successfully to ${dto.email}`,
+        );
+      } catch (emailError: any) {
+        this.logger.error(
+          `Failed to send technician welcome email to ${dto.email}: ${emailError?.message || emailError}`,
+          emailError?.stack,
+        );
       }
     }
 

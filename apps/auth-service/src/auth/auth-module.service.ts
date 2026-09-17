@@ -10,7 +10,7 @@ import {
 } from '@nestjs/common';
 import { UserRepository, OtpRepository } from '@hichandra/repositories';
 import * as bcrypt from 'bcryptjs';
-import { User, USER_STATUS, USER_ROLE, TechnicianService, TechnicianPayoutAccount, TechnicianProfile, JOB_STATUS } from '@hichandra/entities';
+import { User, USER_STATUS, USER_ROLE, TechnicianService, TechnicianPayoutAccount, TechnicianProfile, JOB_STATUS, Otp } from '@hichandra/entities';
 import { ConfigService } from '@nestjs/config';
 import { createHmac } from 'crypto';
 import { Cron } from '@nestjs/schedule';
@@ -169,14 +169,39 @@ export class AuthModuleService {
     }
     // console.log("hellog");
     // 5. Generate a 6-digit numeric OTP
-    // console.log("hello");
     const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
-    // console.log("hello");
-    // if (dto.email) {
-    //   await this.emailService.sendOtpEmail(dto.email, otpCode);
-    // }
-    if (dto.phone) {
-      await this.smsService.sendOtpSms(dto.phone, otpCode);
+
+    try {
+      if (dto.phone) {
+        await this.smsService.sendOtpSms(dto.phone, otpCode);
+        this.logger.log(`OTP sent successfully via SMS to ${dto.phone}`);
+      }
+    } catch (smsError: any) {
+      this.logger.warn(
+        `Failed to send OTP via SMS to ${dto.phone}: ${smsError?.message || smsError}. Attempting email fallback...`,
+      );
+
+      if (dto.email) {
+        try {
+          await this.emailService.sendOtpEmail(dto.email, otpCode);
+          this.logger.log(`OTP sent successfully via Email to ${dto.email}`);
+        } catch (emailError: any) {
+          this.logger.error(
+            `Failed to send OTP via Email to ${dto.email}: ${emailError?.message || emailError}`,
+            emailError?.stack,
+          );
+          throw new InternalServerErrorException(
+            'Failed to send OTP via SMS and Email fallback. Please try again later.',
+          );
+        }
+      } else {
+        this.logger.error(
+          `Failed to send OTP via SMS to ${dto.phone} and no email was provided in request.`,
+        );
+        throw new InternalServerErrorException(
+          'Failed to send OTP via SMS, and no email was provided to fallback.',
+        );
+      }
     }
     // console.log("hello");
     // 6. Save OTP to database
@@ -596,23 +621,47 @@ export class AuthModuleService {
   }
 
   async forgotPasswordService(dto: ForgotPasswordDto) {
-    if (!dto.phone) {
-      throw new BadRequestException('Phone number is required');
+    if (!dto.phone && !dto.email) {
+      throw new BadRequestException(
+        'Please provide either phone number or email',
+      );
     }
-    const user = await this.userRepository.findOne({
-      where: dto.countryCode
-        ? { phone: dto.phone, countryCode: dto.countryCode }
-        : { phone: dto.phone },
-    });
+
+    let user: User | null = null;
+    if (dto.phone) {
+      user = await this.userRepository.findOne({
+        where: dto.countryCode
+          ? { phone: dto.phone, countryCode: dto.countryCode }
+          : { phone: dto.phone },
+      });
+    } else if (dto.email) {
+      user = await this.userRepository.findOne({
+        where: { email: dto.email },
+      });
+    }
+
     if (!user) {
       throw new NotFoundException('User not found');
     }
 
-    const oldOtp = await this.otpRepository.findOne({
-      where: dto.countryCode
-        ? { phone: dto.phone, countryCode: dto.countryCode, isVerified: false }
-        : { phone: dto.phone, isVerified: false },
-    });
+    // Invalidate old unverified OTP
+    let oldOtp: Otp | null = null;
+    if (dto.phone) {
+      oldOtp = await this.otpRepository.findOne({
+        where: dto.countryCode
+          ? {
+            phone: dto.phone,
+            countryCode: dto.countryCode,
+            isVerified: false,
+          }
+          : { phone: dto.phone, isVerified: false },
+      });
+    } else if (dto.email) {
+      oldOtp = await this.otpRepository.findOne({
+        where: { email: dto.email, isVerified: false },
+      });
+    }
+
     if (oldOtp) {
       await this.otpRepository.update(oldOtp.id, {
         isVerified: true,
@@ -623,13 +672,72 @@ export class AuthModuleService {
       100000 + Math.random() * 900000,
     ).toString();
 
-    await this.smsService.sendOtpSms(dto.phone, otpCode);
+    // 1. If phone is provided, send via SMS (with fallback to email if SMS fails)
+    if (dto.phone) {
+      try {
+        await this.smsService.sendOtpSms(dto.phone, otpCode);
+        this.logger.log(`OTP sent successfully via SMS to ${dto.phone}`);
+      } catch (smsError: any) {
+        this.logger.warn(
+          `Failed to send OTP via SMS to ${dto.phone}: ${smsError?.message || smsError}. Attempting email fallback...`,
+        );
+
+        const recipientEmail = user.email || dto.email;
+        if (recipientEmail) {
+          try {
+            await this.emailService.sendOtpEmail(
+              recipientEmail,
+              otpCode,
+              user.username,
+            );
+            this.logger.log(
+              `OTP sent successfully via Email to ${recipientEmail}`,
+            );
+          } catch (emailError: any) {
+            this.logger.error(
+              `Failed to send OTP via Email to ${recipientEmail}: ${emailError?.message || emailError}`,
+              emailError?.stack,
+            );
+            throw new InternalServerErrorException(
+              'Failed to send OTP via SMS and Email fallback. Please try again later.',
+            );
+          }
+        } else {
+          this.logger.error(
+            `Failed to send OTP via SMS to ${dto.phone} and no registered email found for user ID ${user.id}.`,
+          );
+          throw new InternalServerErrorException(
+            'Failed to send OTP via SMS, and no registered email was found to fallback.',
+          );
+        }
+      }
+    } else if (dto.email) {
+      // 2. If email is provided (no phone), send directly via Email
+      try {
+        await this.emailService.sendOtpEmail(
+          dto.email,
+          otpCode,
+          user.username,
+        );
+        this.logger.log(`OTP sent successfully via Email to ${dto.email}`);
+      } catch (emailError: any) {
+        this.logger.error(
+          `Failed to send OTP via Email to ${dto.email}: ${emailError?.message || emailError}`,
+          emailError?.stack,
+        );
+        throw new InternalServerErrorException(
+          'Failed to send OTP via Email. Please try again later.',
+        );
+      }
+    }
+
     const expiresAt = new Date();
     expiresAt.setMinutes(expiresAt.getMinutes() + 10);
 
     const otp = this.otpRepository.create({
-      phone: dto.phone,
-      countryCode: dto.countryCode || null,
+      phone: dto.phone || user.phone || undefined,
+      email: dto.email || user.email || undefined,
+      countryCode: dto.countryCode || user.countryCode || null,
       otp: otpCode,
       expiresAt,
       role: user.role,
@@ -655,24 +763,41 @@ export class AuthModuleService {
   }
 
   async resetPasswordService(dto: ResetPasswordDto) {
-    if (!dto.phone) {
-      throw new BadRequestException('Phone number is required');
+    if (!dto.phone && !dto.email) {
+      throw new BadRequestException(
+        'Please provide either phone number or email',
+      );
     }
-    const user = await this.userRepository.findOne({
-      where: dto.countryCode
-        ? { phone: dto.phone, countryCode: dto.countryCode }
-        : { phone: dto.phone },
-    });
+
+    let user: User | null = null;
+    if (dto.phone) {
+      user = await this.userRepository.findOne({
+        where: dto.countryCode
+          ? { phone: dto.phone, countryCode: dto.countryCode }
+          : { phone: dto.phone },
+      });
+    } else if (dto.email) {
+      user = await this.userRepository.findOne({
+        where: { email: dto.email },
+      });
+    }
+
     if (!user) {
       throw new NotFoundException('User not found');
     }
 
+    const otpWhere: any = {
+      otp: dto.otp,
+      isVerified: false,
+    };
+    if (dto.phone) {
+      otpWhere.phone = dto.phone;
+    } else if (dto.email) {
+      otpWhere.email = dto.email;
+    }
+
     const otpRecord = await this.otpRepository.findOne({
-      where: {
-        phone: dto.phone,
-        otp: dto.otp,
-        isVerified: false,
-      },
+      where: otpWhere,
     });
     if (!otpRecord) {
       throw new BadRequestException('OTP not found');

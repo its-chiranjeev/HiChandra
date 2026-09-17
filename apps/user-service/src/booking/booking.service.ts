@@ -2017,7 +2017,7 @@ export class BookingService {
         }
         booking.status = dto.status;
         const updatedBooking = await bookingRepo.save(booking);
-        
+
         await this.auditLogService.create({
           actorId: userId,
           actorType: ACTOR_TYPE.USER,
@@ -2092,9 +2092,12 @@ export class BookingService {
       }
 
       if (dto.status === BOOKING_STATUS.ARRIVED) {
-        if (!booking.customer || !booking.customer.phone) {
+        if (
+          !booking.customer ||
+          (!booking.customer.phone && !booking.customer.email)
+        ) {
           throw new BadRequestException(
-            'Customer does not have a registered phone number',
+            'Customer does not have a registered phone number or email',
           );
         }
 
@@ -2106,12 +2109,40 @@ export class BookingService {
         }
 
         try {
-          await this.smsService.sendOtpSms(booking.customer.phone, otpToSend);
-        } catch (error: any) {
-          this.logger.error(
-            `Failed to send OTP SMS to customer ${booking.customer.phone}`,
-            error instanceof Error ? error.stack : String(error),
+          if (booking.customer?.phone) {
+            await this.smsService.sendOtpSms(booking.customer.phone, otpToSend);
+            this.logger.log(
+              `Booking arrival OTP sent successfully via SMS to customer ${booking.customer.phone}`,
+            );
+          } else {
+            throw new Error('Customer does not have a registered phone number');
+          }
+        } catch (smsError: any) {
+          this.logger.warn(
+            `Failed to send arrival OTP SMS to customer ${booking.customer?.phone}: ${smsError?.message || smsError}. Attempting email fallback...`,
           );
+
+          if (booking.customer?.email) {
+            try {
+              await this.emailService.sendOtpEmail(
+                booking.customer.email,
+                otpToSend,
+                booking.customer.username || booking.customer.firstName,
+              );
+              this.logger.log(
+                `Booking arrival OTP sent successfully via Email to customer ${booking.customer.email}`,
+              );
+            } catch (emailError: any) {
+              this.logger.error(
+                `Failed to send arrival OTP via Email to customer ${booking.customer.email}: ${emailError?.message || emailError}`,
+                emailError instanceof Error ? emailError.stack : String(emailError),
+              );
+            }
+          } else {
+            this.logger.error(
+              `Failed to send arrival OTP SMS to customer ${booking.customer?.phone} and customer has no registered email.`,
+            );
+          }
         }
       }
 
@@ -2200,9 +2231,12 @@ export class BookingService {
       );
     }
 
-    if (!booking.customer || !booking.customer.phone) {
+    if (
+      !booking.customer ||
+      (!booking.customer.phone && !booking.customer.email)
+    ) {
       throw new BadRequestException(
-        'Customer does not have a registered phone number',
+        'Customer does not have a registered phone number or email',
       );
     }
 
@@ -2211,15 +2245,46 @@ export class BookingService {
     await this.dataSource.getRepository(Booking).save(booking);
 
     try {
-      await this.smsService.sendOtpSms(booking.customer.phone, newOtp);
-    } catch (error: any) {
-      this.logger.error(
-        `Failed to send OTP SMS to customer ${booking.customer.phone}`,
-        error instanceof Error ? error.stack : String(error),
+      if (booking.customer?.phone) {
+        await this.smsService.sendOtpSms(booking.customer.phone, newOtp);
+        this.logger.log(
+          `Booking OTP resent successfully via SMS to customer ${booking.customer.phone}`,
+        );
+      } else {
+        throw new Error('Customer does not have a registered phone number');
+      }
+    } catch (smsError: any) {
+      this.logger.warn(
+        `Failed to send OTP SMS to customer ${booking.customer?.phone}: ${smsError?.message || smsError}. Attempting email fallback...`,
       );
-      throw new BadRequestException(
-        'Failed to send OTP SMS. Please try again.',
-      );
+
+      if (booking.customer?.email) {
+        try {
+          await this.emailService.sendOtpEmail(
+            booking.customer.email,
+            newOtp,
+            booking.customer.username || booking.customer.firstName,
+          );
+          this.logger.log(
+            `Booking OTP resent successfully via Email to customer ${booking.customer.email}`,
+          );
+        } catch (emailError: any) {
+          this.logger.error(
+            `Failed to send OTP via Email to customer ${booking.customer.email}: ${emailError?.message || emailError}`,
+            emailError instanceof Error ? emailError.stack : String(emailError),
+          );
+          throw new BadRequestException(
+            'Failed to resend OTP via SMS and Email fallback. Please try again.',
+          );
+        }
+      } else {
+        this.logger.error(
+          `Failed to resend OTP SMS to customer ${booking.customer?.phone} and customer has no registered email.`,
+        );
+        throw new BadRequestException(
+          'Failed to resend OTP via SMS and customer has no registered email.',
+        );
+      }
     }
 
     return {
@@ -2359,7 +2424,7 @@ export class BookingService {
       console.error('Webhook signature verification failed!');
       console.error('Payload:', bodyToVerify);
       console.error('Signature:', signature);
-      
+
       // Temporarily bypass signature check for testing if needed
       // throw new BadRequestException('Invalid webhook signature');
       console.warn('Bypassing signature validation for test environment');
@@ -2439,7 +2504,7 @@ export class BookingService {
 
     // Handle Customer Payment Link Webhooks (Razorpay Standard)
     console.log('Webhook Event Received:', payload.event);
-    
+
     if (
       payload.event !==
       'payment_link.paid'

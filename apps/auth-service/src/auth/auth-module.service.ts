@@ -119,34 +119,32 @@ export class AuthModuleService {
   }
 
   async generateOtpService(dto: RegisterUserDto) {
-    // if (!dto.email && !dto.phone) {
-    //   throw new BadRequestException(
-    //     'At least email or phone number must be provided',
-    //   );
-    if (!dto.phone) {
-      throw new BadRequestException('Phone number is required');
+    if (!dto.email && !dto.phone) {
+      throw new BadRequestException(
+        'At least email or phone number must be provided',
+      );
     }
 
     if (![USER_ROLE.CUSTOMER, USER_ROLE.TECHNICIAN].includes(dto.role)) {
       throw new BadRequestException('Invalid role');
     }
 
-    //1. Verify if user already exists by email
-    // if (dto.email) {
-    //   const existingUserByEmail = await this.userRepository.findByEmail(
-    //     dto.email,
-    //   );
-    //   // if (existingUserByEmail) {
-    //   //   throw new ConflictException('Email already in use');
-    //   // }
+    // 1. Verify if user already exists by email
+    if (dto.email) {
+      const existingUserByEmail = await this.userRepository.findByEmail(
+        dto.email,
+      );
+      if (existingUserByEmail) {
+        throw new ConflictException('Email already in use');
+      }
 
-    //   const verifyAccount = await this.otpRepository.findOne({
-    //     where: { email: dto.email },
-    //   });
-    //   if (verifyAccount) {
-    //     await this.otpRepository.delete(verifyAccount.id);
-    //   }
-    // }
+      const verifyAccount = await this.otpRepository.findOne({
+        where: { email: dto.email },
+      });
+      if (verifyAccount) {
+        await this.otpRepository.delete(verifyAccount.id);
+      }
+    }
 
     // 2. Verify if user already exists by phone
     if (dto.phone) {
@@ -167,47 +165,61 @@ export class AuthModuleService {
         await this.otpRepository.delete(verifyAccount.id);
       }
     }
-    // console.log("hellog");
-    // 5. Generate a 6-digit numeric OTP
+
+    // 3. Generate a 6-digit numeric OTP
     const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
 
-    try {
-      if (dto.phone) {
+    // 4. Send OTP via SMS or Email
+    if (dto.phone) {
+      try {
         await this.smsService.sendOtpSms(dto.phone, otpCode);
         this.logger.log(`OTP sent successfully via SMS to ${dto.phone}`);
-      }
-    } catch (smsError: any) {
-      this.logger.warn(
-        `Failed to send OTP via SMS to ${dto.phone}: ${smsError?.message || smsError}. Attempting email fallback...`,
-      );
+      } catch (smsError: any) {
+        this.logger.warn(
+          `Failed to send OTP via SMS to ${dto.phone}: ${smsError?.message || smsError}. Attempting email fallback...`,
+        );
 
-      if (dto.email) {
-        try {
-          await this.emailService.sendOtpEmail(dto.email, otpCode);
-          this.logger.log(`OTP sent successfully via Email to ${dto.email}`);
-        } catch (emailError: any) {
+        if (dto.email) {
+          try {
+            await this.emailService.sendOtpEmail(dto.email, otpCode);
+            this.logger.log(`OTP sent successfully via Email to ${dto.email}`);
+          } catch (emailError: any) {
+            this.logger.error(
+              `Failed to send OTP via Email to ${dto.email}: ${emailError?.message || emailError}`,
+              emailError?.stack,
+            );
+            throw new InternalServerErrorException(
+              'Failed to send OTP via SMS and Email fallback. Please try again later.',
+            );
+          }
+        } else {
           this.logger.error(
-            `Failed to send OTP via Email to ${dto.email}: ${emailError?.message || emailError}`,
-            emailError?.stack,
+            `Failed to send OTP via SMS to ${dto.phone} and no email was provided in request.`,
           );
           throw new InternalServerErrorException(
-            'Failed to send OTP via SMS and Email fallback. Please try again later.',
+            'Failed to send OTP via SMS. Please try again later.',
           );
         }
-      } else {
+      }
+    } else if (dto.email) {
+      try {
+        await this.emailService.sendOtpEmail(dto.email, otpCode);
+        this.logger.log(`OTP sent successfully via Email to ${dto.email}`);
+      } catch (emailError: any) {
         this.logger.error(
-          `Failed to send OTP via SMS to ${dto.phone} and no email was provided in request.`,
+          `Failed to send OTP via Email to ${dto.email}: ${emailError?.message || emailError}`,
+          emailError?.stack,
         );
         throw new InternalServerErrorException(
-          'Failed to send OTP via SMS, and no email was provided to fallback.',
+          'Failed to send OTP via Email. Please try again later.',
         );
       }
     }
-    // console.log("hello");
-    // 6. Save OTP to database
+
+    // 5. Save OTP to database
     const expiresAt = new Date();
     expiresAt.setMinutes(expiresAt.getMinutes() + 10); // OTP expires in 10 minutes
-    // console.log("hello");
+
     const newOtp = this.otpRepository.create({
       ...(dto.email && { email: dto.email }),
       ...(dto.phone && { phone: dto.phone }),
@@ -217,7 +229,6 @@ export class AuthModuleService {
       role: dto.role,
       isVerified: false,
     });
-    // console.log("hello");
     await this.otpRepository.save(newOtp);
 
     return {
@@ -229,16 +240,28 @@ export class AuthModuleService {
   }
 
   async verifyOtpService(dto: VerifyOtpDto) {
-    const otpRecord = await this.otpRepository.findOne({
-      where: {
-        phone: dto.phone,
-        otp: dto.otp,
-        isVerified: false,
-      },
-    });
+    if (!dto.phone && !dto.email) {
+      throw new BadRequestException('Phone number or email is required');
+    }
+
+    const where: any = {
+      otp: dto.otp,
+      isVerified: false,
+    };
+
+    if (dto.phone) {
+      where.phone = dto.phone;
+      if (dto.countryCode) {
+        where.countryCode = dto.countryCode;
+      }
+    } else if (dto.email) {
+      where.email = dto.email;
+    }
+
+    const otpRecord = await this.otpRepository.findOne({ where });
 
     if (!otpRecord) {
-      throw new BadRequestException('Invalid OTP code or phone');
+      throw new BadRequestException('Invalid OTP code or contact details');
     }
 
     if (otpRecord.expiresAt < new Date()) {

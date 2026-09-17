@@ -15,6 +15,7 @@ export class RegisterUserDto {
   @Transform(({ value }) => value?.trim().toLowerCase())
   email?: string;
 
+  @IsOptional()
   @IsString()
   @Transform(({ value }) => value?.trim())
   @MaxLength(15)

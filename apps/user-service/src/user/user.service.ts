@@ -712,8 +712,8 @@ export class UserService {
     // if (!dto.email) {
     //   throw new BadRequestException('Email is required');
     // }
-    if (!dto.technicianId && !dto.phone) {
-      throw new BadRequestException('Phone number is required');
+    if (!dto.technicianId && !dto.phone && !dto.email) {
+      throw new BadRequestException('At least email or phone number is required');
     }
 
     const result = await this.dataSource.transaction(async (manager) => {
@@ -732,13 +732,17 @@ export class UserService {
       let userRole = USER_ROLE.CUSTOMER;
 
       if (!dto.technicianId) {
-        if (!dto.phone || !dto.username || !dto.firstName || !dto.password) {
-          throw new BadRequestException('Missing required fields for registration (phone, username, firstName, password)');
+        if ((!dto.phone && !dto.email) || !dto.username || !dto.firstName || !dto.password) {
+          throw new BadRequestException(
+            'Missing required fields for registration (email or phone, username, firstName, password)',
+          );
         }
 
         if (dto.phone) {
           const existingUserByPhone = await userRepository.findOne({
-            where: { phone: dto.phone },
+            where: dto.countryCode
+              ? { phone: dto.phone, countryCode: dto.countryCode }
+              : { phone: dto.phone },
           });
           if (existingUserByPhone) {
             throw new ConflictException('Phone number already in use');
@@ -763,13 +767,24 @@ export class UserService {
           }
         }
 
-        const otpRecord = await otpRepository.findOne({
-          where: { phone: dto.phone },
-        });
+        let otpRecord: Otp | null = null;
+        if (dto.phone) {
+          otpRecord = await otpRepository.findOne({
+            where: dto.countryCode
+              ? { phone: dto.phone, countryCode: dto.countryCode }
+              : { phone: dto.phone },
+          });
+        }
+
+        if (!otpRecord && dto.email) {
+          otpRecord = await otpRepository.findOne({
+            where: { email: dto.email },
+          });
+        }
 
         if (!otpRecord) {
           throw new BadRequestException(
-            'OTP record not found for this phone number',
+            'OTP record not found for this contact details',
           );
         }
 
@@ -806,7 +821,8 @@ export class UserService {
         const newUser = userRepository.create({
           email: dto.email,
           username: dto.username!,
-          phone: dto.phone!,
+          phone: dto.phone || undefined,
+          countryCode: dto.countryCode || undefined,
           firstName: dto.firstName!,
           lastName: dto.lastName,
           password: hashedPassword,

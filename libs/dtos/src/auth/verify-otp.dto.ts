@@ -16,8 +16,8 @@ export class VerifyOtpDto {
   @Transform(({ value }) => value?.trim().toLowerCase())
   email?: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
   @Transform(({ value }) => value?.trim())
   @MaxLength(15)
   phone?: string;

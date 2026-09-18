@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto';
-import { Booking, BOOKING_STATUS, BOOKING_PAYMENT_STATUS, Service, CustomerAddress, User, USER_ROLE, USER_STATUS, TECHNICIAN_STATUS, JOB_STATUS, TechnicianService, TechnicianLocation, Otp, PriceBreakdown, Payment, PAYMENT_STATUS, COMPLAINT_STATUS, TechnicianProfile, TechnicianPayoutAccount, Complaint, REVIEW_STATUS, PAYMENT_TYPE, CUSTOMER_PAYMENT_MODE } from '@hichandra/entities';
+import { Booking, BOOKING_STATUS, BOOKING_PAYMENT_STATUS, Service, CustomerAddress, User, USER_ROLE, USER_STATUS, TECHNICIAN_STATUS, JOB_STATUS, TechnicianService, TechnicianLocation, Otp, PriceBreakdown, Payment, PAYMENT_STATUS, COMPLAINT_STATUS, TechnicianProfile, TechnicianPayoutAccount, Complaint, REVIEW_STATUS, PAYMENT_TYPE, CUSTOMER_PAYMENT_MODE, NOTIFICATION_TYPE } from '@hichandra/entities';
 import { EmailService } from '@hichandra/email-services';
 import { PaymentService, RazorpayXService } from '@hichandra/payment';
 import { Injectable, NotFoundException, BadRequestException, UnprocessableEntityException, ForbiddenException, UnauthorizedException, Logger } from '@nestjs/common';
@@ -13,6 +13,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { BookingGateway } from '@hichandra/gateway';
 import { AuditLogService } from '@hichandra/common/audit/audit.service';
 import { AUDIT_MODULE, ACTOR_TYPE } from '@hichandra/entities';
+import { NotificationService } from '@hichandra/notification';
 
 @Injectable()
 export class BookingService {
@@ -33,6 +34,7 @@ export class BookingService {
     private readonly smsService: SmsService,
     private readonly bookingGateway: BookingGateway,
     private readonly auditLogService: AuditLogService,
+    private readonly notificationService: NotificationService,
   ) { }
 
   private getIstDateParts(date: Date) {
@@ -473,7 +475,7 @@ export class BookingService {
     userRole?: USER_ROLE,
     // ): Promise<Booking> {
   ): Promise<any> {
-    return this.dataSource.transaction(async (manager) => {
+    const result = await this.dataSource.transaction(async (manager) => {
       const userRepo = manager.getRepository(User);
       const customer = await userRepo.findOne({
         where: { id: customerId },
@@ -886,6 +888,22 @@ export class BookingService {
         updatedAtIst: this.toIstString(finalBooking.updatedAt),
       };
     });
+
+    // In-app notification to customer
+    try {
+      await this.notificationService.createNotification(
+        customerId,
+        'Booking Placed',
+        `Your booking #${result.id} has been placed successfully.`,
+        NOTIFICATION_TYPE.BOOKING,
+        result.id,
+        'Booking',
+      );
+    } catch (notifErr) {
+      this.logger.warn(`Failed to create in-app notification for booking #${result?.id}: ${notifErr}`);
+    }
+
+    return result;
   }
 
   @Cron(
@@ -1442,9 +1460,42 @@ export class BookingService {
             this.bookingGateway.dismissNotification(techId);
           }
         }
+
+        // 3. Send confirmation email to customer
+        if (fullBooking.customer?.email) {
+          try {
+            await this.emailService.sendCustomerBookingConfirmation(
+              fullBooking.customer.email,
+              fullBooking,
+              true,
+            );
+            this.logger.log(
+              `Booking acceptance email sent to customer (${fullBooking.customer.email}) for booking #${fullBooking.id}`,
+            );
+          } catch (mailErr) {
+            this.logger.error(
+              `Failed to send booking acceptance email to customer for booking #${fullBooking.id}`,
+              mailErr,
+            );
+          }
+        }
+
+        // 4. In-app notification to customer
+        const techName = fullBooking.technician?.firstName
+          ? `${fullBooking.technician.firstName} ${fullBooking.technician.lastName || ''}`.trim()
+          : 'A technician';
+
+        await this.notificationService.createNotification(
+          fullBooking.customerId,
+          'Technician Assigned',
+          `${techName} has accepted your booking #${fullBooking.id}.`,
+          NOTIFICATION_TYPE.BOOKING_STATUS,
+          fullBooking.id,
+          'Booking',
+        );
       }
     } catch (e) {
-      this.logger.error('Failed to send Socket.io notifications after booking acceptance', e);
+      this.logger.error('Failed to send Socket.io or email notifications after booking acceptance', e);
     }
 
     return savedBooking;
@@ -1690,9 +1741,28 @@ export class BookingService {
           await this.emailService.sendTechnicianAssignment(fullBooking.technician.email, fullBooking, false);
           this.logger.log(`Technician assignment email sent to technician for booking ${fullBooking.id}`);
         }
+
+        // 5. In-app notifications
+        await this.notificationService.createNotification(
+          fullBooking.customerId,
+          'Technician Assigned',
+          `A technician has been assigned to your booking #${fullBooking.id}.`,
+          NOTIFICATION_TYPE.BOOKING_STATUS,
+          fullBooking.id,
+          'Booking',
+        );
+
+        await this.notificationService.createNotification(
+          technicianId,
+          'New Booking Assigned',
+          `You have been assigned to Booking #${fullBooking.id} by admin.`,
+          NOTIFICATION_TYPE.BOOKING,
+          fullBooking.id,
+          'Booking',
+        );
       }
     } catch (e) {
-      this.logger.error('Failed to send Socket.io or email notifications after manual booking assignment', e);
+      this.logger.error('Failed to send Socket.io, email or in-app notifications after manual booking assignment', e);
     }
 
     return {
@@ -1781,23 +1851,39 @@ export class BookingService {
       throw new NotFoundException('Booking not found after update');
     }
 
-    // Send socket notification to the technician if the customer cancels the booking
-    if (user.role === USER_ROLE.CUSTOMER && booking.technician?.id) {
-      try {
-        this.bookingGateway.emitToUser(
-          booking.technician.id,
-          'booking_cancelled',
-          {
-            bookingId: booking.id,
-            message: 'This booking has been cancelled by the customer',
-          },
+    // In-app notifications
+    try {
+      if (user.role === USER_ROLE.CUSTOMER) {
+        if (booking.technician?.id) {
+          await this.notificationService.createNotification(
+            booking.technician.id,
+            'Booking Cancelled',
+            `Booking #${booking.id} has been cancelled by the customer.`,
+            NOTIFICATION_TYPE.BOOKING_STATUS,
+            booking.id,
+            'Booking',
+          );
+        }
+        await this.notificationService.createNotification(
+          user.id,
+          'Booking Cancelled',
+          `Your booking #${booking.id} has been cancelled.`,
+          NOTIFICATION_TYPE.BOOKING_STATUS,
+          booking.id,
+          'Booking',
         );
-      } catch (e) {
-        this.logger.error(
-          `Failed to send Socket.io cancellation notification to technician ${booking.technician.id}`,
-          e,
+      } else if (user.role === USER_ROLE.TECHNICIAN) {
+        await this.notificationService.createNotification(
+          booking.customerId,
+          'Technician Released Booking',
+          `The assigned technician was unable to attend Booking #${booking.id}. We are finding another technician for you.`,
+          NOTIFICATION_TYPE.BOOKING_STATUS,
+          booking.id,
+          'Booking',
         );
       }
+    } catch (notifErr) {
+      this.logger.warn(`Failed to create cancellation in-app notification: ${notifErr}`);
     }
 
     return {
@@ -1989,7 +2075,7 @@ export class BookingService {
     bookingId: number,
     dto: UpdateBookingStatusDto,
   ): Promise<Booking> {
-    return this.dataSource.transaction(async (manager) => {
+    const result = await this.dataSource.transaction(async (manager) => {
       const bookingRepo = manager.getRepository(Booking);
       const otpRepo = manager.getRepository(Otp);
       const technicianProfileRepo = manager.getRepository(TechnicianProfile);
@@ -2161,6 +2247,51 @@ export class BookingService {
 
       return updatedBooking;
     });
+
+    // In-app notifications
+    try {
+      if (role === USER_ROLE.ADMIN && dto.status === BOOKING_STATUS.REJECTED) {
+        await this.notificationService.createNotification(
+          result.customerId,
+          'Booking Rejected',
+          `Your booking #${result.id} has been rejected by admin.${dto.cancellationReason ? ' Reason: ' + dto.cancellationReason : ''}`,
+          NOTIFICATION_TYPE.BOOKING_STATUS,
+          result.id,
+          'Booking',
+        );
+      } else if (dto.status === BOOKING_STATUS.ENROUTE) {
+        await this.notificationService.createNotification(
+          result.customerId,
+          'Technician On The Way',
+          `The technician is en route to your location for Booking #${result.id}.`,
+          NOTIFICATION_TYPE.BOOKING_STATUS,
+          result.id,
+          'Booking',
+        );
+      } else if (dto.status === BOOKING_STATUS.ARRIVED) {
+        await this.notificationService.createNotification(
+          result.customerId,
+          'Technician Arrived',
+          `The technician has arrived for Booking #${result.id}. Please share your start OTP.`,
+          NOTIFICATION_TYPE.BOOKING_STATUS,
+          result.id,
+          'Booking',
+        );
+      } else if (dto.status === BOOKING_STATUS.COMPLETED) {
+        await this.notificationService.createNotification(
+          result.customerId,
+          'Booking Completed',
+          `Your service for Booking #${result.id} has been completed. Thank you for choosing HiChandra!`,
+          NOTIFICATION_TYPE.BOOKING_STATUS,
+          result.id,
+          'Booking',
+        );
+      }
+    } catch (notifErr) {
+      this.logger.warn(`Failed to create status update in-app notification: ${notifErr}`);
+    }
+
+    return result;
   }
 
   async startBooking(
@@ -2168,7 +2299,7 @@ export class BookingService {
     bookingId: number,
     dto: StartBookingDto,
   ): Promise<Booking> {
-    return this.dataSource.transaction(async (manager) => {
+    const updatedBooking = await this.dataSource.transaction(async (manager) => {
       const bookingRepo = manager.getRepository(Booking);
       const otpRepo = manager.getRepository(Otp);
 
@@ -2205,10 +2336,23 @@ export class BookingService {
       booking.status = BOOKING_STATUS.ONGOING;
       booking.startedAt = new Date();
       booking.customerOtp = undefined; // Clear OTP once verified
-      const updatedBooking = await bookingRepo.save(booking);
-
-      return updatedBooking;
+      return bookingRepo.save(booking);
     });
+
+    try {
+      await this.notificationService.createNotification(
+        updatedBooking.customerId,
+        'Service Started',
+        `Your service for Booking #${updatedBooking.id} has started.`,
+        NOTIFICATION_TYPE.BOOKING_STATUS,
+        updatedBooking.id,
+        'Booking',
+      );
+    } catch (notifErr) {
+      this.logger.warn(`Failed to create start booking in-app notification: ${notifErr}`);
+    }
+
+    return updatedBooking;
   }
 
   async resendBookingOtp(
@@ -2495,6 +2639,36 @@ export class BookingService {
         await this.bookingRepository.saveBooking(payment.booking);
       }
 
+      // In-app notification for technician payout status
+      try {
+        if (payment.technicianId) {
+          if (payment.status === PAYMENT_STATUS.SUCCESS) {
+            await this.notificationService.createNotification(
+              payment.technicianId,
+              'Payout Processed',
+              `Your payout of ₹${payment.amount} has been successfully processed into your account.`,
+              NOTIFICATION_TYPE.PAYOUT,
+              payment.id,
+              'Payment',
+            );
+          } else if (
+            payment.status === PAYMENT_STATUS.FAILED ||
+            payment.status === PAYMENT_STATUS.REVERSED
+          ) {
+            await this.notificationService.createNotification(
+              payment.technicianId,
+              'Payout Failed',
+              `Your payout of ₹${payment.amount} failed or was reversed. Reason: ${payment.errorMessage || 'Failure'}.`,
+              NOTIFICATION_TYPE.PAYOUT,
+              payment.id,
+              'Payment',
+            );
+          }
+        }
+      } catch (notifErr) {
+        this.logger.warn(`Failed to create payout webhook in-app notification: ${notifErr}`);
+      }
+
       return {
         success: true,
         message: `Payout event ${event} processed successfully`,
@@ -2584,6 +2758,32 @@ export class BookingService {
           await userRepo.save(user);
         }
       }
+    }
+
+    // In-app notifications for payment completion
+    try {
+      if (payment.customerId) {
+        await this.notificationService.createNotification(
+          payment.customerId,
+          'Payment Successful',
+          `Your payment of ₹${payment.amount} for Booking #${payment.bookingId || ''} was successful.`,
+          NOTIFICATION_TYPE.PAYMENT,
+          payment.id,
+          'Payment',
+        );
+      }
+      if (payment.booking?.technicianId) {
+        await this.notificationService.createNotification(
+          payment.booking.technicianId,
+          'Payment Received',
+          `Customer has completed payment of ₹${payment.amount} for Booking #${payment.bookingId}.`,
+          NOTIFICATION_TYPE.PAYMENT,
+          payment.id,
+          'Payment',
+        );
+      }
+    } catch (notifErr) {
+      this.logger.warn(`Failed to create payment webhook in-app notification: ${notifErr}`);
     }
 
     return {
@@ -2897,6 +3097,19 @@ export class BookingService {
         newValue: { amount: payoutAmount },
       });
 
+      try {
+        await this.notificationService.createNotification(
+          technician.id,
+          'Payout Initiated',
+          `Payout of ₹${payoutAmount} for Booking #${booking.id} has been initiated.`,
+          NOTIFICATION_TYPE.PAYOUT,
+          payout.id,
+          'Payment',
+        );
+      } catch (notifErr) {
+        this.logger.warn(`Failed to create payout initiated in-app notification: ${notifErr}`);
+      }
+
       return {
         success: true,
         message: 'Technician payout initiated successfully',
@@ -2971,6 +3184,19 @@ export class BookingService {
       message: `Admin recorded a manual payout of ₹${dto.amount} for Technician #${technician.id}.`,
       newValue: { amount: dto.amount },
     });
+
+    try {
+      await this.notificationService.createNotification(
+        technician.id,
+        'Payout Processed',
+        `A payout of ₹${dto.amount} for Booking #${booking.id} has been recorded.`,
+        NOTIFICATION_TYPE.PAYOUT,
+        payout.id,
+        'Payment',
+      );
+    } catch (notifErr) {
+      this.logger.warn(`Failed to create manual payout in-app notification: ${notifErr}`);
+    }
 
     return {
       success: true,
@@ -3149,6 +3375,38 @@ export class BookingService {
     const updated =
       await this.bookingRepository.saveBooking(booking);
 
+    try {
+      const scheduledStr = new Date(dto.scheduledAt).toLocaleString('en-IN', {
+        timeZone: 'Asia/Kolkata',
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      });
+
+      if (user.role === USER_ROLE.ADMIN) {
+        await this.notificationService.createNotification(
+          booking.customerId,
+          'Booking Rescheduled',
+          `Your booking #${booking.id} has been rescheduled to ${scheduledStr} by admin.`,
+          NOTIFICATION_TYPE.BOOKING,
+          booking.id,
+          'Booking',
+        );
+      }
+
+      if (booking.technicianId) {
+        await this.notificationService.createNotification(
+          booking.technicianId,
+          'Booking Rescheduled',
+          `Booking #${booking.id} has been rescheduled to ${scheduledStr}.`,
+          NOTIFICATION_TYPE.BOOKING,
+          booking.id,
+          'Booking',
+        );
+      }
+    } catch (notifErr) {
+      this.logger.warn(`Failed to create reschedule in-app notification: ${notifErr}`);
+    }
+
     return {
       message: 'Booking rescheduled successfully',
       data: updated,
@@ -3289,6 +3547,21 @@ export class BookingService {
         await this.updateTechnicianOverallRating(
           booking.technicianId,
         );
+      }
+
+      if (booking.technicianId) {
+        try {
+          await this.notificationService.createNotification(
+            booking.technicianId,
+            'New Review Received',
+            `A customer has reviewed your service for Booking #${booking.id}${dto.rating ? ` (${dto.rating}★)` : ''}.`,
+            NOTIFICATION_TYPE.SYSTEM,
+            booking.id,
+            'Booking',
+          );
+        } catch (notifErr) {
+          this.logger.warn(`Failed to create review notification: ${notifErr}`);
+        }
       }
     } else if (user.role === USER_ROLE.TECHNICIAN) {
       if (booking.technicianId !== user.id) {
@@ -3725,6 +3998,21 @@ export class BookingService {
         COMPLAINT_STATUS.RESOLVED,
       );
 
+    try {
+      if (complaint.createdBy) {
+        await this.notificationService.createNotification(
+          complaint.createdBy,
+          'Complaint Resolved',
+          `Your complaint #${complaint.id} regarding Booking #${complaint.bookingId} has been marked as resolved.`,
+          NOTIFICATION_TYPE.SYSTEM,
+          complaint.id,
+          'Complaint',
+        );
+      }
+    } catch (notifErr) {
+      this.logger.warn(`Failed to create complaint resolved in-app notification: ${notifErr}`);
+    }
+
     return {
       success: true,
       message: 'Complaint resolved successfully',
@@ -3953,9 +4241,31 @@ export class BookingService {
           await this.emailService.sendTechnicianAssignment(fullBooking.technician.email, fullBooking);
           this.logger.log(`Technician assignment email sent to technician for booking ${fullBooking.id}`);
         }
+
+        // In-app notification to customer
+        await this.notificationService.createNotification(
+          fullBooking.customerId,
+          'Booking Scheduled',
+          `Your booking #${fullBooking.id} has been created and scheduled by admin.`,
+          NOTIFICATION_TYPE.BOOKING,
+          fullBooking.id,
+          'Booking',
+        );
+
+        // In-app notification to technician if assigned
+        if (fullBooking.technicianId) {
+          await this.notificationService.createNotification(
+            fullBooking.technicianId,
+            'New Booking Assigned',
+            `You have been assigned to Booking #${fullBooking.id} by admin.`,
+            NOTIFICATION_TYPE.BOOKING,
+            fullBooking.id,
+            'Booking',
+          );
+        }
       }
     } catch (e) {
-      this.logger.error('Failed to send booking emails for adminCreateBooking', e);
+      this.logger.error('Failed to send booking emails or notifications for adminCreateBooking', e);
     }
 
     return savedBookingResult;

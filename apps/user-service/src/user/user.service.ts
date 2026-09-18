@@ -51,6 +51,7 @@ import {
   BOOKING_STATUS,
   AUDIT_MODULE,
   ACTOR_TYPE,
+  NOTIFICATION_TYPE,
 } from '@hichandra/entities';
 import { AuthModuleService } from 'apps/auth-service/src/auth/auth-module.service';
 import { S3Service } from '@hichandra/s3';
@@ -77,6 +78,7 @@ import { RazorpayXService, PaymentService } from '@hichandra/payment';
 import { SmsService } from '@hichandra/sms-services';
 import { EmailService } from '@hichandra/email-services';
 import { AuditLogService } from '@hichandra/common/audit/audit.service';
+import { NotificationService } from '@hichandra/notification';
 
 @Injectable()
 export class UserService {
@@ -100,6 +102,7 @@ export class UserService {
     private readonly paymentRepository: PaymentRepository,
     private readonly emailService: EmailService,
     private readonly auditLogService: AuditLogService,
+    private readonly notificationService: NotificationService,
   ) { }
 
   async findById(id: number) {
@@ -131,7 +134,7 @@ export class UserService {
   async getAuditLogsService(
     page: number = 1,
     limit: number = 10,
-    filters?: { module?: string; action?: string; actorId?: number },
+    filters?: { module?: string; action?: string; actorId?: number; requestId?: string },
   ) {
     const logs = await this.auditLogService.findAll(page, limit, filters);
     return {
@@ -1906,6 +1909,30 @@ export class UserService {
         oldValue: { status: oldStatus },
         newValue: { status: profile.status },
       });
+
+      try {
+        if (dto.status === TECHNICIAN_STATUS.APPROVED) {
+          await this.notificationService.createNotification(
+            technicianId,
+            'Profile Approved',
+            'Congratulations! Your technician profile has been approved. You are now eligible to receive booking requests.',
+            NOTIFICATION_TYPE.SYSTEM,
+            technicianId,
+            'User',
+          );
+        } else if (dto.status === TECHNICIAN_STATUS.REJECTED) {
+          await this.notificationService.createNotification(
+            technicianId,
+            'Application Status Update',
+            'Your technician application status has been updated to Rejected.',
+            NOTIFICATION_TYPE.SYSTEM,
+            technicianId,
+            'User',
+          );
+        }
+      } catch (notifErr) {
+        this.logger.warn(`Failed to create technician status notification: ${notifErr}`);
+      }
     }
 
     return {

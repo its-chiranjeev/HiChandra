@@ -11,6 +11,7 @@ import { RepositoriesModule } from '@hichandra/repositories';
 import { S3Module } from '@hichandra/s3';
 import { SmsServicesModule } from '@hichandra/sms-services';
 import { GatewayModule } from '@hichandra/gateway';
+import { NotificationModule } from '@hichandra/notification';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { GatewayModule } from '@hichandra/gateway';
     S3Module,
     SmsServicesModule,
     GatewayModule,
+    NotificationModule,
   ],
   controllers: [BookingController],
   providers: [BookingService],

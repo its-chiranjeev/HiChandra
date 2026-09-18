@@ -5,13 +5,15 @@ import {
   UnprocessableEntityException,
   ValidationPipe,
 } from '@nestjs/common';
-import { ResponseInterceptor } from '@hichandra/common';
-import { GlobalExceptionFilter } from '@hichandra/common';
+import { ResponseInterceptor, GlobalExceptionFilter, requestContextMiddleware, RequestContext } from '@hichandra/common';
 import { Request, Response, NextFunction } from 'express';
 
 async function bootstrap() {
   const app = await NestFactory.create(UserManagementModule);
   app.setGlobalPrefix('api');
+
+  // Request context middleware (AsyncLocalStorage for requestId & client IP)
+  app.use(requestContextMiddleware);
 
   // Need to be commented in production
   if (process.env.NODE_ENV !== 'production') {
@@ -27,6 +29,7 @@ async function bootstrap() {
   // APPLY LOGGER EARLY
   app.use((req: Request, res: Response, next: NextFunction) => {
     const start = Date.now();
+    const reqId = RequestContext.getRequestId();
 
     res.on('finish', () => {
       const duration = Date.now() - start;
@@ -44,7 +47,7 @@ async function bootstrap() {
       }
 
       logger.log(
-        `${colorStart}${req.method} ${req.originalUrl} -> ${status} - ${duration}ms${reset}`,
+        `${colorStart}[${reqId || '-'}] ${req.method} ${req.originalUrl} -> ${status} - ${duration}ms${reset}`,
       );
     });
 

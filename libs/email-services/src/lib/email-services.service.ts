@@ -1,5 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import * as nodemailer from 'nodemailer';
+import {
+  renderBaseEmailTemplate,
+  BaseEmailOptions,
+} from './templates/base-email.template';
+import { getLogoAttachment } from './assets/logo.asset';
 
 @Injectable()
 export class EmailService {
@@ -47,18 +52,28 @@ export class EmailService {
   //     }
   // }
 
-  // TODO:THis is for Nodemailer SMTP
+  // Nodemailer SMTP
   private async sendMail(options: {
     to: string | string[];
     subject: string;
     html: string;
+    attachments?: nodemailer.SendMailOptions['attachments'];
   }) {
     try {
+      const attachments = [...(options.attachments || [])];
+      if (options.html.includes('cid:hichandra-logo')) {
+        const logo = getLogoAttachment();
+        if (logo) {
+          attachments.unshift(logo);
+        }
+      }
+
       await this.transporter.sendMail({
         from: process.env[`EMAIL_FROM`],
         to: options.to,
         subject: options.subject,
         html: options.html,
+        attachments,
       });
     } catch (error) {
       this.logger.error('SMTP email failed', error);
@@ -66,56 +81,106 @@ export class EmailService {
     }
   }
 
+  /**
+   * Generic method to send any email using the base HiChandra email template.
+   */
+  async sendTemplateEmail(
+    to: string | string[],
+    subject: string,
+    options: BaseEmailOptions,
+  ) {
+    const html = renderBaseEmailTemplate({
+      ...options,
+      emailTitle: options.emailTitle || subject,
+    });
+
+    return this.sendMail({
+      to,
+      subject,
+      html,
+    });
+  }
+
   async sendOtpEmail(email: string, otp: string, firstName?: string) {
-    const html = `
-            <div>
-            <h2>Hello ${firstName ?? 'User'}</h2>
-            <p>Your OTP code is:</p>
-            <h1 style="letter-spacing:4px">${otp}</h1>
-            <p>This code expires in 10 minutes.</p>
-            </div>
-        `;
+    const html = renderBaseEmailTemplate({
+      emailTitle: 'Your OTP Code - HiChandra',
+      badgeText: 'Verification',
+      mainHeading: 'One-Time Verification Code',
+      userName: firstName || 'User',
+      messageText:
+        'Please use the one-time verification code below to verify your account or authorize your request. This code is confidential and should not be shared with anyone.',
+      otp: {
+        code: otp,
+        label: 'Verification Code',
+        validityNote: '⏱ Valid for 10 minutes',
+      },
+      footerNote:
+        '🔒 If you did not request this OTP code, please disregard this email or contact HiChandra support immediately.',
+    });
 
     return this.sendMail({
       to: email,
-      subject: 'Your OTP Code',
+      subject: 'Your OTP Code - HiChandra',
       html,
     });
   }
 
-  async sendCustomerWelcomeEmail(email: string, firstName: string, password: string) {
-    const html = `
-            <div>
-            <h2>Hello ${firstName},</h2>
-            <p>Welcome to our platform! Your account has been created successfully.</p>
-            <p>Your login credentials are:</p>
-            <p><strong>Email:</strong> ${email}</p>
-            <p><strong>Password:</strong> ${password}</p>
-            <br />
-            <p style="color: red; font-weight: bold;">For your security, please make sure to change your password immediately after logging in.</p>
-            </div>
-        `;
+  async sendCustomerWelcomeEmail(
+    email: string,
+    firstName: string,
+    password: string,
+  ) {
+    const html = renderBaseEmailTemplate({
+      emailTitle: 'Welcome to HiChandra - Account Credentials',
+      badgeText: 'Account Created',
+      mainHeading: 'Welcome to HiChandra!',
+      userName: firstName,
+      messageText:
+        'Welcome to our platform! Your customer account has been created successfully. You can use the temporary credentials below to log in and schedule trusted home services:',
+      details: [
+        { label: 'Email Address', value: email },
+        { label: 'Temporary Password', value: password },
+        { label: 'Account Type', value: 'Customer' },
+      ],
+      cta: {
+        text: 'Log In to HiChandra',
+        url: 'https://hichandra.com',
+      },
+      footerNote:
+        '⚠️ For your security, please make sure to change your password immediately after logging in.',
+    });
 
     return this.sendMail({
       to: email,
-      subject: 'Welcome to Our Platform - Account Credentials',
+      subject: 'Welcome to HiChandra - Account Credentials',
       html,
     });
   }
 
-  async sendTechnicianWelcomeEmail(email: string, firstName: string, password: string) {
-    const html = `
-            <div>
-            <h2>Hello ${firstName},</h2>
-            <p>Welcome to HiChandra! Your technician profile has been created successfully by the Admin.</p>
-            <p>Your login credentials are:</p>
-            <p><strong>Email:</strong> ${email}</p>
-            <p><strong>Password:</strong> ${password}</p>
-            <br />
-            <p style="color: red; font-weight: bold;">For your security, please make sure to change your password immediately after logging in.</p>
-            <p>Please log in to complete your profile setup.</p>
-            </div>
-        `;
+  async sendTechnicianWelcomeEmail(
+    email: string,
+    firstName: string,
+    password: string,
+  ) {
+    const html = renderBaseEmailTemplate({
+      emailTitle: 'Welcome to HiChandra - Technician Account Created',
+      badgeText: 'Technician Partner',
+      mainHeading: 'Welcome to the HiChandra Team!',
+      userName: firstName,
+      messageText:
+        'Your technician profile has been created successfully by the Admin. Please log in to complete your profile setup and start receiving booking assignments:',
+      details: [
+        { label: 'Login Email', value: email },
+        { label: 'Temporary Password', value: password },
+        { label: 'Account Role', value: 'Technician Partner' },
+      ],
+      cta: {
+        text: 'Access Technician Portal',
+        url: 'https://hichandra.com',
+      },
+      footerNote:
+        '⚠️ For your security, please change your password immediately upon your first login.',
+    });
 
     return this.sendMail({
       to: email,
@@ -123,13 +188,18 @@ export class EmailService {
       html,
     });
   }
-  async sendCustomerBookingConfirmation(email: string, booking: any, isUpdate = false) {
-    const customerName = booking.customer?.firstName 
-      ? `${booking.customer.firstName} ${booking.customer.lastName || ''}`.trim() 
+
+  async sendCustomerBookingConfirmation(
+    email: string,
+    booking: any,
+    isUpdate = false,
+  ) {
+    const customerName = booking.customer?.firstName
+      ? `${booking.customer.firstName} ${booking.customer.lastName || ''}`.trim()
       : 'Customer';
 
-    const techName = booking.technician?.firstName 
-      ? `${booking.technician.firstName} ${booking.technician.lastName || ''}`.trim() 
+    const techName = booking.technician?.firstName
+      ? `${booking.technician.firstName} ${booking.technician.lastName || ''}`.trim()
       : null;
 
     const addressStr = booking.address?.fullAddress
@@ -137,52 +207,61 @@ export class EmailService {
       : 'Address not available';
 
     // Format Date/Time (Assuming IST)
-    const scheduledAt = new Date(booking.scheduledAt);
-    const dateStr = scheduledAt.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
-    const timeStr = scheduledAt.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit' });
+    const rawDate = booking.scheduledAt || booking.fromTime || booking.createdAt;
+    const scheduledAt = rawDate ? new Date(rawDate) : null;
+    const isValidDate = scheduledAt instanceof Date && !isNaN(scheduledAt.getTime());
+    const dateStr = isValidDate
+      ? scheduledAt.toLocaleDateString('en-IN', {
+          timeZone: 'Asia/Kolkata',
+          weekday: 'short',
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric',
+        })
+      : 'As per schedule';
+    const timeStr = isValidDate
+      ? scheduledAt.toLocaleTimeString('en-IN', {
+          timeZone: 'Asia/Kolkata',
+          hour: '2-digit',
+          minute: '2-digit',
+        })
+      : 'Flexible';
 
-    const subject = isUpdate ? 'Technician Assigned to Your Booking - HiChandra' : 'Booking Scheduled Successfully - HiChandra';
-    
-    let messageHtml = isUpdate 
-      ? `<p>Your booking has been updated and a technician has been successfully assigned.</p>`
-      : `<p>Your booking has been successfully scheduled with HiChandra. Your service is scheduled for the selected date and time.</p>`;
+    const subject = isUpdate
+      ? 'Technician Assigned to Your Booking - HiChandra'
+      : 'Booking Scheduled Successfully - HiChandra';
 
-    if (techName) {
-      messageHtml += `<p><strong>Assigned Technician:</strong> ${techName}</p>`;
-    }
+    const messageText = isUpdate
+      ? `Your booking <strong>#${booking.id}</strong> has been updated and a verified technician has been successfully assigned to your service.`
+      : `Your booking <strong>#${booking.id}</strong> has been successfully scheduled with HiChandra. Our verified professional will arrive at the scheduled time.`;
 
-    const html = `
-      <div style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #ddd; border-radius: 8px; overflow: hidden;">
-        <div style="background-color: #4CAF50; color: white; padding: 15px; text-align: center;">
-          <h2>HiChandra</h2>
-        </div>
-        <div style="padding: 20px;">
-          <h3>Hello ${customerName},</h3>
-          ${messageHtml}
-          
-          <h4>Booking Details:</h4>
-          <ul>
-            <li><strong>Booking ID:</strong> #${booking.id}</li>
-            <li><strong>Status:</strong> ${booking.status}</li>
-            <li><strong>Service:</strong> ${booking.service?.name || 'N/A'}</li>
-            <li><strong>Date:</strong> ${dateStr}</li>
-            <li><strong>Time:</strong> ${timeStr}</li>
-            <li><strong>Address:</strong> ${addressStr}</li>
-          </ul>
+    const details = [
+      { label: 'Booking ID', value: `#${booking.id}` },
+      { label: 'Status', value: booking.status || 'CONFIRMED' },
+      { label: 'Service', value: booking.service?.name || 'N/A' },
+      { label: 'Scheduled Date', value: dateStr },
+      { label: 'Scheduled Time', value: timeStr },
+      ...(techName ? [{ label: 'Assigned Technician', value: techName }] : []),
+      { label: 'Service Address', value: addressStr },
+      { label: 'Total Amount', value: `₹${booking.totalAmount || 0}` },
+    ];
 
-          <h4>Payment Details:</h4>
-          <ul>
-            <li><strong>Total Amount:</strong> ₹${booking.totalAmount || 0}</li>
-          </ul>
-          
-          <br />
-          <p>Thank you for choosing HiChandra!</p>
-        </div>
-        <div style="background-color: #f1f1f1; color: #777; padding: 10px; text-align: center; font-size: 12px;">
-          &copy; ${new Date().getFullYear()} HiChandra. All rights reserved.
-        </div>
-      </div>
-    `;
+    const html = renderBaseEmailTemplate({
+      emailTitle: subject,
+      badgeText: isUpdate ? 'Technician Assigned' : 'Booking Confirmed',
+      mainHeading: isUpdate
+        ? 'Technician Assigned to Your Booking'
+        : 'Booking Scheduled Successfully',
+      userName: customerName,
+      messageText,
+      details,
+      cta: {
+        text: 'View Booking Details',
+        url: 'https://hichandra.com',
+      },
+      footerNote:
+        'Need to reschedule or have questions? You can manage your booking via your HiChandra account or contact our 24/7 support team.',
+    });
 
     return this.sendMail({
       to: email,
@@ -191,13 +270,17 @@ export class EmailService {
     });
   }
 
-  async sendTechnicianAssignment(email: string, booking: any, isReassignment = false) {
-    const techName = booking.technician?.firstName 
-      ? `${booking.technician.firstName} ${booking.technician.lastName || ''}`.trim() 
+  async sendTechnicianAssignment(
+    email: string,
+    booking: any,
+    isReassignment = false,
+  ) {
+    const techName = booking.technician?.firstName
+      ? `${booking.technician.firstName} ${booking.technician.lastName || ''}`.trim()
       : 'Technician';
 
-    const customerName = booking.customer?.firstName 
-      ? `${booking.customer.firstName} ${booking.customer.lastName || ''}`.trim() 
+    const customerName = booking.customer?.firstName
+      ? `${booking.customer.firstName} ${booking.customer.lastName || ''}`.trim()
       : 'Customer';
     const customerPhone = booking.customer?.phone || 'N/A';
 
@@ -207,52 +290,56 @@ export class EmailService {
 
     // Format Date/Time (Assuming IST)
     const scheduledAt = new Date(booking.scheduledAt);
-    const dateStr = scheduledAt.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
-    const timeStr = scheduledAt.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit' });
+    const dateStr = scheduledAt.toLocaleDateString('en-IN', {
+      timeZone: 'Asia/Kolkata',
+      weekday: 'short',
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+    const timeStr = scheduledAt.toLocaleTimeString('en-IN', {
+      timeZone: 'Asia/Kolkata',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
 
-    const subject = isReassignment ? 'Booking Reassigned to You - HiChandra' : 'New Booking Assigned to You - HiChandra';
-    
+    const subject = isReassignment
+      ? 'Booking Reassigned to You - HiChandra'
+      : 'New Booking Assigned to You - HiChandra';
+
     const payoutAmount = booking.priceBreakdown?.technicianEarning || 0;
     const totalAmount = booking.totalAmount || 0;
 
-    const html = `
-      <div style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #ddd; border-radius: 8px; overflow: hidden;">
-        <div style="background-color: #2196F3; color: white; padding: 15px; text-align: center;">
-          <h2>HiChandra</h2>
-        </div>
-        <div style="padding: 20px;">
-          <h3>Hello ${techName},</h3>
-          <p>A new booking has been assigned to you.</p>
-          
-          <div style="background-color: #e3f2fd; padding: 10px; border-radius: 5px; margin-bottom: 20px;">
-            <p style="margin: 5px 0;"><strong>Your Payout:</strong> ₹${payoutAmount}</p>
-            <p style="margin: 5px 0;"><strong>Booking Amount:</strong> ₹${totalAmount}</p>
-          </div>
-          
-          <h4>Service Details:</h4>
-          <ul>
-            <li><strong>Booking ID:</strong> #${booking.id}</li>
-            <li><strong>Status:</strong> ${booking.status}</li>
-            <li><strong>Service:</strong> ${booking.service?.name || 'N/A'}</li>
-            <li><strong>Date:</strong> ${dateStr}</li>
-            <li><strong>Time:</strong> ${timeStr}</li>
-          </ul>
+    const details = [
+      { label: 'Booking ID', value: `#${booking.id}` },
+      { label: 'Status', value: booking.status || 'ASSIGNED' },
+      { label: 'Service', value: booking.service?.name || 'N/A' },
+      { label: 'Scheduled Date', value: dateStr },
+      { label: 'Scheduled Time', value: timeStr },
+      { label: 'Customer Name', value: customerName },
+      { label: 'Customer Phone', value: customerPhone },
+      { label: 'Service Location', value: addressStr },
+      { label: 'Your Payout', value: `₹${payoutAmount}` },
+      { label: 'Total Booking Amount', value: `₹${totalAmount}` },
+    ];
 
-          <h4>Customer Details:</h4>
-          <ul>
-            <li><strong>Name:</strong> ${customerName}</li>
-            <li><strong>Phone:</strong> ${customerPhone}</li>
-            <li><strong>Address:</strong> ${addressStr}</li>
-          </ul>
-          
-          <br />
-          <p>Please check your technician app for more details.</p>
-        </div>
-        <div style="background-color: #f1f1f1; color: #777; padding: 10px; text-align: center; font-size: 12px;">
-          &copy; ${new Date().getFullYear()} HiChandra. All rights reserved.
-        </div>
-      </div>
-    `;
+    const html = renderBaseEmailTemplate({
+      emailTitle: subject,
+      badgeText: isReassignment ? 'Reassigned' : 'New Assignment',
+      mainHeading: isReassignment
+        ? 'Booking Reassigned to You'
+        : 'New Booking Assigned to You',
+      userName: techName,
+      messageText:
+        'A new service booking has been assigned to you. Please review the customer details and schedule below, and contact the customer prior to arrival if necessary:',
+      details,
+      cta: {
+        text: 'Open Technician App',
+        url: 'https://hichandra.com',
+      },
+      footerNote:
+        'Please check your technician app for more details and follow all standard safety and service protocols.',
+    });
 
     return this.sendMail({
       to: email,
@@ -261,3 +348,4 @@ export class EmailService {
     });
   }
 }
+

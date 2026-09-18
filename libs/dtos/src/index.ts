@@ -35,3 +35,6 @@ export * from './user/update-technician-brand-expertise.dto';
 export * from './user/create-technician-location.dto';
 export * from './booking/accept-booking.dto';
 export * from './user/admin-create-customer.dto';
+export * from './contact-us/contact-us.dto';
+export * from './notification/notification.dto';
+

@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, EntityManager } from 'typeorm';
 import { AuditLog, ACTOR_TYPE, AUDIT_MODULE } from '@hichandra/entities';
+import { RequestContext } from '../middleware/request-context.middleware';
 
 export interface CreateAuditLogDto {
   actorId?: number | null;
@@ -16,7 +17,9 @@ export interface CreateAuditLogDto {
   newValue?: Record<string, any> | null;
   metadata?: Record<string, any> | null;
   ipAddress?: string | null;
+  requestId?: string | null;
 }
+
 
 @Injectable()
 export class AuditLogService {
@@ -68,7 +71,8 @@ export class AuditLogService {
       auditLog.oldValue = dto.oldValue ? this.sanitizeData(dto.oldValue) : undefined;
       auditLog.newValue = dto.newValue ? this.sanitizeData(dto.newValue) : undefined;
       auditLog.metadata = dto.metadata ? this.sanitizeData(dto.metadata) : undefined;
-      auditLog.ipAddress = dto.ipAddress ?? undefined;
+      auditLog.ipAddress = dto.ipAddress ?? RequestContext.getIp() ?? undefined;
+      auditLog.requestId = dto.requestId ?? RequestContext.getRequestId() ?? undefined;
 
       const targetRepo = manager ? manager.getRepository(AuditLog) : this.auditLogRepository;
       
@@ -127,7 +131,7 @@ export class AuditLogService {
   async findAll(
     page: number = 1,
     limit: number = 10,
-    filters?: { module?: string; action?: string; actorId?: number },
+    filters?: { module?: string; action?: string; actorId?: number; requestId?: string },
   ) {
     const queryBuilder = this.auditLogRepository.createQueryBuilder('auditLog');
 
@@ -139,6 +143,9 @@ export class AuditLogService {
     }
     if (filters?.actorId) {
       queryBuilder.andWhere('auditLog.actorId = :actorId', { actorId: filters.actorId });
+    }
+    if (filters?.requestId) {
+      queryBuilder.andWhere('auditLog.requestId = :requestId', { requestId: filters.requestId });
     }
 
     queryBuilder.orderBy('auditLog.createdAt', 'DESC');

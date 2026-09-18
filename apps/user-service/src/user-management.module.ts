@@ -10,6 +10,7 @@ import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 
 import { CommonModule } from '@hichandra/common';
+import { ContactUsModule } from './contact-us/contact-us.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { CommonModule } from '@hichandra/common';
     CommonModule,
     UserModule,
     BookingModule,
+    ContactUsModule,
   ],
   controllers: [UserManagementController],
   providers: [UserManagementService],

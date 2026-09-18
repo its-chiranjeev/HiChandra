@@ -19,6 +19,8 @@ import { Complaint } from './complaint.entity';
 import { FavoriteTechnician } from './favorite-technician.entity';
 import { TechnicianPayoutAccount } from './technician-payout-account.entity';
 import { AuditLog } from './audit-log.entity';
+import { ContactUs } from './contact-us.entity';
+import { Notification } from './notification.entity';
 
 
 @Module({
@@ -41,6 +43,8 @@ import { AuditLog } from './audit-log.entity';
       FavoriteTechnician,
       TechnicianPayoutAccount,
       AuditLog,
+      ContactUs,
+      Notification,
     ]),
   ],
   providers: [EntitiesService],

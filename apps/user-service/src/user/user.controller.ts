@@ -22,15 +22,20 @@ import {
   UpdateTechnicianServicesDto,
   UpdateTechnicianLocationDto,
   UpdateTechnicianBrandExpertiseDto,
-  CreateTechnicianLocationDto
+  CreateTechnicianLocationDto,
+  GetNotificationsDto,
 } from '@hichandra/dtos';
 import { TECHNICIAN_STATUS, USER_ROLE, USER_STATUS } from '@hichandra/entities';
 import { UpdateServiceDto } from '@hichandra/dtos';
 import { filter } from 'rxjs';
+import { NotificationService } from '@hichandra/notification';
 
 @Controller('users')
 export class UserController {
-  constructor(private readonly userService: UserService) { }
+  constructor(
+    private readonly userService: UserService,
+    private readonly notificationService: NotificationService,
+  ) { }
 
   @Post('admin/service')
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -107,6 +112,7 @@ export class UserController {
     @Query('module') module?: string,
     @Query('action') action?: string,
     @Query('actorId') actorId?: string,
+    @Query('requestId') requestId?: string,
   ) {
     return this.userService.getAuditLogsService(
       Number(page),
@@ -115,6 +121,7 @@ export class UserController {
         module,
         action,
         actorId: actorId ? Number(actorId) : undefined,
+        requestId,
       },
     );
   }
@@ -623,6 +630,60 @@ export class UserController {
   @HttpCode(HttpStatus.OK)
   async getFavouriteTechnicians(@Req() req: any) {
     return this.userService.getFavouriteTechnicians(req.user.id);
+  }
+
+  // ==========================================
+  // NOTIFICATION APIS
+  // ==========================================
+
+  @Get('notifications')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async getNotifications(
+    @Req() req: any,
+    @Query(new ValidationPipe({ whitelist: true, transform: true }))
+    query: GetNotificationsDto,
+  ) {
+    const userId = req.user.id || req.user.sub;
+    return this.notificationService.getUserNotifications(userId, query);
+  }
+
+  @Get('notifications/unread-count')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async getUnreadCount(@Req() req: any) {
+    const userId = req.user.id || req.user.sub;
+    return this.notificationService.getUnreadCount(userId);
+  }
+
+  @Patch('notifications/read-all')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async markAllAsRead(@Req() req: any) {
+    const userId = req.user.id || req.user.sub;
+    return this.notificationService.markAllAsRead(userId);
+  }
+
+  @Patch('notifications/:id/read')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async markAsRead(
+    @Req() req: any,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    const userId = req.user.id || req.user.sub;
+    return this.notificationService.markAsRead(id, userId);
+  }
+
+  @Delete('notifications/:id')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async deleteNotification(
+    @Req() req: any,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    const userId = req.user.id || req.user.sub;
+    return this.notificationService.deleteNotification(id, userId);
   }
 
   @Get(':id')

@@ -11,6 +11,7 @@ import { Service, PricingRule } from '@hichandra/entities';
 import { PaymentModule } from '@hichandra/payment';
 import { SmsServicesModule } from '@hichandra/sms-services';
 import { EmailServicesModule } from '@hichandra/email-services';
+import { NotificationModule } from '@hichandra/notification';
 
 @Module({
 imports: [
@@ -26,8 +27,10 @@ imports: [
   PaymentModule,
   SmsServicesModule,
   EmailServicesModule,
+  NotificationModule,
 ],
   controllers: [UserController],
   providers: [UserService],
+  exports: [UserService],
 })
 export class UserModule {}

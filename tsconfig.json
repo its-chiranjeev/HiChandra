@@ -75,6 +75,13 @@
       ],
       "@hichandra/payment/*": [
         "libs/payment/src/*"
+      ],
+      "@hichandra/notification": [
+        "libs/notification/src",
+        "libs/notification/src/index.ts"
+      ],
+      "@hichandra/notification/*": [
+        "libs/notification/src/*"
       ]
     }
   },

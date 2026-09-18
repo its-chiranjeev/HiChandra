@@ -11,6 +11,7 @@ import { ComplaintRepository } from './complaint.repository';
 import { PaymentRepository } from './payment.repository';
 import { FavoriteTechnicianRepository } from './favorite-technician.repository';
 import { TechnicianPayoutAccountRepository } from './technician-payout-account.repository';
+import { NotificationRepository } from './notification.repository';
 
 @Module({
   imports: [EntitiesModule],
@@ -22,10 +23,11 @@ import { TechnicianPayoutAccountRepository } from './technician-payout-account.r
     ServiceRepository,
     PlatformSettingRepository,
     BookingRepository,
-     ComplaintRepository,
+    ComplaintRepository,
     PaymentRepository,
     FavoriteTechnicianRepository,
     TechnicianPayoutAccountRepository,
+    NotificationRepository,
   ],
   exports: [
     RepositoriesService,
@@ -39,6 +41,7 @@ import { TechnicianPayoutAccountRepository } from './technician-payout-account.r
     PaymentRepository,
     FavoriteTechnicianRepository,
     TechnicianPayoutAccountRepository,
+    NotificationRepository,
   ],
 })
 export class RepositoriesModule {}

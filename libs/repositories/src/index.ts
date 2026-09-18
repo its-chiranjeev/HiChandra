@@ -10,3 +10,4 @@ export * from './complaint.repository';
 export * from './payment.repository';
 export * from './favorite-technician.repository';
 export * from './technician-payout-account.repository';
+export * from './notification.repository';

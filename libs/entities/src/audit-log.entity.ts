@@ -81,6 +81,10 @@ export class AuditLog {
   @Column({ type: 'varchar', length: 45, nullable: true })
   ipAddress?: string;
 
+  @Index()
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  requestId?: string;
+
   // TIMESTAMP
   @CreateDateColumn()
   createdAt!: Date;

@@ -14,6 +14,7 @@ import {
 } from '@nestjs/common';
 import { AuthModuleService } from './auth-module.service';
 import { JwtAuthGuard } from '@hichandra/common';
+import { AUTH_PORTAL_TYPE } from '@hichandra/entities';
 import { LoginDto, RegisterUserDto, VerifyOtpDto, ResetPasswordDto, ForgotPasswordDto } from '@hichandra/dtos';
 
 @Controller('auth')
@@ -53,8 +54,9 @@ export class AuthModuleController {
     @Req() req: any,
     @Body(new ValidationPipe({ whitelist: true, transform: true }))
     dto: LoginDto,
+    @Query('portalType') portalType?: AUTH_PORTAL_TYPE,
   ) {
-    return this.authModuleService.loginService(dto);
+    return this.authModuleService.loginService(dto, portalType);
   }
 
   @Post('refresh-token')
@@ -82,8 +84,9 @@ export class AuthModuleController {
   @HttpCode(HttpStatus.OK)
   async forgotPassword(
     @Body(new ValidationPipe({ whitelist: true, transform: true })) dto: ForgotPasswordDto,
+    @Query('portalType') portalType?: AUTH_PORTAL_TYPE,
   ) {
-    return this.authModuleService.forgotPasswordService(dto);
+    return this.authModuleService.forgotPasswordService(dto, portalType);
   }
 
 

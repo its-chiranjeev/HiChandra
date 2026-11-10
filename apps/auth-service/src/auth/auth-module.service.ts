@@ -10,7 +10,7 @@ import {
 } from '@nestjs/common';
 import { UserRepository, OtpRepository } from '@hichandra/repositories';
 import * as bcrypt from 'bcryptjs';
-import { User, USER_STATUS, USER_ROLE, TechnicianService, TechnicianPayoutAccount, TechnicianProfile, JOB_STATUS, Otp } from '@hichandra/entities';
+import { User, USER_STATUS, USER_ROLE, AUTH_PORTAL_TYPE, TechnicianService, TechnicianPayoutAccount, TechnicianProfile, JOB_STATUS, Otp } from '@hichandra/entities';
 import { ConfigService } from '@nestjs/config';
 import { createHmac } from 'crypto';
 import { Cron } from '@nestjs/schedule';
@@ -380,7 +380,46 @@ export class AuthModuleService {
   //   };
   // }
 
-  async loginService(dto: LoginDto) {
+  private validatePortalType(portalType?: AUTH_PORTAL_TYPE): void {
+    if (
+      portalType !== undefined &&
+      !Object.values(AUTH_PORTAL_TYPE).includes(portalType)
+    ) {
+      throw new BadRequestException(
+        `Invalid portalType. Allowed values are: ${Object.values(AUTH_PORTAL_TYPE).join(', ')}`,
+      );
+    }
+  }
+
+  private validatePortalAccess(
+    userRole: USER_ROLE,
+    portalType?: AUTH_PORTAL_TYPE,
+  ): void {
+    this.validatePortalType(portalType);
+
+    if (!portalType) {
+      return;
+    }
+
+    if (portalType === AUTH_PORTAL_TYPE.ADMIN && userRole !== USER_ROLE.ADMIN) {
+      throw new BadRequestException(
+        'Access denied. Only administrators are allowed to access the admin portal.',
+      );
+    }
+
+    if (
+      portalType === AUTH_PORTAL_TYPE.USER &&
+      ![USER_ROLE.CUSTOMER, USER_ROLE.TECHNICIAN].includes(userRole)
+    ) {
+      throw new BadRequestException(
+        'Access denied. Administrators are not allowed to access the user portal. Please use the admin portal.',
+      );
+    }
+  }
+
+  async loginService(dto: LoginDto, portalType?: AUTH_PORTAL_TYPE) {
+    this.validatePortalType(portalType);
+
     const identifier = dto.identifier.trim();
 
     if (!identifier) {
@@ -434,6 +473,8 @@ export class AuthModuleService {
         'Invalid email/phone or password',
       );
     }
+
+    this.validatePortalAccess(user.role, portalType);
 
     if (
       user.status === USER_STATUS.BLOCKED ||
@@ -643,7 +684,12 @@ export class AuthModuleService {
     };
   }
 
-  async forgotPasswordService(dto: ForgotPasswordDto) {
+  async forgotPasswordService(
+    dto: ForgotPasswordDto,
+    portalType?: AUTH_PORTAL_TYPE,
+  ) {
+    this.validatePortalType(portalType);
+
     if (!dto.phone && !dto.email) {
       throw new BadRequestException(
         'Please provide either phone number or email',
@@ -666,6 +712,8 @@ export class AuthModuleService {
     if (!user) {
       throw new NotFoundException('User not found');
     }
+
+    this.validatePortalAccess(user.role, portalType);
 
     // Invalidate old unverified OTP
     let oldOtp: Otp | null = null;

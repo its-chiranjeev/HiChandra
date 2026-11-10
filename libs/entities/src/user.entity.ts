@@ -28,6 +28,11 @@ export enum USER_STATUS {
   PENDING = 'PENDING',
 }
 
+export enum AUTH_PORTAL_TYPE {
+  ADMIN = 'ADMIN',
+  USER = 'USER',
+}
+
 @Entity('users')
 @Unique(['phone', 'countryCode'])
 export class User {

@@ -401,14 +401,14 @@ export class AuthModuleService {
       return;
     }
 
-    if (portalType === AUTH_PORTAL_TYPE.ADMIN && userRole !== USER_ROLE.ADMIN) {
+    if (portalType === AUTH_PORTAL_TYPE.ADMIN_PAGE && userRole !== USER_ROLE.ADMIN) {
       throw new BadRequestException(
         'Access denied. Only administrators are allowed to access the admin portal.',
       );
     }
 
     if (
-      portalType === AUTH_PORTAL_TYPE.USER &&
+      portalType === AUTH_PORTAL_TYPE.HOME_PAGE &&
       ![USER_ROLE.CUSTOMER, USER_ROLE.TECHNICIAN].includes(userRole)
     ) {
       throw new BadRequestException(

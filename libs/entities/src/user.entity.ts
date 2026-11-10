@@ -29,8 +29,8 @@ export enum USER_STATUS {
 }
 
 export enum AUTH_PORTAL_TYPE {
-  ADMIN = 'ADMIN',
-  USER = 'USER',
+  HOME_PAGE = 'HOME_PAGE',
+  ADMIN_PAGE = 'ADMIN_PAGE'
 }
 
 @Entity('users')
